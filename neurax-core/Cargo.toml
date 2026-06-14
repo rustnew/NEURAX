@@ -1,0 +1,46 @@
+[package]
+name = "neurax-core"
+version = "0.1.0"
+edition = "2021"
+description = "Core pipeline and orchestration for NEURAX"
+
+[dependencies]
+# Sérialisation
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Erreurs
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# Parallélisme
+rayon = { workspace = true }
+
+# Temps
+chrono = { workspace = true }
+
+# Performance
+ahash = { workspace = true }
+parking_lot = { workspace = true }
+dashmap = { workspace = true }
+smallvec = { workspace = true }
+indexmap = { workspace = true }
+itertools = { workspace = true }
+once_cell = { workspace = true }
+
+# Crates internes
+neurax-parser = { path = "../neurax-parser" }
+neurax-ir = { path = "../neurax-ir" }
+neurax-formulas = { path = "../neurax-formulas" }
+neurax-hardware-db = { path = "../neurax-hardware-db" }
+
+[dev-dependencies]
+approx = { workspace = true }
+proptest = { workspace = true }
+criterion = { workspace = true }
+
+[lints]
+workspace = true

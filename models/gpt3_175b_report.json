@@ -1,0 +1,154 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-03-19T17:14:27.146347414Z",
+  "neurax_version": "0.1.0",
+  "analysis_time_ms": 0,
+  "input_file": "model.json",
+  "model": {
+    "name": "GPT-3-175B",
+    "model_type": "transformer",
+    "total_parameters": 6657871872,
+    "num_layers": 12,
+    "vocab_size": null,
+    "sequence_length": null,
+    "hidden_size": null,
+    "num_attention_heads": null,
+    "num_key_value_heads": null,
+    "intermediate_size": null
+  },
+  "metrics": {
+    "structure": {
+      "total_parameters": 6657871872,
+      "num_layers": 12,
+      "model_type": "transformer",
+      "params_per_layer": {},
+      "layers_by_type": {}
+    },
+    "graph": {
+      "graph_depth": 12,
+      "total_operations": 12
+    },
+    "compute": {
+      "total_flops": 242457413419008.0,
+      "forward_flops": 242457413419008.0,
+      "backward_flops": 484914826838016.0,
+      "flops_per_token": 473549635584.0,
+      "flops_incremental_decode": 284129781350.39996,
+      "arithmetic_intensity": 17937.12745381456,
+      "flops_per_layer": {},
+      "op_type_distribution": {}
+    },
+    "memory": {
+      "peak_vram_bytes": 110928391426,
+      "peak_vram_gb": 110.928391426,
+      "parameter_memory_bytes": 15731869294,
+      "parameter_memory_gb": 15.731869294,
+      "activation_memory_bytes": 805306368,
+      "activation_memory_gb": 0.805306368,
+      "gradient_memory_bytes": 31463738588,
+      "gradient_memory_gb": 31.463738588,
+      "optimizer_state_bytes": 62927477176,
+      "optimizer_state_gb": 62.927477176,
+      "max_batch_size_fit": 287,
+      "oom_risk": "low"
+    },
+    "parallelism": {
+      "data_parallel_efficiency": 0.5,
+      "communication_overhead": 0.0,
+      "optimal_gpu_count": 1024,
+      "data_parallel": 1,
+      "tensor_parallel": 1,
+      "pipeline_parallel": 1
+    },
+    "performance": {
+      "latency_ms": 315435303.70048004,
+      "latency_seconds": 315435.30370048,
+      "throughput_tokens_per_s": 0.05194092039728483,
+      "gpu_utilization": 0.14234145790527658,
+      "gpu_utilization_percent": 14.234145790527657,
+      "bottleneck": "compute-bound"
+    },
+    "cost": {
+      "training_cost_usd": 0.0,
+      "training_time_hours": 0.0,
+      "energy_kwh": 0.0,
+      "co2_kg": 0.0,
+      "cost_per_million_tokens_usd": 0.0,
+      "gpu_hours": 0.0,
+      "provider": "unknown"
+    },
+    "hardware": {
+      "gpu_name": "H100",
+      "gpu_count": 1024,
+      "gpu_memory_gb": 80.0,
+      "gpu_tflops_fp16": 20.0,
+      "gpu_memory_bandwidth_gbs": 1000.0,
+      "interconnect": "",
+      "interconnect_bandwidth_gbs": 64.0
+    },
+    "dynamic": {
+      "virtual_memory": {
+        "fragmentation_overhead_gb": 5.8237405498649935,
+        "fragmentation_pct": 10.5,
+        "defrag_savings_gb": 5.8237405498649935,
+        "virtual_savings_gb": 8.735610824797504,
+        "virtual_savings_pct": 7.875000000000004,
+        "peak_vram_with_defrag_gb": 105.10465087613501,
+        "peak_vram_with_virtual_gb": 102.1927806012025,
+        "recommended_strategy": "EnableCompaction",
+        "confidence": 0.65
+      },
+      "stability": {
+        "lyapunov_exponent_mean": 1.0500856062430348,
+        "chaos_index": 0.7407913375916945,
+        "high_risk_layers_count": 0,
+        "fp32_required_pct": 0.0,
+        "global_robustness_score": 0.5137034839819394,
+        "fp32_fallback_memory_overhead_gb": 0.0,
+        "confidence": 0.7
+      },
+      "behavioral": {
+        "expert_load_imbalance": 0.0,
+        "memory_contention_score": 0.1,
+        "cache_locality_score": 0.8,
+        "numerical_sensitivity": 0.5,
+        "load_balance_efficiency": 100.0,
+        "memory_bank_conflict_rate": 1.5,
+        "prediction_confidence": 0.65
+      }
+    }
+  },
+  "diagnostics": [
+    {
+      "category": "memoryoverflow",
+      "severity": "critical",
+      "message": "Peak VRAM (110.9 GB) exceeds GPU memory (85.9 GB)",
+      "layer_id": null,
+      "suggestion": "Enable gradient checkpointing or use model parallelism"
+    },
+    {
+      "category": "architectureinefficiency",
+      "severity": "warning",
+      "message": "Low GPU utilization (14.2%)",
+      "layer_id": null,
+      "suggestion": "Increase batch size or consider tensor parallelism"
+    }
+  ],
+  "recommendations": [
+    {
+      "category": "memoryoptimization",
+      "priority": "high",
+      "title": "Enable Gradient Checkpointing",
+      "description": "Reduce activation memory by recomputing during backward pass",
+      "impact": "Save ~0.6 GB VRAM"
+    },
+    {
+      "category": "parallelism",
+      "priority": "medium",
+      "title": "Use Hybrid Parallelism",
+      "description": "Combine data, tensor, and pipeline parallelism for better scaling",
+      "impact": "Improve efficiency to ~90%"
+    }
+  ],
+  "warnings": []
+}

@@ -1,0 +1,662 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Neural Architecture Designer - Pure White Board Theme */
+
+@layer base {
+  :root {
+    /* Pure White Board Theme */
+    --background: 0 0% 100%;
+    --foreground: 220 14% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 14% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 14% 10%;
+
+    --primary: 220 14% 20%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 10% 96%;
+    --secondary-foreground: 220 14% 10%;
+
+    --muted: 220 10% 96%;
+    --muted-foreground: 220 10% 46%;
+
+    --accent: 220 10% 94%;
+    --accent-foreground: 220 14% 10%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 220 14% 10%;
+
+    --success: 160 60% 39%;
+    --success-foreground: 0 0% 100%;
+
+    --info: 199 70% 50%;
+    --info-foreground: 0 0% 100%;
+
+    --border: 220 10% 90%;
+    --input: 220 10% 96%;
+    --ring: 220 14% 40%;
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 0 0% 99%;
+    --sidebar-foreground: 220 14% 20%;
+    --sidebar-primary: 220 14% 20%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 10% 96%;
+    --sidebar-accent-foreground: 220 14% 10%;
+    --sidebar-border: 220 10% 92%;
+    --sidebar-ring: 220 14% 40%;
+
+    /* Canvas specific - Pure white board */
+    --canvas-bg: 0 0% 99%;
+    --canvas-grid: 220 10% 92%;
+    --canvas-node: 0 0% 100%;
+    --canvas-node-border: 220 10% 85%;
+    --canvas-connection: 220 14% 35%;
+
+    /* Panel specific */
+    --panel-header: 220 10% 97%;
+  }
+
+  .dark {
+    /* Dark Theme Variant */
+    --background: 220 14% 6%;
+    --foreground: 0 0% 96%;
+
+    --card: 220 14% 8%;
+    --card-foreground: 0 0% 96%;
+
+    --popover: 220 14% 10%;
+    --popover-foreground: 0 0% 96%;
+
+    --primary: 220 10% 70%;
+    --primary-foreground: 220 14% 6%;
+
+    --secondary: 220 14% 12%;
+    --secondary-foreground: 0 0% 90%;
+
+    --muted: 220 14% 14%;
+    --muted-foreground: 220 10% 50%;
+
+    --accent: 220 10% 75%;
+    --accent-foreground: 220 14% 6%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 98%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 220 14% 6%;
+
+    --success: 160 60% 45%;
+    --success-foreground: 220 14% 6%;
+
+    --info: 199 70% 50%;
+    --info-foreground: 220 14% 6%;
+
+    --border: 220 14% 16%;
+    --input: 220 14% 14%;
+    --ring: 220 10% 60%;
+
+    --sidebar-background: 220 14% 7%;
+    --sidebar-foreground: 0 0% 90%;
+    --sidebar-primary: 220 10% 70%;
+    --sidebar-primary-foreground: 220 14% 6%;
+    --sidebar-accent: 220 14% 12%;
+    --sidebar-accent-foreground: 0 0% 95%;
+    --sidebar-border: 220 14% 14%;
+    --sidebar-ring: 220 10% 60%;
+
+    --canvas-bg: 220 14% 5%;
+    --canvas-grid: 220 14% 12%;
+    --canvas-node: 220 14% 9%;
+    --canvas-node-border: 220 14% 18%;
+    --canvas-connection: 220 10% 55%;
+
+    --panel-header: 220 14% 9%;
+  }
+
+  .dark.theme-gruvbox {
+    --background: 45 12% 9%;
+    --foreground: 40 33% 88%;
+
+    --card: 45 12% 11%;
+    --card-foreground: 40 33% 88%;
+
+    --popover: 45 12% 12%;
+    --popover-foreground: 40 33% 88%;
+
+    --primary: 35 65% 62%;
+    --primary-foreground: 45 12% 9%;
+
+    --secondary: 45 10% 16%;
+    --secondary-foreground: 40 33% 88%;
+
+    --muted: 45 10% 16%;
+    --muted-foreground: 40 12% 65%;
+
+    --accent: 20 60% 55%;
+    --accent-foreground: 45 12% 9%;
+
+    --border: 45 8% 20%;
+    --input: 45 10% 16%;
+    --ring: 35 65% 62%;
+
+    --sidebar-background: 45 12% 10%;
+    --sidebar-foreground: 40 33% 88%;
+    --sidebar-primary: 35 65% 62%;
+    --sidebar-primary-foreground: 45 12% 9%;
+    --sidebar-accent: 45 10% 16%;
+    --sidebar-accent-foreground: 40 33% 88%;
+    --sidebar-border: 45 8% 18%;
+    --sidebar-ring: 35 65% 62%;
+
+    --canvas-bg: 45 12% 8%;
+    --canvas-grid: 45 8% 16%;
+    --canvas-node: 45 12% 12%;
+    --canvas-node-border: 45 8% 22%;
+    --canvas-connection: 35 35% 70%;
+
+    --panel-header: 45 12% 12%;
+  }
+
+  .dark.theme-nord {
+    --background: 220 16% 8%;
+    --foreground: 218 27% 92%;
+
+    --card: 220 16% 10%;
+    --card-foreground: 218 27% 92%;
+
+    --popover: 220 16% 11%;
+    --popover-foreground: 218 27% 92%;
+
+    --primary: 193 56% 68%;
+    --primary-foreground: 220 16% 8%;
+
+    --secondary: 220 14% 14%;
+    --secondary-foreground: 218 27% 92%;
+
+    --muted: 220 14% 14%;
+    --muted-foreground: 219 12% 65%;
+
+    --accent: 213 32% 52%;
+    --accent-foreground: 218 27% 92%;
+
+    --border: 220 14% 18%;
+    --input: 220 14% 14%;
+    --ring: 193 56% 68%;
+
+    --sidebar-background: 220 16% 9%;
+    --sidebar-foreground: 218 27% 92%;
+    --sidebar-primary: 193 56% 68%;
+    --sidebar-primary-foreground: 220 16% 8%;
+    --sidebar-accent: 220 14% 14%;
+    --sidebar-accent-foreground: 218 27% 92%;
+    --sidebar-border: 220 14% 18%;
+    --sidebar-ring: 193 56% 68%;
+
+    --canvas-bg: 220 16% 7%;
+    --canvas-grid: 220 14% 14%;
+    --canvas-node: 220 16% 11%;
+    --canvas-node-border: 220 14% 20%;
+    --canvas-connection: 193 30% 70%;
+
+    --panel-header: 220 16% 11%;
+  }
+
+  .dark.theme-onedark {
+    --background: 220 15% 8%;
+    --foreground: 220 17% 92%;
+
+    --card: 220 15% 10%;
+    --card-foreground: 220 17% 92%;
+
+    --popover: 220 15% 11%;
+    --popover-foreground: 220 17% 92%;
+
+    --primary: 207 82% 66%;
+    --primary-foreground: 220 15% 8%;
+
+    --secondary: 220 14% 14%;
+    --secondary-foreground: 220 17% 92%;
+
+    --muted: 220 14% 14%;
+    --muted-foreground: 220 10% 62%;
+
+    --accent: 286 60% 70%;
+    --accent-foreground: 220 15% 8%;
+
+    --border: 220 14% 18%;
+    --input: 220 14% 14%;
+    --ring: 207 82% 66%;
+
+    --sidebar-background: 220 15% 9%;
+    --sidebar-foreground: 220 17% 92%;
+    --sidebar-primary: 207 82% 66%;
+    --sidebar-primary-foreground: 220 15% 8%;
+    --sidebar-accent: 220 14% 14%;
+    --sidebar-accent-foreground: 220 17% 92%;
+    --sidebar-border: 220 14% 18%;
+    --sidebar-ring: 207 82% 66%;
+
+    --canvas-bg: 220 15% 7%;
+    --canvas-grid: 220 14% 14%;
+    --canvas-node: 220 15% 11%;
+    --canvas-node-border: 220 14% 20%;
+    --canvas-connection: 207 35% 70%;
+
+    --panel-header: 220 15% 11%;
+  }
+
+  /* Kanagawa Theme */
+  .dark.theme-kanagawa {
+    --background: 240 13% 14%;
+    --foreground: 50 31% 80%;
+    --card: 240 13% 16%;
+    --card-foreground: 50 31% 80%;
+    --popover: 240 13% 18%;
+    --popover-foreground: 50 31% 80%;
+    --primary: 39 41% 59%;
+    --primary-foreground: 240 13% 14%;
+    --secondary: 240 10% 22%;
+    --secondary-foreground: 50 31% 85%;
+    --muted: 240 10% 22%;
+    --muted-foreground: 50 15% 60%;
+    --accent: 175 25% 45%;
+    --accent-foreground: 240 13% 14%;
+    --border: 240 10% 25%;
+    --input: 240 10% 22%;
+    --ring: 39 41% 59%;
+    --canvas-bg: 240 13% 12%;
+    --canvas-grid: 240 10% 20%;
+    --canvas-node: 240 13% 16%;
+    --canvas-node-border: 240 10% 25%;
+    --canvas-connection: 39 20% 60%;
+    --panel-header: 240 13% 16%;
+  }
+
+  /* Catppuccin Macchiato */
+  .dark.theme-catppuccin {
+    --background: 234 24% 19%;
+    --foreground: 227 70% 87%;
+    --card: 234 24% 22%;
+    --card-foreground: 227 70% 87%;
+    --popover: 234 24% 24%;
+    --popover-foreground: 227 70% 87%;
+    --primary: 221 82% 75%;
+    --primary-foreground: 234 24% 19%;
+    --secondary: 233 18% 25%;
+    --secondary-foreground: 226 64% 88%;
+    --muted: 233 18% 25%;
+    --muted-foreground: 231 23% 70%;
+    --accent: 316 73% 84%;
+    --accent-foreground: 234 24% 19%;
+    --border: 235 21% 28%;
+    --input: 233 18% 25%;
+    --ring: 221 82% 75%;
+    --canvas-bg: 234 24% 17%;
+    --canvas-grid: 235 21% 24%;
+    --canvas-node: 234 24% 22%;
+    --canvas-node-border: 235 21% 32%;
+    --canvas-connection: 221 50% 70%;
+    --panel-header: 234 24% 22%;
+  }
+
+  /* Tokyonight Storm */
+  .dark.theme-tokyonight {
+    --background: 233 24% 19%;
+    --foreground: 228 72% 86%;
+    --card: 233 24% 22%;
+    --card-foreground: 228 72% 86%;
+    --popover: 233 24% 24%;
+    --popover-foreground: 228 72% 86%;
+    --primary: 221 90% 72%;
+    --primary-foreground: 233 24% 19%;
+    --secondary: 232 18% 26%;
+    --secondary-foreground: 228 70% 88%;
+    --muted: 232 18% 26%;
+    --muted-foreground: 227 30% 70%;
+    --accent: 288 60% 75%;
+    --accent-foreground: 233 24% 19%;
+    --border: 233 20% 30%;
+    --input: 232 18% 26%;
+    --ring: 221 90% 72%;
+    --canvas-bg: 233 24% 17%;
+    --canvas-grid: 233 20% 25%;
+    --canvas-node: 233 24% 22%;
+    --canvas-node-border: 233 20% 35%;
+    --canvas-connection: 221 60% 70%;
+    --panel-header: 233 24% 22%;
+  }
+
+  /* Everforest */
+  .dark.theme-everforest {
+    --background: 204 14% 21%;
+    --foreground: 43 30% 75%;
+    --card: 204 14% 23%;
+    --card-foreground: 43 30% 75%;
+    --popover: 204 14% 25%;
+    --popover-foreground: 43 30% 75%;
+    --primary: 83 33% 63%;
+    --primary-foreground: 204 14% 21%;
+    --secondary: 200 12% 28%;
+    --secondary-foreground: 43 25% 80%;
+    --muted: 200 12% 28%;
+    --muted-foreground: 43 15% 60%;
+    --accent: 14 55% 68%;
+    --accent-foreground: 204 14% 21%;
+    --border: 200 12% 32%;
+    --input: 200 12% 28%;
+    --ring: 83 33% 63%;
+    --canvas-bg: 204 14% 19%;
+    --canvas-grid: 200 12% 25%;
+    --canvas-node: 204 14% 23%;
+    --canvas-node-border: 200 12% 35%;
+    --canvas-connection: 83 25% 60%;
+    --panel-header: 204 14% 23%;
+  }
+
+  /* Dracula */
+  .dark.theme-dracula {
+    --background: 231 15% 18%;
+    --foreground: 60 30% 96%;
+    --card: 231 15% 21%;
+    --card-foreground: 60 30% 96%;
+    --popover: 231 15% 24%;
+    --popover-foreground: 60 30% 96%;
+    --primary: 265 89% 78%;
+    --primary-foreground: 231 15% 18%;
+    --secondary: 231 15% 30%;
+    --secondary-foreground: 60 30% 90%;
+    --muted: 231 15% 30%;
+    --muted-foreground: 231 10% 70%;
+    --accent: 326 100% 74%;
+    --accent-foreground: 231 15% 18%;
+    --border: 231 15% 35%;
+    --input: 231 15% 30%;
+    --ring: 265 89% 78%;
+    --canvas-bg: 231 15% 16%;
+    --canvas-grid: 231 15% 25%;
+    --canvas-node: 231 15% 21%;
+    --canvas-node-border: 231 15% 40%;
+    --canvas-connection: 265 50% 75%;
+    --panel-header: 231 15% 21%;
+  }
+
+  /* Nightfox */
+  .dark.theme-nightfox {
+    --background: 214 32% 14%;
+    --foreground: 240 2% 87%;
+    --card: 214 32% 17%;
+    --card-foreground: 240 2% 87%;
+    --popover: 214 32% 20%;
+    --popover-foreground: 240 2% 87%;
+    --primary: 215 57% 64%;
+    --primary-foreground: 214 32% 14%;
+    --secondary: 214 25% 25%;
+    --secondary-foreground: 240 2% 90%;
+    --muted: 214 25% 25%;
+    --muted-foreground: 214 10% 65%;
+    --accent: 178 30% 60%;
+    --accent-foreground: 214 32% 14%;
+    --border: 214 20% 30%;
+    --input: 214 25% 25%;
+    --ring: 215 57% 64%;
+    --canvas-bg: 214 32% 12%;
+    --canvas-grid: 214 20% 25%;
+    --canvas-node: 214 32% 17%;
+    --canvas-node-border: 214 20% 35%;
+    --canvas-connection: 215 40% 65%;
+    --panel-header: 214 32% 17%;
+  }
+
+  /* Rose Pine */
+  .dark.theme-rose-pine {
+    --background: 249 22% 12%;
+    --foreground: 247 44% 91%;
+    --card: 249 22% 15%;
+    --card-foreground: 247 44% 91%;
+    --popover: 249 22% 18%;
+    --popover-foreground: 247 44% 91%;
+    --primary: 343 76% 68%;
+    --primary-foreground: 249 22% 12%;
+    --secondary: 249 15% 25%;
+    --secondary-foreground: 247 40% 95%;
+    --muted: 249 15% 25%;
+    --muted-foreground: 249 10% 70%;
+    --accent: 260 44% 78%;
+    --accent-foreground: 249 22% 12%;
+    --border: 249 15% 30%;
+    --input: 249 15% 25%;
+    --ring: 343 76% 68%;
+    --canvas-bg: 249 22% 10%;
+    --canvas-grid: 249 15% 22%;
+    --canvas-node: 249 22% 15%;
+    --canvas-node-border: 249 15% 35%;
+    --canvas-connection: 343 50% 70%;
+    --panel-header: 249 22% 15%;
+  }
+
+  /* Solarized Dark */
+  .dark.theme-solarized-dark {
+    --background: 192 100% 11%;
+    --foreground: 190 8% 55%;
+    --card: 192 100% 14%;
+    --card-foreground: 190 8% 55%;
+    --popover: 192 100% 16%;
+    --popover-foreground: 190 8% 55%;
+    --primary: 205 69% 49%;
+    --primary-foreground: 192 100% 11%;
+    --secondary: 192 40% 20%;
+    --secondary-foreground: 190 8% 65%;
+    --muted: 192 40% 20%;
+    --muted-foreground: 190 5% 45%;
+    --accent: 175 44% 45%;
+    --accent-foreground: 192 100% 11%;
+    --border: 192 30% 25%;
+    --input: 192 40% 20%;
+    --ring: 205 69% 49%;
+    --canvas-bg: 192 100% 9%;
+    --canvas-grid: 192 30% 20%;
+    --canvas-node: 192 100% 14%;
+    --canvas-node-border: 192 30% 30%;
+    --canvas-connection: 205 50% 60%;
+    --panel-header: 192 100% 14%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+@layer components {
+  .panel-section {
+    @apply bg-card border border-border rounded-lg;
+  }
+
+  .panel-header {
+    @apply px-3 py-2 bg-panel-header border-b border-border text-xs font-semibold uppercase tracking-wider text-muted-foreground;
+  }
+
+  .layer-item {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-md cursor-grab hover:bg-secondary/80 transition-colors duration-150 active:cursor-grabbing active:bg-primary/10;
+  }
+
+  .layer-icon {
+    @apply w-8 h-8 rounded-md flex items-center justify-center text-primary bg-primary/10 border border-primary/20;
+  }
+
+  .canvas-node {
+    @apply absolute bg-canvas-node border-2 border-canvas-node-border rounded-lg shadow-md cursor-move transition-all duration-150 hover:border-primary/50 hover:shadow-lg;
+  }
+
+  .canvas-node-selected {
+    @apply border-primary shadow-lg ring-2 ring-primary/30;
+  }
+
+  .status-error {
+    @apply text-destructive bg-destructive/10 border-destructive/30;
+  }
+
+  .status-warning {
+    @apply text-warning bg-warning/10 border-warning/30;
+  }
+
+  .status-success {
+    @apply text-success bg-success/10 border-success/30;
+  }
+
+  .metric-card {
+    @apply p-3 rounded-lg bg-secondary/50 border border-border;
+  }
+
+  .connection-line {
+    stroke: hsl(var(--canvas-connection));
+    stroke-width: 2;
+    fill: none;
+    stroke-linecap: round;
+    transition: stroke-width 0.2s ease, opacity 0.2s ease;
+  }
+
+  /* Miro-style dot pattern - Clean white board feel */
+  .canvas-dots {
+    background-color: hsl(var(--canvas-bg));
+    background-image:
+      radial-gradient(circle at center,
+        hsl(var(--canvas-grid) / 0.8) 1px,
+        transparent 1px);
+    background-size: 32px 32px;
+    background-position: 0 0;
+  }
+
+  /* Larger grid dots for major intersections */
+  .canvas-dots::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      radial-gradient(circle at center,
+        hsl(var(--canvas-grid) / 0.5) 2px,
+        transparent 2px);
+    background-size: 128px 128px;
+    pointer-events: none;
+  }
+
+  /* Keep grid-pattern for compatibility */
+  .grid-pattern {
+    background-image:
+      linear-gradient(hsl(var(--canvas-grid)) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--canvas-grid)) 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+
+  /* Inference Intelligence specific styles */
+  .inference-gauge {
+    @apply relative w-32 h-32 rounded-full flex items-center justify-center;
+  }
+
+  .inference-card {
+    @apply p-4 rounded-xl bg-card border border-border shadow-sm hover:shadow-md transition-shadow;
+  }
+
+  .inference-section {
+    @apply space-y-3 p-4 bg-secondary/30 rounded-lg border border-border;
+  }
+
+  .token-strip {
+    @apply flex gap-0.5 p-2 bg-secondary/50 rounded-lg overflow-x-auto;
+  }
+
+  .token-item {
+    @apply px-2 py-1 rounded text-xs font-mono whitespace-nowrap transition-all;
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--muted-foreground) / 0.3);
+    border-radius: 3px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--muted-foreground) / 0.5);
+  }
+
+  .text-gradient-primary {
+    @apply bg-gradient-to-r from-primary via-foreground to-muted-foreground bg-clip-text text-transparent;
+  }
+
+  .shadow-glow-sm {
+    box-shadow: 0 0 15px -3px hsl(var(--primary) / 0.2);
+  }
+
+  .shadow-glow {
+    box-shadow: 0 0 25px -5px hsl(var(--primary) / 0.3);
+  }
+
+  @keyframes jiggle {
+
+    0%,
+    100% {
+      transform: translateX(0);
+    }
+
+    15% {
+      transform: translateX(-4px);
+    }
+
+    30% {
+      transform: translateX(4px);
+    }
+
+    45% {
+      transform: translateX(-3px);
+    }
+
+    60% {
+      transform: translateX(3px);
+    }
+
+    75% {
+      transform: translateX(-1px);
+    }
+  }
+
+  .animate-jiggle {
+    animation: jiggle 0.5s ease-in-out;
+  }
+}

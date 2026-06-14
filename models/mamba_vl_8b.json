@@ -1,0 +1,477 @@
+{
+  "schema_version": "1.0.0",
+  "model": {
+    "name": "Mamba-VL-8B",
+    "type": "ssm",
+    "layers": [
+      {
+        "id": "image_patch_embed",
+        "layer_type": "conv",
+        "input_shape": [1, 3, 336, 336],
+        "output_shape": [1, 1152, 24, 24],
+        "params": {
+          "in_channels": 3,
+          "out_channels": 1152,
+          "kernel_size": 14,
+          "stride": 14,
+          "padding": 0,
+          "bias": false
+        }
+      },
+      {
+        "id": "image_projection",
+        "layer_type": "linear",
+        "input_shape": [577, 1152],
+        "output_shape": [577, 4096],
+        "params": {
+          "in_features": 1152,
+          "out_features": 4096,
+          "bias": true
+        }
+      },
+      {
+        "id": "text_embedding",
+        "layer_type": "embedding",
+        "input_shape": [4096],
+        "output_shape": [4096, 4096],
+        "params": {
+          "vocab_size": 256000,
+          "hidden_size": 4096,
+          "position_embeddings": 0
+        }
+      },
+      {
+        "id": "mamba_layer_0",
+        "layer_type": "mamba",
+        "input_shape": [4096, 4096],
+        "output_shape": [4096, 4096],
+        "params": {
+          "d_model": 4096,
+          "d_state": 16,
+          "d_conv": 4,
+          "expand": 2
+        }
+      },
+      {
+        "id": "mamba_layer_1",
+        "layer_type": "mamba",
+        "input_shape": [4096, 4096],
+        "output_shape": [4096, 4096],
+        "params": {
+          "d_model": 4096,
+          "d_state": 16,
+          "d_conv": 4,
+          "expand": 2
+        }
+      },
+      {
+        "id": "mamba_layer_2",
+        "layer_type": "mamba",
+        "input_shape": [4096, 4096],
+        "output_shape": [4096, 4096],
+        "params": {
+          "d_model": 4096,
+          "d_state": 16,
+          "d_conv": 4,
+          "expand": 2
+        }
+      },
+      {
+        "id": "mamba_layer_3",
+        "layer_type": "mamba",
+        "input_shape": [4096, 4096],
+        "output_shape": [4096, 4096],
+        "params": {
+          "d_model": 4096,
+          "d_state": 16,
+          "d_conv": 4,
+          "expand": 2
+        }
+      },
+      {
+        "id": "mamba_layer_4",
+        "layer_type": "mamba",
+        "input_shape": [4096, 4096],
+        "output_shape": [4096, 4096],
+        "params": {
+          "d_model": 4096,
+          "d_state": 16,
+          "d_conv": 4,
+          "expand": 2
+        }
+      },
+      {
+        "id": "mamba_layer_5",
+        "layer_type": "mamba",
+        "input_shape": [4096, 4096],
+        "output_shape": [4096, 4096],
+        "params": {
+          "d_model": 4096,
+          "d_state": 16,
+          "d_conv": 4,
+          "expand": 2
+        }
+      },
+      {
+        "id": "mamba_layer_6",
+        "layer_type": "mamba",
+        "input_shape": [4096, 4096],
+        "output_shape": [4096, 4096],
+        "params": {
+          "d_model": 4096,
+          "d_state": 16,
+          "d_conv": 4,
+          "expand": 2
+        }
+      },
+      {
+        "id": "mamba_layer_7",
+        "layer_type": "mamba",
+        "input_shape": [4096, 4096],
+        "output_shape": [4096, 4096],
+        "params": {
+          "d_model": 4096,
+          "d_state": 16,
+          "d_conv": 4,
+          "expand": 2
+        }
+      },
+      {
+        "id": "mamba_layer_8",
+        "layer_type": "mamba",
+        "input_shape": [4096, 4096],
+        "output_shape": [4096, 4096],
+        "params": {
+          "d_model": 4096,
+          "d_state": 16,
+          "d_conv": 4,
+          "expand": 2
+        }
+      },
+      {
+        "id": "mamba_layer_9",
+        "layer_type": "mamba",
+        "input_shape": [4096, 4096],
+        "output_shape": [4096, 4096],
+        "params": {
+          "d_model": 4096,
+          "d_state": 16,
+          "d_conv": 4,
+          "expand": 2
+        }
+      },
+      {
+        "id": "mamba_layer_10",
+        "layer_type": "mamba",
+        "input_shape": [4096, 4096],
+        "output_shape": [4096, 4096],
+        "params": {
+          "d_model": 4096,
+          "d_state": 16,
+          "d_conv": 4,
+          "expand": 2
+        }
+      },
+      {
+        "id": "mamba_layer_11",
+        "layer_type": "mamba",
+        "input_shape": [4096, 4096],
+        "output_shape": [4096, 4096],
+        "params": {
+          "d_model": 4096,
+          "d_state": 16,
+          "d_conv": 4,
+          "expand": 2
+        }
+      },
+      {
+        "id": "mamba_layer_12",
+        "layer_type": "mamba",
+        "input_shape": [4096, 4096],
+        "output_shape": [4096, 4096],
+        "params": {
+          "d_model": 4096,
+          "d_state": 16,
+          "d_conv": 4,
+          "expand": 2
+        }
+      },
+      {
+        "id": "mamba_layer_13",
+        "layer_type": "mamba",
+        "input_shape": [4096, 4096],
+        "output_shape": [4096, 4096],
+        "params": {
+          "d_model": 4096,
+          "d_state": 16,
+          "d_conv": 4,
+          "expand": 2
+        }
+      },
+      {
+        "id": "mamba_layer_14",
+        "layer_type": "mamba",
+        "input_shape": [4096, 4096],
+        "output_shape": [4096, 4096],
+        "params": {
+          "d_model": 4096,
+          "d_state": 16,
+          "d_conv": 4,
+          "expand": 2
+        }
+      },
+      {
+        "id": "mamba_layer_15",
+        "layer_type": "mamba",
+        "input_shape": [4096, 4096],
+        "output_shape": [4096, 4096],
+        "params": {
+          "d_model": 4096,
+          "d_state": 16,
+          "d_conv": 4,
+          "expand": 2
+        }
+      },
+      {
+        "id": "mamba_layer_16",
+        "layer_type": "mamba",
+        "input_shape": [4096, 4096],
+        "output_shape": [4096, 4096],
+        "params": {
+          "d_model": 4096,
+          "d_state": 16,
+          "d_conv": 4,
+          "expand": 2
+        }
+      },
+      {
+        "id": "mamba_layer_17",
+        "layer_type": "mamba",
+        "input_shape": [4096, 4096],
+        "output_shape": [4096, 4096],
+        "params": {
+          "d_model": 4096,
+          "d_state": 16,
+          "d_conv": 4,
+          "expand": 2
+        }
+      },
+      {
+        "id": "mamba_layer_18",
+        "layer_type": "mamba",
+        "input_shape": [4096, 4096],
+        "output_shape": [4096, 4096],
+        "params": {
+          "d_model": 4096,
+          "d_state": 16,
+          "d_conv": 4,
+          "expand": 2
+        }
+      },
+      {
+        "id": "mamba_layer_19",
+        "layer_type": "mamba",
+        "input_shape": [4096, 4096],
+        "output_shape": [4096, 4096],
+        "params": {
+          "d_model": 4096,
+          "d_state": 16,
+          "d_conv": 4,
+          "expand": 2
+        }
+      },
+      {
+        "id": "mamba_layer_20",
+        "layer_type": "mamba",
+        "input_shape": [4096, 4096],
+        "output_shape": [4096, 4096],
+        "params": {
+          "d_model": 4096,
+          "d_state": 16,
+          "d_conv": 4,
+          "expand": 2
+        }
+      },
+      {
+        "id": "mamba_layer_21",
+        "layer_type": "mamba",
+        "input_shape": [4096, 4096],
+        "output_shape": [4096, 4096],
+        "params": {
+          "d_model": 4096,
+          "d_state": 16,
+          "d_conv": 4,
+          "expand": 2
+        }
+      },
+      {
+        "id": "mamba_layer_22",
+        "layer_type": "mamba",
+        "input_shape": [4096, 4096],
+        "output_shape": [4096, 4096],
+        "params": {
+          "d_model": 4096,
+          "d_state": 16,
+          "d_conv": 4,
+          "expand": 2
+        }
+      },
+      {
+        "id": "mamba_layer_23",
+        "layer_type": "mamba",
+        "input_shape": [4096, 4096],
+        "output_shape": [4096, 4096],
+        "params": {
+          "d_model": 4096,
+          "d_state": 16,
+          "d_conv": 4,
+          "expand": 2
+        }
+      },
+      {
+        "id": "mamba_layer_24",
+        "layer_type": "mamba",
+        "input_shape": [4096, 4096],
+        "output_shape": [4096, 4096],
+        "params": {
+          "d_model": 4096,
+          "d_state": 16,
+          "d_conv": 4,
+          "expand": 2
+        }
+      },
+      {
+        "id": "mamba_layer_25",
+        "layer_type": "mamba",
+        "input_shape": [4096, 4096],
+        "output_shape": [4096, 4096],
+        "params": {
+          "d_model": 4096,
+          "d_state": 16,
+          "d_conv": 4,
+          "expand": 2
+        }
+      },
+      {
+        "id": "mamba_layer_26",
+        "layer_type": "mamba",
+        "input_shape": [4096, 4096],
+        "output_shape": [4096, 4096],
+        "params": {
+          "d_model": 4096,
+          "d_state": 16,
+          "d_conv": 4,
+          "expand": 2
+        }
+      },
+      {
+        "id": "mamba_layer_27",
+        "layer_type": "mamba",
+        "input_shape": [4096, 4096],
+        "output_shape": [4096, 4096],
+        "params": {
+          "d_model": 4096,
+          "d_state": 16,
+          "d_conv": 4,
+          "expand": 2
+        }
+      },
+      {
+        "id": "mamba_layer_28",
+        "layer_type": "mamba",
+        "input_shape": [4096, 4096],
+        "output_shape": [4096, 4096],
+        "params": {
+          "d_model": 4096,
+          "d_state": 16,
+          "d_conv": 4,
+          "expand": 2
+        }
+      },
+      {
+        "id": "mamba_layer_29",
+        "layer_type": "mamba",
+        "input_shape": [4096, 4096],
+        "output_shape": [4096, 4096],
+        "params": {
+          "d_model": 4096,
+          "d_state": 16,
+          "d_conv": 4,
+          "expand": 2
+        }
+      },
+      {
+        "id": "mamba_layer_30",
+        "layer_type": "mamba",
+        "input_shape": [4096, 4096],
+        "output_shape": [4096, 4096],
+        "params": {
+          "d_model": 4096,
+          "d_state": 16,
+          "d_conv": 4,
+          "expand": 2
+        }
+      },
+      {
+        "id": "mamba_layer_31",
+        "layer_type": "mamba",
+        "input_shape": [4096, 4096],
+        "output_shape": [4096, 4096],
+        "params": {
+          "d_model": 4096,
+          "d_state": 16,
+          "d_conv": 4,
+          "expand": 2
+        }
+      },
+      {
+        "id": "lm_head",
+        "layer_type": "linear",
+        "input_shape": [4096, 4096],
+        "output_shape": [4096, 256000],
+        "params": {
+          "in_features": 4096,
+          "out_features": 256000,
+          "bias": false
+        }
+      }
+    ],
+    "global_params": {
+      "sequence_length": 4096,
+      "vocab_size": 256000,
+      "embedding_dim": 4096,
+      "num_layers": 32,
+      "d": 4096,
+      "d_state": 16,
+      "d_conv": 4,
+      "expand": 2,
+      "image_size": 336,
+      "patch_size": 14,
+      "multimodal": true
+    }
+  },
+  "training": {
+    "batch_size": 1,
+    "optimizer": "adamw",
+    "learning_rate": 0.0001,
+    "precision": "bf16",
+    "gradient_checkpointing": true,
+    "max_steps": 100000,
+    "warmup_steps": 2000
+  },
+  "hardware": {
+    "gpus": [
+      {
+        "name": "H100",
+        "memory_gb": 80,
+        "tensor_cores": true
+      }
+    ],
+    "num_gpus": 8
+  },
+  "data": {
+    "dataset_size": 1000000,
+    "sequence_length": 4096,
+    "image_size": 336
+  }
+}

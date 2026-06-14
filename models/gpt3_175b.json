@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0.0",
+  "model": {
+    "name": "GPT-3-175B",
+    "type": "transformer",
+    "layers": [
+      {"id": "embed", "layer_type": "embedding", "params": {"vocab_size": 50257, "hidden_size": 12288}},
+      {"id": "layer_0", "layer_type": "attention", "params": {"hidden_size": 12288, "num_attention_heads": 96, "intermediate_size": 49152}},
+      {"id": "layer_1", "layer_type": "attention", "params": {"hidden_size": 12288, "num_attention_heads": 96, "intermediate_size": 49152}},
+      {"id": "layer_2", "layer_type": "attention", "params": {"hidden_size": 12288, "num_attention_heads": 96, "intermediate_size": 49152}},
+      {"id": "layer_3", "layer_type": "attention", "params": {"hidden_size": 12288, "num_attention_heads": 96, "intermediate_size": 49152}},
+      {"id": "layer_4", "layer_type": "attention", "params": {"hidden_size": 12288, "num_attention_heads": 96, "intermediate_size": 49152}},
+      {"id": "layer_5", "layer_type": "attention", "params": {"hidden_size": 12288, "num_attention_heads": 96, "intermediate_size": 49152}},
+      {"id": "layer_6", "layer_type": "attention", "params": {"hidden_size": 12288, "num_attention_heads": 96, "intermediate_size": 49152}},
+      {"id": "layer_7", "layer_type": "attention", "params": {"hidden_size": 12288, "num_attention_heads": 96, "intermediate_size": 49152}},
+      {"id": "layer_8", "layer_type": "attention", "params": {"hidden_size": 12288, "num_attention_heads": 96, "intermediate_size": 49152}},
+      {"id": "layer_9", "layer_type": "attention", "params": {"hidden_size": 12288, "num_attention_heads": 96, "intermediate_size": 49152}},
+      {"id": "ln_f", "layer_type": "normalization", "params": {"hidden_size": 12288}}
+    ]
+  },
+  "training": {
+    "batch_size": 32,
+    "sequence_length": 2048,
+    "precision": "bf16",
+    "learning_rate": 0.00001,
+    "num_epochs": 300
+  },
+  "hardware": {
+    "gpus": [{"name": "H100", "memory_gb": 80, "count": 1024}]
+  },
+  "data": {
+    "dataset_size": 500000000000,
+    "vocab_size": 50257,
+    "num_classes": 0
+  }
+}

@@ -1,0 +1,27 @@
+[package]
+name = "neurax-tui"
+version = "0.1.0"
+edition = "2021"
+description = "Terminal User Interface for Neurax IR model compilation visualization"
+
+[dependencies]
+neurax-core = { path = "../neurax-core" }
+neurax-ir = { path = "../neurax-ir" }
+neurax-parser = { path = "../neurax-parser" }
+
+ratatui = { workspace = true }
+crossterm = { workspace = true }
+tokio = { workspace = true }
+color-eyre = { workspace = true }
+unicode-width = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+
+[dependencies.uuid]
+version = "1.0"
+features = ["v4"]
+
+[[bin]]
+name = "neurax-tui"
+path = "src/main.rs"

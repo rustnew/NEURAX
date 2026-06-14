@@ -1,0 +1,21 @@
+[package]
+name = "neurax-formulas"
+version = "0.1.0"
+edition = "2021"
+description = "Analytical formulas for ML operations - Hot path, maximum optimization"
+
+[dependencies]
+tracing = { workspace = true }
+evalexpr = { workspace = true }
+
+[dev-dependencies]
+approx = { workspace = true }
+proptest = { workspace = true }
+criterion = { workspace = true }
+
+[lints]
+workspace = true
+
+[[bench]]
+name = "formulas_bench"
+harness = false

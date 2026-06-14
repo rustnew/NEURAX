@@ -1,0 +1,32 @@
+[package]
+name = "neurax-parser"
+version = "0.1.0"
+edition = "2021"
+description = "JSON parsing for NEURAX universal format"
+
+[dependencies]
+# Sérialisation
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Erreurs
+thiserror = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# Expression evaluator
+evalexpr = { workspace = true }
+
+# Performance
+ahash = { workspace = true }
+indexmap = { workspace = true }
+itertools = { workspace = true }
+
+[dev-dependencies]
+approx = { workspace = true }
+proptest = { workspace = true }
+neurax-ir = { path = "../neurax-ir" }
+
+[lints]
+workspace = true

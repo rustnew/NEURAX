@@ -1,0 +1,25 @@
+[package]
+name = "neurax-cli"
+version = "0.1.0"
+edition = "2021"
+description = "CLI interface for NEURAX"
+
+[[bin]]
+name = "neurax"
+path = "src/main.rs"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+chrono = { workspace = true }
+neurax-core = { path = "../neurax-core" }
+neurax-parser = { path = "../neurax-parser" }
+neurax-ir = { path = "../neurax-ir" }
+neurax-mlir = { path = "../neurax-mlir", optional = true }
+
+[features]
+default = []
+# Enable the MLIR backend (requires LLVM 18: set LLVM_SYS_180_PREFIX / MLIR_SYS_180_PREFIX / TABLEGEN_180_PREFIX)
+mlir = ["dep:neurax-mlir"]

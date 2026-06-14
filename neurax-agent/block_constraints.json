@@ -1,0 +1,349 @@
+{
+  "blocks": {
+    "input": {
+      "max_inputs": 0,
+      "max_outputs": -1,
+      "notes": "Entry point of the model. No inputs allowed. Connect FROM input TO the first processing layer.",
+      "common_fix": "Input should be the first node. Connect input -> embedding/conv2d/first_layer."
+    },
+    "output": {
+      "max_inputs": 1,
+      "max_outputs": 0,
+      "notes": "Final output node. Only ONE input allowed. Must be the last node in the chain.",
+      "common_fix": "If you need to merge multiple branches, use concat/residual_add/merge BEFORE output, then connect that merge node -> output."
+    },
+    "embedding": {
+      "max_inputs": 1,
+      "max_outputs": -1,
+      "notes": "Token embedding layer. Single input (from input node or positional encoding).",
+      "common_fix": "Connect input -> embedding. For residual streams, branch AFTER embedding."
+    },
+    "positional_encoding": {
+      "max_inputs": 1,
+      "max_outputs": -1,
+      "notes": "Adds position information. Single input.",
+      "common_fix": "Typically: embedding -> positional_encoding -> attention."
+    },
+    "attention": {
+      "max_inputs": 1,
+      "max_outputs": -1,
+      "notes": "Multi-head attention. Single input stream.",
+      "common_fix": "Connect from previous layer. For multi-branch attention, use separate attention blocks."
+    },
+    "mha": {
+      "max_inputs": 1,
+      "max_outputs": -1,
+      "notes": "Full multi-head attention. Single input.",
+      "common_fix": "Same as attention - single input stream."
+    },
+    "gqa": {
+      "max_inputs": 1,
+      "max_outputs": -1,
+      "notes": "Grouped Query Attention. Single input.",
+      "common_fix": "Efficient attention variant. Single input stream."
+    },
+    "layernorm": {
+      "max_inputs": 1,
+      "max_outputs": -1,
+      "notes": "Layer normalization. Single input only.",
+      "common_fix": "If merging multiple streams, use concat/residual_add BEFORE layernorm."
+    },
+    "rmsnorm": {
+      "max_inputs": 1,
+      "max_outputs": -1,
+      "notes": "RMS normalization. Single input only.",
+      "common_fix": "Same as layernorm - single input."
+    },
+    "ffn": {
+      "max_inputs": 1,
+      "max_outputs": -1,
+      "notes": "Feed-forward network. Single input.",
+      "common_fix": "Standard transformer FFN. Single input stream."
+    },
+    "swiglu": {
+      "max_inputs": 1,
+      "max_outputs": -1,
+      "notes": "SwiGLU activation FFN. Single input.",
+      "common_fix": "Efficient FFN variant. Single input."
+    },
+    "dropout": {
+      "max_inputs": 1,
+      "max_outputs": -1,
+      "notes": "Dropout regularization. Single input.",
+      "common_fix": "Pass-through layer. Single input."
+    },
+    "conv2d": {
+      "max_inputs": 1,
+      "max_outputs": -1,
+      "notes": "2D convolution. Single input tensor.",
+      "common_fix": "For parallel convolutions, use separate conv2d blocks then merge with concat."
+    },
+    "max_pool": {
+      "max_inputs": 1,
+      "max_outputs": -1,
+      "notes": "Max pooling. Single input.",
+      "common_fix": "Standard pooling. Single input."
+    },
+    "avg_pool": {
+      "max_inputs": 1,
+      "max_outputs": -1,
+      "notes": "Average pooling. Single input.",
+      "common_fix": "Standard pooling. Single input."
+    },
+    "batchnorm": {
+      "max_inputs": 1,
+      "max_outputs": -1,
+      "notes": "Batch normalization. Single input.",
+      "common_fix": "Single input normalization."
+    },
+    "groupnorm": {
+      "max_inputs": 1,
+      "max_outputs": -1,
+      "notes": "Group normalization. Single input.",
+      "common_fix": "Single input normalization."
+    },
+    "flatten": {
+      "max_inputs": 1,
+      "max_outputs": -1,
+      "notes": "Flatten to 1D. Single input.",
+      "common_fix": "Single input. Used before dense layers."
+    },
+    "dense": {
+      "max_inputs": 1,
+      "max_outputs": -1,
+      "notes": "Dense/Linear layer. Single input.",
+      "common_fix": "Single input. For merging branches, use concat first."
+    },
+    "relu": {
+      "max_inputs": 1,
+      "max_outputs": -1,
+      "notes": "ReLU activation. Single input.",
+      "common_fix": "Pass-through activation."
+    },
+    "gelu": {
+      "max_inputs": 1,
+      "max_outputs": -1,
+      "notes": "GELU activation. Single input.",
+      "common_fix": "Pass-through activation."
+    },
+    "global_pool": {
+      "max_inputs": 1,
+      "max_outputs": -1,
+      "notes": "Global average pooling. Single input.",
+      "common_fix": "Single input. Used before classification head."
+    },
+    "classification_head": {
+      "max_inputs": 1,
+      "max_outputs": -1,
+      "notes": "Classification output layer. Single input.",
+      "common_fix": "Connect global_pool -> classification_head -> output."
+    },
+    "lm_head": {
+      "max_inputs": -1,
+      "max_outputs": -1,
+      "notes": "Language model head. Can accept multiple inputs (from different expert branches).",
+      "common_fix": "Fan-in capable. Can merge multiple expert outputs."
+    },
+    "residual": {
+      "max_inputs": -1,
+      "max_outputs": -1,
+      "notes": "Residual/skip connection. Can merge multiple inputs (main + skip).",
+      "common_fix": "Connect main path and skip path INTO residual, then output goes to next layer."
+    },
+    "residual_add": {
+      "max_inputs": -1,
+      "max_outputs": -1,
+      "notes": "Add residual connection. Can merge multiple inputs.",
+      "common_fix": "Fan-in capable. Use to combine skip connections with main path."
+    },
+    "skip_connection": {
+      "max_inputs": -1,
+      "max_outputs": -1,
+      "notes": "Skip connection block. Can merge multiple inputs.",
+      "common_fix": "Fan-in capable. Combines multiple streams."
+    },
+    "concat": {
+      "max_inputs": -1,
+      "max_outputs": -1,
+      "notes": "Concatenate multiple tensors. Unlimited inputs.",
+      "common_fix": "Use concat to merge parallel branches (e.g., Inception-style multi-branch)."
+    },
+    "merge": {
+      "max_inputs": -1,
+      "max_outputs": -1,
+      "notes": "Generic merge block. Unlimited inputs. Combines multiple streams.",
+      "common_fix": "Fan-in capable. Use when you need to combine multiple outputs into one stream."
+    },
+    "add": {
+      "max_inputs": -1,
+      "max_outputs": -1,
+      "notes": "Element-wise addition. Can merge multiple inputs.",
+      "common_fix": "Fan-in capable. Used for residual connections."
+    },
+    "gate": {
+      "max_inputs": -1,
+      "max_outputs": -1,
+      "notes": "Router/Gate for MoE. Can accept multiple inputs.",
+      "common_fix": "Fan-in capable. Routes tokens to experts."
+    },
+    "expert": {
+      "max_inputs": 1,
+      "max_outputs": -1,
+      "notes": "Expert FFN in MoE. Single input from router.",
+      "common_fix": "Each expert receives routed tokens. Single input."
+    },
+    "moe_block": {
+      "max_inputs": -1,
+      "max_outputs": -1,
+      "notes": "Complete MoE block with routing. Fan-in capable.",
+      "common_fix": "Handles routing internally. Can accept multiple inputs."
+    },
+    "router_softmax": {
+      "max_inputs": -1,
+      "max_outputs": -1,
+      "notes": "Softmax router for MoE. Fan-in capable.",
+      "common_fix": "Computes routing weights. Can accept multiple inputs."
+    },
+    "expert_combine": {
+      "max_inputs": -1,
+      "max_outputs": -1,
+      "notes": "Combine expert outputs. Fan-in capable.",
+      "common_fix": "Merges outputs from multiple experts."
+    },
+    "output_combination": {
+      "max_inputs": -1,
+      "max_outputs": -1,
+      "notes": "Output combination for MoE. Fan-in capable.",
+      "common_fix": "Combines expert outputs into final output."
+    },
+    "mamba_block": {
+      "max_inputs": 1,
+      "max_outputs": -1,
+      "notes": "Mamba SSM block. Single input.",
+      "common_fix": "State space model block. Single input stream."
+    },
+    "s4_block": {
+      "max_inputs": 1,
+      "max_outputs": -1,
+      "notes": "S4 state space block. Single input.",
+      "common_fix": "Structured state space. Single input."
+    },
+    "lstm": {
+      "max_inputs": 1,
+      "max_outputs": -1,
+      "notes": "LSTM layer. Single input sequence.",
+      "common_fix": "Recurrent layer. Single input."
+    },
+    "gru": {
+      "max_inputs": 1,
+      "max_outputs": -1,
+      "notes": "GRU layer. Single input sequence.",
+      "common_fix": "Recurrent layer. Single input."
+    },
+    "bilstm": {
+      "max_inputs": 1,
+      "max_outputs": -1,
+      "notes": "Bidirectional LSTM. Single input.",
+      "common_fix": "Processes forward and backward. Single input."
+    },
+    "gcn_conv": {
+      "max_inputs": 1,
+      "max_outputs": -1,
+      "notes": "Graph convolution. Single input (node features).",
+      "common_fix": "GNN layer. Single input."
+    },
+    "gat_conv": {
+      "max_inputs": 1,
+      "max_outputs": -1,
+      "notes": "Graph attention convolution. Single input.",
+      "common_fix": "GNN attention layer. Single input."
+    },
+    "sage_conv": {
+      "max_inputs": 1,
+      "max_outputs": -1,
+      "notes": "GraphSAGE convolution. Single input.",
+      "common_fix": "GNN layer. Single input."
+    },
+    "global_mean_pool": {
+      "max_inputs": 1,
+      "max_outputs": -1,
+      "notes": "Global mean pooling for graphs. Single input.",
+      "common_fix": "Graph-level pooling. Single input."
+    },
+    "conv_transpose2d": {
+      "max_inputs": 1,
+      "max_outputs": -1,
+      "notes": "Transposed convolution (upsampling). Single input.",
+      "common_fix": "Generator/decoder layer. Single input."
+    },
+    "upsample": {
+      "max_inputs": 1,
+      "max_outputs": -1,
+      "notes": "Upsampling layer. Single input.",
+      "common_fix": "Decoder layer. Single input."
+    },
+    "downsample": {
+      "max_inputs": 1,
+      "max_outputs": -1,
+      "notes": "Downsampling layer. Single input.",
+      "common_fix": "Encoder layer. Single input."
+    },
+    "leaky_relu": {
+      "max_inputs": 1,
+      "max_outputs": -1,
+      "notes": "Leaky ReLU activation. Single input.",
+      "common_fix": "GAN activation. Single input."
+    },
+    "timestep_embedding": {
+      "max_inputs": 1,
+      "max_outputs": -1,
+      "notes": "Timestep embedding for diffusion. Single input.",
+      "common_fix": "Diffusion-specific. Single input."
+    },
+    "residual_block": {
+      "max_inputs": 1,
+      "max_outputs": -1,
+      "notes": "Residual block (internal skip). Single input.",
+      "common_fix": "Contains internal skip connection. Single external input."
+    },
+    "unet_block": {
+      "max_inputs": -1,
+      "max_outputs": -1,
+      "notes": "U-Net block with skip connections. Fan-in capable.",
+      "common_fix": "Can merge encoder and decoder paths."
+    },
+    "lif_neuron": {
+      "max_inputs": 1,
+      "max_outputs": -1,
+      "notes": "Leaky integrate-and-fire neuron (SNN). Single input.",
+      "common_fix": "Spiking neuron. Single input."
+    },
+    "custom": {
+      "max_inputs": -1,
+      "max_outputs": -1,
+      "notes": "Custom block. Fan-in capable by default.",
+      "common_fix": "User-defined block. Check specific requirements."
+    },
+    "transformer_layer": {
+      "max_inputs": 1,
+      "max_outputs": -1,
+      "notes": "Complete transformer layer (attention + FFN). Single input.",
+      "common_fix": "Stack multiple transformer_layer blocks in sequence. Single input each."
+    }
+  },
+  "merge_capable_types": [
+    "concat", "residual_add", "skip_connection", "residual", "merge", "add",
+    "router_softmax", "gate", "lm_head", "expert_combine",
+    "output_combination", "moe_block", "unet_block"
+  ],
+  "single_input_only_types": [
+    "output", "embedding", "attention", "mha", "gqa", "layernorm", "rmsnorm",
+    "ffn", "swiglu", "dropout", "conv2d", "max_pool", "avg_pool", "batchnorm",
+    "groupnorm", "flatten", "dense", "relu", "gelu", "global_pool",
+    "classification_head", "expert", "mamba_block", "s4_block", "lstm", "gru",
+    "bilstm", "gcn_conv", "gat_conv", "sage_conv", "global_mean_pool",
+    "conv_transpose2d", "upsample", "downsample", "leaky_relu",
+    "timestep_embedding", "residual_block", "lif_neuron", "transformer_layer",
+    "positional_encoding"
+  ]
+}

@@ -1,0 +1,1831 @@
+{
+  "cnn": {
+    "description": "Convolutional Neural Networks for visual tasks",
+    "taskHints": [
+      "image classification",
+      "object detection",
+      "visual feature extraction",
+      "image segmentation",
+      "mobile deployment"
+    ],
+    "defaultInputShape": "[B, 3, 224, 224]",
+    "blocks": [
+      {
+        "type": "input",
+        "name": "Input",
+        "defaultParams": {
+          "shape": "[B, 3, 224, 224]"
+        }
+      },
+      {
+        "type": "output",
+        "name": "Output",
+        "defaultParams": {}
+      },
+      {
+        "type": "conv2d",
+        "name": "Conv2D",
+        "defaultParams": {
+          "in_channels": 3,
+          "out_channels": 64,
+          "kernel_size": 3,
+          "stride": 1,
+          "padding": 1,
+          "bias": true
+        }
+      },
+      {
+        "type": "depthwise_conv2d",
+        "name": "Depthwise Conv2D",
+        "defaultParams": {
+          "in_channels": 64,
+          "kernel_size": 3,
+          "stride": 1,
+          "padding": 1,
+          "groups": 64,
+          "bias": false
+        }
+      },
+      {
+        "type": "se_block",
+        "name": "Squeeze-and-Excitation Block",
+        "defaultParams": {
+          "channels": 64,
+          "reduction_ratio": 16
+        }
+      },
+      {
+        "type": "max_pool",
+        "name": "MaxPool2D",
+        "defaultParams": {
+          "pool_size": 2,
+          "stride": 2
+        }
+      },
+      {
+        "type": "avg_pool",
+        "name": "AvgPool2D",
+        "defaultParams": {
+          "pool_size": 2,
+          "stride": 2
+        }
+      },
+      {
+        "type": "global_pool",
+        "name": "Global Average Pool",
+        "defaultParams": {}
+      },
+      {
+        "type": "batchnorm",
+        "name": "BatchNorm2D",
+        "defaultParams": {
+          "num_features": 64,
+          "eps": 1e-05,
+          "momentum": 0.1,
+          "affine": true
+        }
+      },
+      {
+        "type": "instancenorm",
+        "name": "InstanceNorm2D",
+        "defaultParams": {
+          "num_features": 64,
+          "eps": 1e-05,
+          "affine": false
+        }
+      },
+      {
+        "type": "groupnorm",
+        "name": "GroupNorm",
+        "defaultParams": {
+          "num_groups": 32,
+          "num_channels": 64,
+          "eps": 1e-05
+        }
+      },
+      {
+        "type": "layernorm",
+        "name": "LayerNorm",
+        "defaultParams": {
+          "normalized_shape": 64,
+          "eps": 1e-05
+        }
+      },
+      {
+        "type": "dropout",
+        "name": "Dropout",
+        "defaultParams": {
+          "p": 0.1
+        }
+      },
+      {
+        "type": "flatten",
+        "name": "Flatten",
+        "defaultParams": {}
+      },
+      {
+        "type": "dense",
+        "name": "Dense / Linear",
+        "defaultParams": {
+          "in_features": 512,
+          "out_features": 256,
+          "bias": true
+        }
+      },
+      {
+        "type": "relu",
+        "name": "ReLU",
+        "defaultParams": {}
+      },
+      {
+        "type": "gelu",
+        "name": "GELU",
+        "defaultParams": {}
+      },
+      {
+        "type": "silu",
+        "name": "SiLU",
+        "defaultParams": {}
+      },
+      {
+        "type": "residual",
+        "name": "Residual / Skip Connection",
+        "defaultParams": {
+          "projection": false
+        }
+      },
+      {
+        "type": "add",
+        "name": "Element-wise Add",
+        "defaultParams": {}
+      },
+      {
+        "type": "concat",
+        "name": "Concatenate",
+        "defaultParams": {
+          "axis": 1
+        }
+      },
+      {
+        "type": "merge",
+        "name": "Merge",
+        "defaultParams": {}
+      },
+      {
+        "type": "classification_head",
+        "name": "Classification Head",
+        "defaultParams": {
+          "in_features": 512,
+          "num_classes": 10
+        }
+      }
+    ],
+    "macroBlocks": [
+      {
+        "id": "macro-resnet-block",
+        "name": "ResNet Block",
+        "description": "Conv2D → BN → ReLU → Conv2D → BN → (+Skip) → ReLU"
+      },
+      {
+        "id": "macro-bottleneck",
+        "name": "Bottleneck Block",
+        "description": "1×1 Conv → 3×3 Conv → 1×1 Conv with residual"
+      },
+      {
+        "id": "macro-mbconv",
+        "name": "MBConv Block",
+        "description": "Expand Conv → Depthwise Conv2D → SE Block → Project Conv"
+      }
+    ],
+    "presets": [
+      {
+        "id": "cnn-lenet",
+        "name": "LeNet-5",
+        "description": "Classic CNN for digit recognition"
+      },
+      {
+        "id": "cnn-resnet",
+        "name": "ResNet-50",
+        "description": "Deep residual network with skip connections"
+      },
+      {
+        "id": "cnn-vgg",
+        "name": "VGG-16",
+        "description": "Very deep CNN with 3×3 convolutions"
+      },
+      {
+        "id": "cnn-mobilenet",
+        "name": "MobileNetV2",
+        "description": "Inverted residuals for mobile devices"
+      }
+    ],
+    "constraints": {
+      "requiredBlocks": [
+        "input",
+        "output",
+        "conv2d"
+      ],
+      "incompatibleBlocks": [
+        "mha",
+        "mha",
+        "gqa",
+        "expert",
+        "gate",
+        "mamba_block",
+        "s4_block",
+        "gcn_conv",
+        "gat_conv",
+        "sage_conv",
+        "lstm",
+        "gru",
+        "bilstm"
+      ]
+    }
+  },
+  "transformer": {
+    "description": "Transformer architectures for sequence modeling",
+    "taskHints": [
+      "text generation",
+      "language modeling",
+      "translation",
+      "text classification",
+      "sequence-to-sequence"
+    ],
+    "defaultInputShape": "[B, seq_len]",
+    "blocks": [
+      {
+        "type": "input",
+        "name": "Input",
+        "defaultParams": {
+          "shape": "[B, seq_len]"
+        }
+      },
+      {
+        "type": "output",
+        "name": "Output",
+        "defaultParams": {}
+      },
+      {
+        "type": "embedding",
+        "name": "Token Embedding",
+        "defaultParams": {
+          "vocab_size": 32000,
+          "d_model": 512,
+          "padding_idx": 0
+        }
+      },
+      {
+        "type": "positional_encoding",
+        "name": "Positional Encoding (sinusoidal)",
+        "defaultParams": {
+          "max_seq_len": 2048,
+          "d_model": 512,
+          "dropout": 0.1
+        }
+      },
+      {
+        "type": "rope",
+        "name": "Rotary Position Embedding (RoPE)",
+        "defaultParams": {
+          "dim": 64,
+          "base": 10000
+        }
+      },
+      {
+        "type": "alibi",
+        "name": "ALiBi Position Bias",
+        "defaultParams": {
+          "num_heads": 8
+        }
+      },
+      {
+        "type": "mha",
+        "name": "Multi-Head Attention",
+        "defaultParams": {
+          "num_heads": 8,
+          "d_model": 512,
+          "head_dim": 64,
+          "dropout": 0.0,
+          "bias": true,
+          "causal": false,
+          "use_kv_cache": false
+        }
+      },
+      {
+        "type": "gqa",
+        "name": "Grouped Query Attention",
+        "defaultParams": {
+          "num_heads": 8,
+          "num_kv_heads": 2,
+          "d_model": 512,
+          "head_dim": 64,
+          "dropout": 0.0,
+          "causal": true,
+          "use_kv_cache": false
+        }
+      },
+      {
+        "type": "layernorm",
+        "name": "LayerNorm",
+        "defaultParams": {
+          "normalized_shape": 512,
+          "eps": 1e-05
+        }
+      },
+      {
+        "type": "rmsnorm",
+        "name": "RMSNorm",
+        "defaultParams": {
+          "normalized_shape": 512,
+          "eps": 1e-06
+        }
+      },
+      {
+        "type": "ffn",
+        "name": "Feed-Forward Network",
+        "defaultParams": {
+          "d_model": 512,
+          "hidden_dim": 2048,
+          "activation": "relu",
+          "dropout": 0.0,
+          "bias": true
+        }
+      },
+      {
+        "type": "swiglu",
+        "name": "SwiGLU FFN",
+        "defaultParams": {
+          "d_model": 512,
+          "hidden_dim": 2048,
+          "bias": false,
+          "dropout": 0.0
+        }
+      },
+      {
+        "type": "dropout",
+        "name": "Dropout",
+        "defaultParams": {
+          "p": 0.1
+        }
+      },
+      {
+        "type": "residual",
+        "name": "Residual Connection",
+        "defaultParams": {
+          "projection": false
+        }
+      },
+      {
+        "type": "add",
+        "name": "Element-wise Add",
+        "defaultParams": {}
+      },
+      {
+        "type": "lm_head",
+        "name": "LM Head",
+        "defaultParams": {
+          "in_features": 512,
+          "vocab_size": 32000,
+          "weight_tying": true,
+          "bias": false
+        }
+      },
+      {
+        "type": "classification_head",
+        "name": "Classification Head",
+        "defaultParams": {
+          "in_features": 512,
+          "num_classes": 10
+        }
+      }
+    ],
+    "macroBlocks": [
+      {
+        "id": "macro-transformer-block",
+        "name": "Standard Transformer Block",
+        "description": "LayerNorm → MHA → Residual → LayerNorm → FFN → Residual"
+      },
+      {
+        "id": "macro-decoder-block",
+        "name": "Decoder-Only Block",
+        "description": "RMSNorm → GQA (causal) → Residual → RMSNorm → SwiGLU → Residual"
+      },
+      {
+        "id": "macro-cross-attn",
+        "name": "Cross-Attention Block",
+        "description": "LayerNorm → Cross-MHA → Residual (encoder-decoder)"
+      }
+    ],
+    "presets": [
+      {
+        "id": "gpt-style",
+        "name": "GPT-style (Decoder-Only)",
+        "description": "Autoregressive decoder with causal masking"
+      },
+      {
+        "id": "bert-style",
+        "name": "BERT-style (Encoder-Only)",
+        "description": "Bidirectional encoder for representation learning"
+      },
+      {
+        "id": "llama-style",
+        "name": "LLaMA-style",
+        "description": "Efficient decoder with RMSNorm, GQA, SwiGLU and RoPE"
+      }
+    ],
+    "constraints": {
+      "requiredBlocks": [
+        "input",
+        "output",
+        "mha"
+      ],
+      "incompatibleBlocks": [
+        "gcn_conv",
+        "gat_conv",
+        "sage_conv",
+        "mamba_block",
+        "s4_block",
+        "lstm",
+        "gru",
+        "bilstm",
+        "conv2d"
+      ]
+    }
+  },
+  "moe": {
+    "description": "Mixture of Experts for large-scale sparse models",
+    "taskHints": [
+      "scaling model capacity",
+      "conditional computation",
+      "sparse activation",
+      "efficient scaling",
+      "expert routing"
+    ],
+    "defaultInputShape": "[B, seq_len]",
+    "blocks": [
+      {
+        "type": "input",
+        "name": "Input",
+        "defaultParams": {
+          "shape": "[B, seq_len]"
+        }
+      },
+      {
+        "type": "output",
+        "name": "Output",
+        "defaultParams": {}
+      },
+      {
+        "type": "embedding",
+        "name": "Token Embedding",
+        "defaultParams": {
+          "vocab_size": 32000,
+          "d_model": 512,
+          "padding_idx": 0
+        }
+      },
+      {
+        "type": "mha",
+        "name": "Multi-Head Attention",
+        "defaultParams": {
+          "num_heads": 8,
+          "d_model": 512,
+          "head_dim": 64,
+          "dropout": 0.0,
+          "bias": true,
+          "causal": false,
+          "use_kv_cache": false
+        }
+      },
+      {
+        "type": "gate",
+        "name": "Router / Gate",
+        "defaultParams": {
+          "num_experts": 8,
+          "top_k": 2,
+          "d_model": 512,
+          "routing_algorithm": "top_k",
+          "load_balancing_loss": true,
+          "noise": 0.0
+        }
+      },
+      {
+        "type": "expert",
+        "name": "Expert FFN",
+        "defaultParams": {
+          "d_model": 512,
+          "hidden_dim": 2048,
+          "expert_id": 0,
+          "activation": "relu",
+          "bias": true
+        }
+      },
+      {
+        "type": "expert_combine",
+        "name": "Expert Combine",
+        "defaultParams": {
+          "num_experts": 8,
+          "top_k": 2,
+          "combine_method": "weighted_sum"
+        }
+      },
+      {
+        "type": "router_softmax",
+        "name": "Router Softmax",
+        "defaultParams": {
+          "num_experts": 8,
+          "top_k": 2
+        }
+      },
+      {
+        "type": "moe_block",
+        "name": "MoE Block",
+        "defaultParams": {
+          "num_experts": 8,
+          "top_k": 2,
+          "d_model": 512,
+          "hidden_dim": 2048
+        }
+      },
+      {
+        "type": "layernorm",
+        "name": "LayerNorm",
+        "defaultParams": {
+          "normalized_shape": 512,
+          "eps": 1e-05
+        }
+      },
+      {
+        "type": "rmsnorm",
+        "name": "RMSNorm",
+        "defaultParams": {
+          "normalized_shape": 512,
+          "eps": 1e-06
+        }
+      },
+      {
+        "type": "dropout",
+        "name": "Dropout",
+        "defaultParams": {
+          "p": 0.1
+        }
+      },
+      {
+        "type": "residual",
+        "name": "Residual Connection",
+        "defaultParams": {
+          "projection": false
+        }
+      },
+      {
+        "type": "add",
+        "name": "Element-wise Add",
+        "defaultParams": {}
+      },
+      {
+        "type": "concat",
+        "name": "Concat",
+        "defaultParams": {
+          "axis": 1
+        }
+      },
+      {
+        "type": "merge",
+        "name": "Merge",
+        "defaultParams": {}
+      },
+      {
+        "type": "ffn",
+        "name": "Feed-Forward Network",
+        "defaultParams": {
+          "d_model": 512,
+          "hidden_dim": 2048,
+          "activation": "relu",
+          "dropout": 0.0,
+          "bias": true
+        }
+      },
+      {
+        "type": "swiglu",
+        "name": "SwiGLU FFN",
+        "defaultParams": {
+          "d_model": 512,
+          "hidden_dim": 2048,
+          "bias": false,
+          "dropout": 0.0
+        }
+      },
+      {
+        "type": "lm_head",
+        "name": "LM Head",
+        "defaultParams": {
+          "in_features": 512,
+          "vocab_size": 32000,
+          "weight_tying": true,
+          "bias": false
+        }
+      }
+    ],
+    "macroBlocks": [
+      {
+        "id": "macro-moe-block",
+        "name": "MoE Transformer Block",
+        "description": "LayerNorm → MHA → Residual → LayerNorm → Gate → Expert FFN → Combine → Residual"
+      },
+      {
+        "id": "macro-moe-ffn",
+        "name": "MoE FFN Layer",
+        "description": "Gate (Router) → Dispatch Top-K → Expert FFN → Expert Combine"
+      }
+    ],
+    "presets": [
+      {
+        "id": "mixtral-style",
+        "name": "Mixtral 8×7B",
+        "description": "8 experts with top-2 routing per layer"
+      },
+      {
+        "id": "switch-transformer",
+        "name": "Switch Transformer",
+        "description": "Single-expert routing for simplicity"
+      }
+    ],
+    "constraints": {
+      "requiredBlocks": [
+        "input",
+        "output",
+        "gate"
+      ],
+      "incompatibleBlocks": [
+        "gcn_conv",
+        "gat_conv",
+        "sage_conv",
+        "mamba_block",
+        "s4_block",
+        "lstm",
+        "gru",
+        "bilstm",
+        "conv2d"
+      ]
+    }
+  },
+  "ssm": {
+    "description": "State Space Models for efficient sequence modeling",
+    "taskHints": [
+      "long-range sequences",
+      "efficient inference",
+      "linear complexity",
+      "mamba-style",
+      "selective state spaces"
+    ],
+    "defaultInputShape": "[B, seq_len]",
+    "blocks": [
+      {
+        "type": "input",
+        "name": "Input",
+        "defaultParams": {
+          "shape": "[B, seq_len]"
+        }
+      },
+      {
+        "type": "output",
+        "name": "Output",
+        "defaultParams": {}
+      },
+      {
+        "type": "embedding",
+        "name": "Token Embedding",
+        "defaultParams": {
+          "vocab_size": 32000,
+          "d_model": 512,
+          "padding_idx": 0
+        }
+      },
+      {
+        "type": "mamba_block",
+        "name": "Mamba Block",
+        "defaultParams": {
+          "d_model": 512,
+          "d_state": 16,
+          "d_conv": 4,
+          "expand": 2,
+          "dt_rank": "auto",
+          "bias": false,
+          "conv_bias": true
+        }
+      },
+      {
+        "type": "s4_block",
+        "name": "S4 Block",
+        "defaultParams": {
+          "d_model": 512,
+          "d_state": 64,
+          "dt_min": 0.001,
+          "dt_max": 0.1,
+          "bidirectional": false
+        }
+      },
+      {
+        "type": "conv1d",
+        "name": "Conv1D",
+        "defaultParams": {
+          "in_channels": 512,
+          "out_channels": 512,
+          "kernel_size": 4,
+          "groups": 512,
+          "bias": true
+        }
+      },
+      {
+        "type": "dense",
+        "name": "Linear Projection",
+        "defaultParams": {
+          "in_features": 512,
+          "out_features": 512,
+          "bias": true
+        }
+      },
+      {
+        "type": "layernorm",
+        "name": "LayerNorm",
+        "defaultParams": {
+          "normalized_shape": 512,
+          "eps": 1e-05
+        }
+      },
+      {
+        "type": "rmsnorm",
+        "name": "RMSNorm",
+        "defaultParams": {
+          "normalized_shape": 512,
+          "eps": 1e-06
+        }
+      },
+      {
+        "type": "dropout",
+        "name": "Dropout",
+        "defaultParams": {
+          "p": 0.1
+        }
+      },
+      {
+        "type": "residual",
+        "name": "Residual Connection",
+        "defaultParams": {
+          "projection": false
+        }
+      },
+      {
+        "type": "add",
+        "name": "Element-wise Add",
+        "defaultParams": {}
+      },
+      {
+        "type": "silu",
+        "name": "SiLU",
+        "defaultParams": {}
+      },
+      {
+        "type": "lm_head",
+        "name": "LM Head",
+        "defaultParams": {
+          "in_features": 512,
+          "vocab_size": 32000,
+          "weight_tying": true,
+          "bias": false
+        }
+      }
+    ],
+    "macroBlocks": [
+      {
+        "id": "macro-mamba-block",
+        "name": "MAMBA Block",
+        "description": "Linear Proj → Conv1D → SSM Core (d_state, dt_rank) → SiLU Gate → Output Proj"
+      },
+      {
+        "id": "macro-s4-block",
+        "name": "S4 Block",
+        "description": "SSM Core (HiPPO) → GLU Gate → Residual"
+      }
+    ],
+    "presets": [
+      {
+        "id": "mamba-style",
+        "name": "Mamba",
+        "description": "Selective state space for efficient long-range modeling"
+      },
+      {
+        "id": "mamba2-style",
+        "name": "Mamba 2",
+        "description": "Structured State Space Duality (SSD) — longer sequences, better parallelism"
+      }
+    ],
+    "constraints": {
+      "requiredBlocks": [
+        "input",
+        "output"
+      ],
+      "incompatibleBlocks": [
+        "gcn_conv",
+        "gat_conv",
+        "sage_conv",
+        "conv2d",
+        "expert",
+        "gate",
+        "lstm",
+        "gru",
+        "bilstm"
+      ]
+    }
+  },
+  "rnn": {
+    "description": "Recurrent Neural Networks for sequential data",
+    "taskHints": [
+      "time series",
+      "sequential data",
+      "variable length sequences",
+      "temporal modeling",
+      "sequence classification"
+    ],
+    "defaultInputShape": "[B, seq_len, input_size]",
+    "blocks": [
+      {
+        "type": "input",
+        "name": "Input",
+        "defaultParams": {
+          "shape": "[B, seq_len, input_size]"
+        }
+      },
+      {
+        "type": "output",
+        "name": "Output",
+        "defaultParams": {}
+      },
+      {
+        "type": "embedding",
+        "name": "Embedding",
+        "defaultParams": {
+          "vocab_size": 32000,
+          "embed_dim": 256,
+          "padding_idx": 0
+        }
+      },
+      {
+        "type": "lstm",
+        "name": "LSTM",
+        "defaultParams": {
+          "input_size": 256,
+          "hidden_size": 256,
+          "num_layers": 1,
+          "dropout": 0.0,
+          "bidirectional": false,
+          "batch_first": true,
+          "bias": true
+        }
+      },
+      {
+        "type": "gru",
+        "name": "GRU",
+        "defaultParams": {
+          "input_size": 256,
+          "hidden_size": 256,
+          "num_layers": 1,
+          "dropout": 0.0,
+          "bidirectional": false,
+          "batch_first": true,
+          "bias": true
+        }
+      },
+      {
+        "type": "bilstm",
+        "name": "BiLSTM",
+        "defaultParams": {
+          "input_size": 256,
+          "hidden_size": 256,
+          "num_layers": 1,
+          "dropout": 0.0,
+          "merge_mode": "concat",
+          "batch_first": true
+        }
+      },
+      {
+        "type": "bigru",
+        "name": "BiGRU",
+        "defaultParams": {
+          "input_size": 256,
+          "hidden_size": 256,
+          "num_layers": 1,
+          "dropout": 0.0,
+          "merge_mode": "concat",
+          "batch_first": true
+        }
+      },
+      {
+        "type": "bahdanau_attention",
+        "name": "Bahdanau Attention",
+        "defaultParams": {
+          "query_size": 256,
+          "key_size": 256,
+          "hidden_size": 128
+        }
+      },
+      {
+        "type": "dense",
+        "name": "Linear Projection",
+        "defaultParams": {
+          "in_features": 256,
+          "out_features": 256,
+          "bias": true
+        }
+      },
+      {
+        "type": "dropout",
+        "name": "Dropout",
+        "defaultParams": {
+          "p": 0.1
+        }
+      },
+      {
+        "type": "relu",
+        "name": "ReLU",
+        "defaultParams": {}
+      },
+      {
+        "type": "tanh",
+        "name": "Tanh",
+        "defaultParams": {}
+      },
+      {
+        "type": "layernorm",
+        "name": "LayerNorm",
+        "defaultParams": {
+          "normalized_shape": 256,
+          "eps": 1e-05
+        }
+      },
+      {
+        "type": "residual",
+        "name": "Residual Connection",
+        "defaultParams": {
+          "projection": false
+        }
+      },
+      {
+        "type": "add",
+        "name": "Element-wise Add",
+        "defaultParams": {}
+      },
+      {
+        "type": "classification_head",
+        "name": "Classification Head",
+        "defaultParams": {
+          "in_features": 256,
+          "num_classes": 10
+        }
+      }
+    ],
+    "macroBlocks": [
+      {
+        "id": "macro-lstm-cell",
+        "name": "LSTM Cell",
+        "description": "Gates: Forget → Input → Cell → Output"
+      },
+      {
+        "id": "macro-gru-cell",
+        "name": "GRU Cell",
+        "description": "Gates: Reset → Update → Candidate"
+      },
+      {
+        "id": "macro-bidirectional",
+        "name": "Bidirectional Layer",
+        "description": "Forward pass + backward pass (merge_mode)"
+      }
+    ],
+    "presets": [
+      {
+        "id": "lstm-classifier",
+        "name": "LSTM Classifier",
+        "description": "Simple LSTM for sequence classification"
+      },
+      {
+        "id": "seq2seq-gru",
+        "name": "Seq2Seq GRU",
+        "description": "GRU encoder-decoder with Bahdanau attention"
+      }
+    ],
+    "constraints": {
+      "requiredBlocks": [
+        "input",
+        "output"
+      ],
+      "incompatibleBlocks": [
+        "conv2d",
+        "mha",
+        "gqa",
+        "expert",
+        "gate",
+        "mamba_block",
+        "s4_block",
+        "gcn_conv",
+        "gat_conv"
+      ]
+    }
+  },
+  "gnn": {
+    "description": "Graph Neural Networks for graph-structured data",
+    "taskHints": [
+      "node classification",
+      "link prediction",
+      "graph classification",
+      "molecular graphs",
+      "social networks"
+    ],
+    "defaultInputShape": "[B, num_nodes, node_features]",
+    "blocks": [
+      {
+        "type": "input",
+        "name": "Input",
+        "defaultParams": {
+          "shape": "[B, num_nodes, node_features]"
+        }
+      },
+      {
+        "type": "output",
+        "name": "Output",
+        "defaultParams": {}
+      },
+      {
+        "type": "gcn_conv",
+        "name": "GCN Conv",
+        "defaultParams": {
+          "in_channels": 64,
+          "out_channels": 64,
+          "bias": true,
+          "normalize": false,
+          "add_self_loops": true
+        }
+      },
+      {
+        "type": "gat_conv",
+        "name": "GAT Conv",
+        "defaultParams": {
+          "in_channels": 64,
+          "out_channels": 64,
+          "heads": 8,
+          "dropout": 0.0,
+          "concat": true,
+          "negative_slope": 0.2,
+          "bias": true
+        }
+      },
+      {
+        "type": "sage_conv",
+        "name": "SAGE Conv",
+        "defaultParams": {
+          "in_channels": 64,
+          "out_channels": 64,
+          "bias": true,
+          "normalize": false,
+          "aggr": "mean"
+        }
+      },
+      {
+        "type": "edge_conv",
+        "name": "Edge Conv",
+        "defaultParams": {
+          "in_channels": 64,
+          "out_channels": 64,
+          "aggr": "max",
+          "bias": true
+        }
+      },
+      {
+        "type": "global_mean_pool",
+        "name": "Global Mean Pool",
+        "defaultParams": {}
+      },
+      {
+        "type": "global_max_pool",
+        "name": "Global Max Pool",
+        "defaultParams": {}
+      },
+      {
+        "type": "global_add_pool",
+        "name": "Global Add Pool",
+        "defaultParams": {}
+      },
+      {
+        "type": "graphnorm",
+        "name": "GraphNorm",
+        "defaultParams": {
+          "in_channels": 64,
+          "eps": 1e-05
+        }
+      },
+      {
+        "type": "batchnorm",
+        "name": "BatchNorm1D",
+        "defaultParams": {
+          "num_features": 64,
+          "eps": 1e-05,
+          "momentum": 0.1
+        }
+      },
+      {
+        "type": "layernorm",
+        "name": "LayerNorm",
+        "defaultParams": {
+          "normalized_shape": 64,
+          "eps": 1e-05
+        }
+      },
+      {
+        "type": "dense",
+        "name": "Linear Projection",
+        "defaultParams": {
+          "in_features": 64,
+          "out_features": 64,
+          "bias": true
+        }
+      },
+      {
+        "type": "dropout",
+        "name": "Dropout",
+        "defaultParams": {
+          "p": 0.1
+        }
+      },
+      {
+        "type": "relu",
+        "name": "ReLU",
+        "defaultParams": {}
+      },
+      {
+        "type": "residual",
+        "name": "Residual Connection",
+        "defaultParams": {
+          "projection": false
+        }
+      },
+      {
+        "type": "add",
+        "name": "Element-wise Add",
+        "defaultParams": {}
+      },
+      {
+        "type": "classification_head",
+        "name": "Classification Head",
+        "defaultParams": {
+          "in_features": 64,
+          "num_classes": 10
+        }
+      }
+    ],
+    "macroBlocks": [
+      {
+        "id": "macro-gcn-res",
+        "name": "ResNet GCN Block",
+        "description": "GCN Conv → GraphNorm → ReLU → Dropout → Residual"
+      },
+      {
+        "id": "macro-mpnn-block",
+        "name": "MPNN Block",
+        "description": "Edge Conv (Message) → Global Aggr → Dense (Update)"
+      },
+      {
+        "id": "macro-gat-block",
+        "name": "GAT Block",
+        "description": "GAT Conv (concat=true) → BatchNorm → ReLU → Dropout"
+      }
+    ],
+    "presets": [
+      {
+        "id": "gcn-basic",
+        "name": "Basic GCN",
+        "description": "Simple graph convolutional network"
+      },
+      {
+        "id": "gat-molecular",
+        "name": "Molecular GAT",
+        "description": "Multi-head GAT for molecular classification"
+      }
+    ],
+    "constraints": {
+      "requiredBlocks": [
+        "input",
+        "output"
+      ],
+      "incompatibleBlocks": [
+        "conv2d",
+        "mha",
+        "gqa",
+        "expert",
+        "gate",
+        "mamba_block",
+        "s4_block",
+        "lstm",
+        "gru",
+        "bilstm"
+      ]
+    }
+  },
+  "gan": {
+    "description": "Generative Adversarial Networks for image generation",
+    "taskHints": [
+      "image generation",
+      "data synthesis",
+      "adversarial training",
+      "style transfer",
+      "image-to-image translation"
+    ],
+    "defaultInputShape": "[B, latent_dim]",
+    "blocks": [
+      {
+        "type": "input",
+        "name": "Input",
+        "defaultParams": {
+          "shape": "[B, latent_dim]"
+        }
+      },
+      {
+        "type": "output",
+        "name": "Output",
+        "defaultParams": {}
+      },
+      {
+        "type": "conv2d",
+        "name": "Conv2D",
+        "defaultParams": {
+          "in_channels": 64,
+          "out_channels": 64,
+          "kernel_size": 4,
+          "stride": 2,
+          "padding": 1,
+          "bias": false
+        }
+      },
+      {
+        "type": "conv_transpose2d",
+        "name": "ConvTranspose2D",
+        "defaultParams": {
+          "in_channels": 64,
+          "out_channels": 64,
+          "kernel_size": 4,
+          "stride": 2,
+          "padding": 1,
+          "bias": false
+        }
+      },
+      {
+        "type": "batchnorm",
+        "name": "BatchNorm2D",
+        "defaultParams": {
+          "num_features": 64,
+          "eps": 1e-05,
+          "momentum": 0.1,
+          "affine": true
+        }
+      },
+      {
+        "type": "instancenorm",
+        "name": "InstanceNorm2D",
+        "defaultParams": {
+          "num_features": 64,
+          "eps": 1e-05,
+          "affine": false
+        }
+      },
+      {
+        "type": "pixelnorm",
+        "name": "Pixel Norm",
+        "defaultParams": {
+          "eps": 1e-08
+        }
+      },
+      {
+        "type": "spectral_norm",
+        "name": "Spectral Norm",
+        "defaultParams": {
+          "n_power_iterations": 1
+        }
+      },
+      {
+        "type": "dense",
+        "name": "Dense / Linear",
+        "defaultParams": {
+          "in_features": 256,
+          "out_features": 256,
+          "bias": true
+        }
+      },
+      {
+        "type": "dropout",
+        "name": "Dropout",
+        "defaultParams": {
+          "p": 0.1
+        }
+      },
+      {
+        "type": "upsample",
+        "name": "Upsample",
+        "defaultParams": {
+          "scale_factor": 2,
+          "mode": "nearest"
+        }
+      },
+      {
+        "type": "downsample",
+        "name": "Downsample",
+        "defaultParams": {
+          "scale_factor": 2
+        }
+      },
+      {
+        "type": "leaky_relu",
+        "name": "LeakyReLU",
+        "defaultParams": {
+          "negative_slope": 0.2
+        }
+      },
+      {
+        "type": "relu",
+        "name": "ReLU",
+        "defaultParams": {}
+      },
+      {
+        "type": "tanh",
+        "name": "Tanh",
+        "defaultParams": {}
+      },
+      {
+        "type": "sigmoid",
+        "name": "Sigmoid",
+        "defaultParams": {}
+      },
+      {
+        "type": "add",
+        "name": "Element-wise Add",
+        "defaultParams": {}
+      }
+    ],
+    "macroBlocks": [
+      {
+        "id": "macro-gen-block",
+        "name": "Generator Block",
+        "description": "ConvTranspose2D → BN → ReLU (upsampling block)"
+      },
+      {
+        "id": "macro-disc-block",
+        "name": "Discriminator Block",
+        "description": "Conv2D (SpectralNorm) → InstanceNorm → LeakyReLU (downsampling block)"
+      }
+    ],
+    "presets": [
+      {
+        "id": "dcgan",
+        "name": "DCGAN",
+        "description": "Deep Convolutional GAN"
+      },
+      {
+        "id": "stylegan",
+        "name": "StyleGAN",
+        "description": "Style-based generator with PixelNorm and MappingNetwork"
+      }
+    ],
+    "constraints": {
+      "requiredBlocks": [
+        "input",
+        "output"
+      ],
+      "incompatibleBlocks": [
+        "gcn_conv",
+        "gat_conv",
+        "sage_conv",
+        "lstm",
+        "gru",
+        "bilstm",
+        "mamba_block",
+        "s4_block"
+      ]
+    }
+  },
+  "diffusion": {
+    "description": "Diffusion models for iterative image generation",
+    "taskHints": [
+      "image generation",
+      "denoising",
+      "iterative refinement",
+      "score-based generative",
+      "latent diffusion"
+    ],
+    "defaultInputShape": "[B, 3, H, W]",
+    "blocks": [
+      {
+        "type": "input",
+        "name": "Input",
+        "defaultParams": {
+          "shape": "[B, 3, 64, 64]"
+        }
+      },
+      {
+        "type": "output",
+        "name": "Output",
+        "defaultParams": {}
+      },
+      {
+        "type": "conv2d",
+        "name": "Conv2D",
+        "defaultParams": {
+          "in_channels": 3,
+          "out_channels": 64,
+          "kernel_size": 3,
+          "padding": 1,
+          "bias": true
+        }
+      },
+      {
+        "type": "mha",
+        "name": "Attention",
+        "defaultParams": {
+          "num_heads": 8,
+          "d_model": 256,
+          "head_dim": 32,
+          "dropout": 0.0,
+          "bias": true,
+          "causal": false,
+          "use_kv_cache": false
+        }
+      },
+      {
+        "type": "residual_block",
+        "name": "Residual Block",
+        "defaultParams": {
+          "in_channels": 64,
+          "out_channels": 64,
+          "dropout": 0.0
+        }
+      },
+      {
+        "type": "timestep_embedding",
+        "name": "Timestep Embedding",
+        "defaultParams": {
+          "embed_dim": 256,
+          "max_timesteps": 1000,
+          "embedding_type": "sinusoidal"
+        }
+      },
+      {
+        "type": "noise_scheduler",
+        "name": "Noise Scheduler",
+        "defaultParams": {
+          "num_timesteps": 1000,
+          "beta_schedule": "linear",
+          "beta_start": 0.0001,
+          "beta_end": 0.02
+        }
+      },
+      {
+        "type": "dense",
+        "name": "Linear Projection",
+        "defaultParams": {
+          "in_features": 256,
+          "out_features": 256,
+          "bias": true
+        }
+      },
+      {
+        "type": "downsample",
+        "name": "Downsample",
+        "defaultParams": {
+          "scale_factor": 2
+        }
+      },
+      {
+        "type": "upsample",
+        "name": "Upsample",
+        "defaultParams": {
+          "scale_factor": 2,
+          "mode": "nearest"
+        }
+      },
+      {
+        "type": "groupnorm",
+        "name": "GroupNorm",
+        "defaultParams": {
+          "num_groups": 32,
+          "num_channels": 64,
+          "eps": 1e-05
+        }
+      },
+      {
+        "type": "layernorm",
+        "name": "LayerNorm",
+        "defaultParams": {
+          "normalized_shape": 256,
+          "eps": 1e-05
+        }
+      },
+      {
+        "type": "dropout",
+        "name": "Dropout",
+        "defaultParams": {
+          "p": 0.1
+        }
+      },
+      {
+        "type": "add",
+        "name": "Element-wise Add",
+        "defaultParams": {}
+      },
+      {
+        "type": "residual",
+        "name": "Residual Connection",
+        "defaultParams": {
+          "projection": false
+        }
+      },
+      {
+        "type": "silu",
+        "name": "SiLU",
+        "defaultParams": {}
+      },
+      {
+        "type": "relu",
+        "name": "ReLU",
+        "defaultParams": {}
+      },
+      {
+        "type": "unet_block",
+        "name": "U-Net Block",
+        "defaultParams": {
+          "in_channels": 64,
+          "out_channels": 64,
+          "dropout": 0.0
+        }
+      }
+    ],
+    "macroBlocks": [
+      {
+        "id": "macro-unet-down",
+        "name": "U-Net Down Block",
+        "description": "ResidualBlock → GroupNorm → SiLU → Downsample"
+      },
+      {
+        "id": "macro-unet-up",
+        "name": "U-Net Up Block",
+        "description": "Upsample → Concat (skip) → ResidualBlock → GroupNorm → SiLU"
+      },
+      {
+        "id": "macro-unet-mid",
+        "name": "U-Net Middle Block",
+        "description": "ResidualBlock → Attention → ResidualBlock"
+      }
+    ],
+    "presets": [
+      {
+        "id": "ddpm",
+        "name": "DDPM",
+        "description": "Denoising Diffusion Probabilistic Model"
+      },
+      {
+        "id": "latent-diffusion",
+        "name": "Latent Diffusion",
+        "description": "Diffusion in latent space with VAE"
+      }
+    ],
+    "constraints": {
+      "requiredBlocks": [
+        "input",
+        "output",
+        "noise_scheduler"
+      ],
+      "incompatibleBlocks": [
+        "gcn_conv",
+        "gat_conv",
+        "sage_conv",
+        "lstm",
+        "gru",
+        "bilstm",
+        "mamba_block",
+        "s4_block"
+      ]
+    }
+  },
+  "snn": {
+    "description": "Spiking Neural Networks for neuromorphic computing",
+    "taskHints": [
+      "neuromorphic",
+      "event-based",
+      "low-power",
+      "spiking neurons",
+      "temporal coding"
+    ],
+    "defaultInputShape": "[B, time_steps, features]",
+    "blocks": [
+      {
+        "type": "input",
+        "name": "Input",
+        "defaultParams": {
+          "shape": "[B, time_steps, features]"
+        }
+      },
+      {
+        "type": "output",
+        "name": "Output",
+        "defaultParams": {}
+      },
+      {
+        "type": "rate_encoder",
+        "name": "Rate Encoder",
+        "defaultParams": {
+          "time_steps": 10,
+          "gain": 1.0
+        }
+      },
+      {
+        "type": "latency_encoder",
+        "name": "Latency Encoder",
+        "defaultParams": {
+          "time_steps": 10,
+          "tau": 5.0,
+          "normalize": true
+        }
+      },
+      {
+        "type": "lif_neuron",
+        "name": "LIF Neuron",
+        "defaultParams": {
+          "threshold": 1.0,
+          "tau": 0.9,
+          "reset_mechanism": "subtract",
+          "spike_grad": "fast_sigmoid",
+          "time_steps": 10
+        }
+      },
+      {
+        "type": "leaky_neuron",
+        "name": "Leaky Neuron (no spike)",
+        "defaultParams": {
+          "tau": 0.9,
+          "time_steps": 10
+        }
+      },
+      {
+        "type": "synaptic_layer",
+        "name": "Synaptic Layer",
+        "defaultParams": {
+          "in_features": 256,
+          "out_features": 256,
+          "alpha": 0.9,
+          "beta": 0.8
+        }
+      },
+      {
+        "type": "dense",
+        "name": "Linear Projection",
+        "defaultParams": {
+          "in_features": 256,
+          "out_features": 256,
+          "bias": false
+        }
+      },
+      {
+        "type": "batchnorm",
+        "name": "BatchNorm1D",
+        "defaultParams": {
+          "num_features": 256,
+          "eps": 1e-05
+        }
+      },
+      {
+        "type": "dropout",
+        "name": "Dropout",
+        "defaultParams": {
+          "p": 0.1
+        }
+      },
+      {
+        "type": "classification_head",
+        "name": "Classification Head",
+        "defaultParams": {
+          "in_features": 256,
+          "num_classes": 10
+        }
+      }
+    ],
+    "macroBlocks": [
+      {
+        "id": "macro-lif-layer",
+        "name": "LIF Layer",
+        "description": "Dense → BatchNorm → LIF Neuron (with leak and reset)"
+      },
+      {
+        "id": "macro-snn-encoder",
+        "name": "SNN Encoder",
+        "description": "Rate Encoder → Dense → LIF Neuron → Dropout"
+      }
+    ],
+    "presets": [
+      {
+        "id": "snn-classifier",
+        "name": "Simple SNN Classifier",
+        "description": "Rate Encoder → 2× (Dense → LIF) → Classification Head"
+      }
+    ],
+    "constraints": {
+      "requiredBlocks": [
+        "input",
+        "output"
+      ],
+      "incompatibleBlocks": [
+        "mha",
+        "gqa",
+        "expert",
+        "gate",
+        "gcn_conv",
+        "gat_conv",
+        "mamba_block",
+        "s4_block",
+        "conv2d"
+      ]
+    }
+  },
+  "experimental": {
+    "description": "Experimental and research architectures",
+    "taskHints": [
+      "research",
+      "novel architectures",
+      "custom blocks",
+      "experimental"
+    ],
+    "defaultInputShape": "[B, ...]",
+    "blocks": [
+      {
+        "type": "input",
+        "name": "Input",
+        "defaultParams": {
+          "shape": "[B, ...]"
+        }
+      },
+      {
+        "type": "output",
+        "name": "Output",
+        "defaultParams": {}
+      },
+      {
+        "type": "custom",
+        "name": "Custom Block",
+        "defaultParams": {
+          "description": "",
+          "input_shape": [],
+          "output_shape": [],
+          "custom_equations": {}
+        }
+      },
+      {
+        "type": "dense",
+        "name": "Linear Projection",
+        "defaultParams": {
+          "in_features": 256,
+          "out_features": 256,
+          "bias": true
+        }
+      },
+      {
+        "type": "add",
+        "name": "Element-wise Add",
+        "defaultParams": {}
+      },
+      {
+        "type": "concat",
+        "name": "Concatenate",
+        "defaultParams": {
+          "axis": 1
+        }
+      },
+      {
+        "type": "residual",
+        "name": "Residual Connection",
+        "defaultParams": {
+          "projection": false
+        }
+      },
+      {
+        "type": "dropout",
+        "name": "Dropout",
+        "defaultParams": {
+          "p": 0.1
+        }
+      }
+    ],
+    "macroBlocks": [],
+    "presets": [],
+    "constraints": {
+      "requiredBlocks": [
+        "input",
+        "output"
+      ],
+      "incompatibleBlocks": []
+    }
+  }
+}

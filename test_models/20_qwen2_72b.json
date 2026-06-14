@@ -1,0 +1,135 @@
+{
+  "schema_version": "1.0.0",
+  "model": {
+    "name": "Qwen2-72B",
+    "type": "transformer",
+    "layers": [
+      {
+        "id": "embed",
+        "layer_type": "embedding",
+        "params": {
+          "vocab_size": 152064,
+          "hidden_size": 8192
+        }
+      },
+      {
+        "id": "layer_0",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 8192,
+          "num_attention_heads": 64,
+          "intermediate_size": 29568
+        }
+      },
+      {
+        "id": "layer_1",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 8192,
+          "num_attention_heads": 64,
+          "intermediate_size": 29568
+        }
+      },
+      {
+        "id": "layer_2",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 8192,
+          "num_attention_heads": 64,
+          "intermediate_size": 29568
+        }
+      },
+      {
+        "id": "layer_3",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 8192,
+          "num_attention_heads": 64,
+          "intermediate_size": 29568
+        }
+      },
+      {
+        "id": "layer_4",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 8192,
+          "num_attention_heads": 64,
+          "intermediate_size": 29568
+        }
+      },
+      {
+        "id": "layer_5",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 8192,
+          "num_attention_heads": 64,
+          "intermediate_size": 29568
+        }
+      },
+      {
+        "id": "layer_6",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 8192,
+          "num_attention_heads": 64,
+          "intermediate_size": 29568
+        }
+      },
+      {
+        "id": "layer_7",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 8192,
+          "num_attention_heads": 64,
+          "intermediate_size": 29568
+        }
+      },
+      {
+        "id": "layer_8",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 8192,
+          "num_attention_heads": 64,
+          "intermediate_size": 29568
+        }
+      },
+      {
+        "id": "layer_9",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 8192,
+          "num_attention_heads": 64,
+          "intermediate_size": 29568
+        }
+      },
+      {
+        "id": "ln_f",
+        "layer_type": "normalization",
+        "params": {
+          "hidden_size": 8192
+        }
+      }
+    ]
+  },
+  "training": {
+    "batch_size": 8,
+    "sequence_length": 32768,
+    "precision": "bf16",
+    "learning_rate": 3e-05,
+    "num_epochs": 1
+  },
+  "hardware": {
+    "gpus": [
+      {
+        "name": "H100",
+        "memory_gb": 80,
+        "count": 256
+      }
+    ]
+  },
+  "data": {
+    "dataset_size": 7000000000000,
+    "vocab_size": 152064,
+    "num_classes": 0
+  }
+}

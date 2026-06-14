@@ -1,0 +1,80 @@
+{
+  "schema_version": "1.0.0",
+  "model": {
+    "name": "ResNet-50-25M",
+    "type": "transformer",
+    "layers": [
+      {
+        "id": "conv1",
+        "layer_type": "conv",
+        "params": {
+          "in_channels": 3,
+          "out_channels": 64,
+          "kernel_size": 7,
+          "hidden_size": 64
+        }
+      },
+      {
+        "id": "block1",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 256,
+          "num_attention_heads": 4
+        }
+      },
+      {
+        "id": "block2",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 512,
+          "num_attention_heads": 8
+        }
+      },
+      {
+        "id": "block3",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1024,
+          "num_attention_heads": 16
+        }
+      },
+      {
+        "id": "block4",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 2048,
+          "num_attention_heads": 32
+        }
+      },
+      {
+        "id": "classifier",
+        "layer_type": "linear",
+        "params": {
+          "hidden_size": 2048,
+          "output_size": 1000
+        }
+      }
+    ]
+  },
+  "training": {
+    "batch_size": 256,
+    "sequence_length": 196,
+    "precision": "fp32",
+    "learning_rate": 0.1,
+    "num_epochs": 90
+  },
+  "hardware": {
+    "gpus": [
+      {
+        "name": "V100",
+        "memory_gb": 32,
+        "count": 8
+      }
+    ]
+  },
+  "data": {
+    "dataset_size": 1281167,
+    "vocab_size": 0,
+    "num_classes": 1000
+  }
+}

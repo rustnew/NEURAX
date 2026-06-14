@@ -1,0 +1,140 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-03-19T23:03:44.200393887Z",
+  "neurax_version": "0.1.0",
+  "analysis_time_ms": 0,
+  "input_file": "model.json",
+  "model": {
+    "name": "GraphSAGE-1B",
+    "model_type": "transformer",
+    "total_parameters": 212542464,
+    "num_layers": 7,
+    "vocab_size": null,
+    "sequence_length": null,
+    "hidden_size": null,
+    "num_attention_heads": null,
+    "num_key_value_heads": null,
+    "intermediate_size": null
+  },
+  "metrics": {
+    "structure": {
+      "total_parameters": 212542464,
+      "num_layers": 7,
+      "model_type": "transformer",
+      "params_per_layer": {},
+      "layers_by_type": {}
+    },
+    "graph": {
+      "graph_depth": 7,
+      "total_operations": 7
+    },
+    "compute": {
+      "total_flops": 175589966846361.56,
+      "forward_flops": 175589966846361.56,
+      "backward_flops": 351179933692723.1,
+      "flops_per_token": 342949153996.7999,
+      "flops_incremental_decode": 205769492398.07996,
+      "arithmetic_intensity": 41975.22262366656,
+      "flops_per_layer": {},
+      "op_type_distribution": {}
+    },
+    "memory": {
+      "peak_vram_bytes": 18618900062,
+      "peak_vram_gb": 18.618900062,
+      "parameter_memory_bytes": 512359218,
+      "parameter_memory_gb": 0.512359218,
+      "activation_memory_bytes": 15032385536,
+      "activation_memory_gb": 15.032385536,
+      "gradient_memory_bytes": 1024718436,
+      "gradient_memory_gb": 1.024718436,
+      "optimizer_state_bytes": 2049436872,
+      "optimizer_state_gb": 2.049436872,
+      "max_batch_size_fit": 5676,
+      "oom_risk": "low"
+    },
+    "parallelism": {
+      "data_parallel_efficiency": 0.595,
+      "communication_overhead": 0.0,
+      "optimal_gpu_count": 16,
+      "data_parallel": 1,
+      "tensor_parallel": 1,
+      "pipeline_parallel": 1
+    },
+    "performance": {
+      "latency_ms": 216375512.53094396,
+      "latency_seconds": 216375.51253094396,
+      "throughput_tokens_per_s": 2.423046831258326,
+      "gpu_utilization": 0.15027883768711475,
+      "gpu_utilization_percent": 15.027883768711476,
+      "bottleneck": "compute-bound"
+    },
+    "cost": {
+      "training_cost_usd": 0.0,
+      "training_time_hours": 0.0,
+      "energy_kwh": 0.0,
+      "co2_kg": 0.0,
+      "cost_per_million_tokens_usd": 0.0,
+      "gpu_hours": 0.0,
+      "provider": "unknown"
+    },
+    "hardware": {
+      "gpu_name": "H100",
+      "gpu_count": 16,
+      "gpu_memory_gb": 80.0,
+      "gpu_tflops_fp16": 20.0,
+      "gpu_memory_bandwidth_gbs": 1000.0,
+      "interconnect": "",
+      "interconnect_bandwidth_gbs": 64.0
+    },
+    "dynamic": {
+      "virtual_memory": {
+        "fragmentation_overhead_gb": 1.4895120049599981,
+        "fragmentation_pct": 16.0,
+        "defrag_savings_gb": 1.4895120049599981,
+        "virtual_savings_gb": 2.2342680074400008,
+        "virtual_savings_pct": 12.000000000000004,
+        "peak_vram_with_defrag_gb": 17.129388057040003,
+        "peak_vram_with_virtual_gb": 16.38463205456,
+        "recommended_strategy": "EnableFlashAttention",
+        "confidence": 0.65
+      },
+      "stability": {
+        "lyapunov_exponent_mean": 0.8195133830891166,
+        "chaos_index": 0.6941330350820837,
+        "high_risk_layers_count": 0,
+        "fp32_required_pct": 0.0,
+        "global_robustness_score": 0.584919199535076,
+        "fp32_fallback_memory_overhead_gb": 0.0,
+        "confidence": 0.7
+      },
+      "behavioral": {
+        "expert_load_imbalance": 0.0,
+        "memory_contention_score": 0.1,
+        "cache_locality_score": 0.8,
+        "numerical_sensitivity": 0.5,
+        "load_balance_efficiency": 100.0,
+        "memory_bank_conflict_rate": 1.5,
+        "prediction_confidence": 0.65
+      }
+    }
+  },
+  "diagnostics": [
+    {
+      "category": "architectureinefficiency",
+      "severity": "warning",
+      "message": "Low GPU utilization (15.0%)",
+      "layer_id": null,
+      "suggestion": "Increase batch size or consider tensor parallelism"
+    }
+  ],
+  "recommendations": [
+    {
+      "category": "parallelism",
+      "priority": "medium",
+      "title": "Use Hybrid Parallelism",
+      "description": "Combine data, tensor, and pipeline parallelism for better scaling",
+      "impact": "Improve efficiency to ~90%"
+    }
+  ],
+  "warnings": []
+}

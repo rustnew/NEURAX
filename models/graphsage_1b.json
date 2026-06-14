@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0.0",
+  "model": {
+    "name": "GraphSAGE-1B",
+    "type": "transformer",
+    "layers": [
+      {"id": "embed", "layer_type": "embedding", "params": {"vocab_size": 100000, "hidden_size": 1024}},
+      {"id": "sage_0", "layer_type": "attention", "params": {"hidden_size": 1024, "num_attention_heads": 16}},
+      {"id": "sage_1", "layer_type": "attention", "params": {"hidden_size": 2048, "num_attention_heads": 16}},
+      {"id": "sage_2", "layer_type": "attention", "params": {"hidden_size": 4096, "num_attention_heads": 16}},
+      {"id": "sage_3", "layer_type": "attention", "params": {"hidden_size": 2048, "num_attention_heads": 16}},
+      {"id": "sage_4", "layer_type": "attention", "params": {"hidden_size": 1024, "num_attention_heads": 16}},
+      {"id": "classifier", "layer_type": "linear", "params": {"hidden_size": 1024, "output_size": 1000}}
+    ]
+  },
+  "training": {
+    "batch_size": 1024,
+    "sequence_length": 512,
+    "precision": "bf16",
+    "learning_rate": 0.001,
+    "num_epochs": 50
+  },
+  "hardware": {
+    "gpus": [{"name": "H100", "memory_gb": 80, "count": 16}]
+  },
+  "data": {
+    "dataset_size": 100000000,
+    "vocab_size": 100000,
+    "num_classes": 1000
+  }
+}

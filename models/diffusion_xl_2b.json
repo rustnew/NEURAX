@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0.0",
+  "model": {
+    "name": "Stable-Diffusion-XL-2B",
+    "type": "diffusion",
+    "layers": [
+      {"id": "conv_in", "layer_type": "conv", "params": {"in_channels": 4, "out_channels": 320, "kernel_size": 3, "hidden_size": 320}},
+      {"id": "down_0", "layer_type": "attention", "params": {"hidden_size": 320, "num_attention_heads": 8}},
+      {"id": "down_1", "layer_type": "attention", "params": {"hidden_size": 640, "num_attention_heads": 10}},
+      {"id": "down_2", "layer_type": "attention", "params": {"hidden_size": 1280, "num_attention_heads": 16}},
+      {"id": "mid_attn", "layer_type": "attention", "params": {"hidden_size": 1280, "num_attention_heads": 20}},
+      {"id": "up_0", "layer_type": "attention", "params": {"hidden_size": 1280, "num_attention_heads": 20}},
+      {"id": "up_1", "layer_type": "attention", "params": {"hidden_size": 640, "num_attention_heads": 10}},
+      {"id": "up_2", "layer_type": "attention", "params": {"hidden_size": 320, "num_attention_heads": 8}},
+      {"id": "conv_out", "layer_type": "conv", "params": {"in_channels": 320, "out_channels": 4, "kernel_size": 3, "hidden_size": 320}}
+    ]
+  },
+  "training": {
+    "batch_size": 16,
+    "sequence_length": 4096,
+    "precision": "bf16",
+    "learning_rate": 0.0001,
+    "num_epochs": 100
+  },
+  "hardware": {
+    "gpus": [{"name": "H100", "memory_gb": 80, "count": 8}]
+  },
+  "data": {
+    "dataset_size": 1000000000,
+    "vocab_size": 256,
+    "num_classes": 1000
+  }
+}

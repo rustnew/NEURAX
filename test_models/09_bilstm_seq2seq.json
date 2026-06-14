@@ -1,0 +1,86 @@
+{
+  "schema_version": "1.0.0",
+  "model": {
+    "name": "BiLSTM-Seq2Seq-50M",
+    "type": "transformer",
+    "layers": [
+      {
+        "id": "embed_enc",
+        "layer_type": "embedding",
+        "params": {
+          "vocab_size": 32000,
+          "hidden_size": 512
+        }
+      },
+      {
+        "id": "lstm_enc_0",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 512,
+          "num_attention_heads": 8
+        }
+      },
+      {
+        "id": "lstm_enc_1",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 512,
+          "num_attention_heads": 8
+        }
+      },
+      {
+        "id": "embed_dec",
+        "layer_type": "embedding",
+        "params": {
+          "vocab_size": 32000,
+          "hidden_size": 512
+        }
+      },
+      {
+        "id": "lstm_dec_0",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 512,
+          "num_attention_heads": 8
+        }
+      },
+      {
+        "id": "lstm_dec_1",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 512,
+          "num_attention_heads": 8
+        }
+      },
+      {
+        "id": "output_proj",
+        "layer_type": "linear",
+        "params": {
+          "hidden_size": 512,
+          "output_size": 32000
+        }
+      }
+    ]
+  },
+  "training": {
+    "batch_size": 64,
+    "sequence_length": 256,
+    "precision": "fp32",
+    "learning_rate": 0.001,
+    "num_epochs": 30
+  },
+  "hardware": {
+    "gpus": [
+      {
+        "name": "V100",
+        "memory_gb": 32,
+        "count": 1
+      }
+    ]
+  },
+  "data": {
+    "dataset_size": 5000000,
+    "vocab_size": 32000,
+    "num_classes": 0
+  }
+}

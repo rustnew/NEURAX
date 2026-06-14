@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0.0",
+  "model": {
+    "name": "Mixtral-8x22B",
+    "type": "moe",
+    "layers": [
+      {"id": "embed", "layer_type": "embedding", "params": {"vocab_size": 32768, "hidden_size": 6656}},
+      {"id": "layer_0", "layer_type": "moe", "params": {"hidden_size": 6656, "num_attention_heads": 64, "intermediate_size": 16640, "num_experts": 8, "top_k": 2}},
+      {"id": "layer_1", "layer_type": "moe", "params": {"hidden_size": 6656, "num_attention_heads": 64, "intermediate_size": 16640, "num_experts": 8, "top_k": 2}},
+      {"id": "layer_2", "layer_type": "moe", "params": {"hidden_size": 6656, "num_attention_heads": 64, "intermediate_size": 16640, "num_experts": 8, "top_k": 2}},
+      {"id": "layer_3", "layer_type": "moe", "params": {"hidden_size": 6656, "num_attention_heads": 64, "intermediate_size": 16640, "num_experts": 8, "top_k": 2}},
+      {"id": "layer_4", "layer_type": "moe", "params": {"hidden_size": 6656, "num_attention_heads": 64, "intermediate_size": 16640, "num_experts": 8, "top_k": 2}},
+      {"id": "layer_5", "layer_type": "moe", "params": {"hidden_size": 6656, "num_attention_heads": 64, "intermediate_size": 16640, "num_experts": 8, "top_k": 2}},
+      {"id": "ln_f", "layer_type": "normalization", "params": {"hidden_size": 6656}}
+    ]
+  },
+  "training": {
+    "batch_size": 64,
+    "sequence_length": 4096,
+    "precision": "bf16",
+    "learning_rate": 0.00005,
+    "num_epochs": 100
+  },
+  "hardware": {
+    "gpus": [{"name": "H100", "memory_gb": 80, "count": 256}]
+  },
+  "data": {
+    "dataset_size": 2000000000000,
+    "vocab_size": 32768,
+    "num_classes": 0
+  }
+}

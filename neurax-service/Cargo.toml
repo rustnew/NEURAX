@@ -1,0 +1,30 @@
+[package]
+name = "neurax-service"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+neurax-core = { path = "../neurax-core" }
+neurax-parser = { path = "../neurax-parser" }
+neurax-ir = { path = "../neurax-ir" }
+neurax-hardware-db = { path = "../neurax-hardware-db" }
+actix-web = "4"
+actix-ws = "0.2"
+actix-cors = "0.7"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+dashmap = "6"
+uuid = { version = "1", features = ["v4", "serde"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+tracing-actix-web = "0.7"
+
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+jsonwebtoken = "9"
+futures-util = "0.3"
+dotenvy = "0.15"
+hmac = "0.12"
+sha2 = "0.10"
+hex = "0.4"
+subtle = "2"

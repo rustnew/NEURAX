@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0.0",
+  "model": {
+    "name": "SpikingResNet-500M",
+    "type": "transformer",
+    "layers": [
+      {"id": "conv_0", "layer_type": "conv", "params": {"in_channels": 3, "out_channels": 64, "kernel_size": 7, "hidden_size": 64}},
+      {"id": "block_0", "layer_type": "attention", "params": {"hidden_size": 256, "num_attention_heads": 8}},
+      {"id": "block_1", "layer_type": "attention", "params": {"hidden_size": 512, "num_attention_heads": 16}},
+      {"id": "block_2", "layer_type": "attention", "params": {"hidden_size": 1024, "num_attention_heads": 32}},
+      {"id": "block_3", "layer_type": "attention", "params": {"hidden_size": 2048, "num_attention_heads": 32}},
+      {"id": "classifier", "layer_type": "linear", "params": {"hidden_size": 2048, "output_size": 1000}}
+    ]
+  },
+  "training": {
+    "batch_size": 256,
+    "sequence_length": 196,
+    "precision": "fp16",
+    "learning_rate": 0.0001,
+    "num_epochs": 90
+  },
+  "hardware": {
+    "gpus": [{"name": "H100", "memory_gb": 80, "count": 8}]
+  },
+  "data": {
+    "dataset_size": 128000000,
+    "vocab_size": 0,
+    "num_classes": 1000
+  }
+}

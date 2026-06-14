@@ -1,0 +1,124 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-03-19T23:03:43.540314467Z",
+  "neurax_version": "0.1.0",
+  "analysis_time_ms": 1,
+  "input_file": "model.json",
+  "model": {
+    "name": "Mamba-VL-8B",
+    "model_type": "ssm",
+    "total_parameters": 4284897280,
+    "num_layers": 36,
+    "vocab_size": null,
+    "sequence_length": null,
+    "hidden_size": null,
+    "num_attention_heads": null,
+    "num_key_value_heads": null,
+    "intermediate_size": null
+  },
+  "metrics": {
+    "structure": {
+      "total_parameters": 4284897280,
+      "num_layers": 36,
+      "model_type": "ssm",
+      "params_per_layer": {},
+      "layers_by_type": {}
+    },
+    "graph": {
+      "graph_depth": 36,
+      "total_operations": 36
+    },
+    "compute": {
+      "total_flops": 26434191163392.0,
+      "forward_flops": 26434191163392.0,
+      "backward_flops": 52868382326784.0,
+      "flops_per_token": 6453659952.0,
+      "flops_incremental_decode": 0.0,
+      "arithmetic_intensity": 2703.5033669899676,
+      "flops_per_layer": {},
+      "op_type_distribution": {}
+    },
+    "memory": {
+      "peak_vram_bytes": 60178374451,
+      "peak_vram_gb": 60.178374451,
+      "parameter_memory_bytes": 8569794560,
+      "parameter_memory_gb": 8.56979456,
+      "activation_memory_bytes": 189812531,
+      "activation_memory_gb": 0.189812531,
+      "gradient_memory_bytes": 17139589120,
+      "gradient_memory_gb": 17.13958912,
+      "optimizer_state_bytes": 34279178240,
+      "optimizer_state_gb": 34.27917824,
+      "max_batch_size_fit": 226,
+      "oom_risk": "low"
+    },
+    "parallelism": {
+      "data_parallel_efficiency": 1.0,
+      "communication_overhead": 0.0,
+      "optimal_gpu_count": 1,
+      "data_parallel": 1,
+      "tensor_parallel": 1,
+      "pipeline_parallel": 1
+    },
+    "performance": {
+      "latency_ms": null,
+      "latency_seconds": null,
+      "throughput_tokens_per_s": 0.0,
+      "gpu_utilization": null,
+      "gpu_utilization_percent": null,
+      "bottleneck": "compute-bound"
+    },
+    "cost": {
+      "training_cost_usd": 8.333333333333332,
+      "training_time_hours": 2.7777777777777777,
+      "energy_kwh": 0.0,
+      "co2_kg": 0.0,
+      "cost_per_million_tokens_usd": 0.02034505208333333,
+      "gpu_hours": 0.0,
+      "provider": "unknown"
+    },
+    "hardware": {
+      "gpu_name": "H100",
+      "gpu_count": 1,
+      "gpu_memory_gb": 80.0,
+      "gpu_tflops_fp16": 20.0,
+      "gpu_memory_bandwidth_gbs": 1000.0,
+      "interconnect": "",
+      "interconnect_bandwidth_gbs": 64.0
+    },
+    "dynamic": {
+      "virtual_memory": {
+        "fragmentation_overhead_gb": 3.1593646586774966,
+        "fragmentation_pct": 10.5,
+        "defrag_savings_gb": 3.1593646586774966,
+        "virtual_savings_gb": 4.7390469880162485,
+        "virtual_savings_pct": 7.874999999999997,
+        "peak_vram_with_defrag_gb": 57.01900979232251,
+        "peak_vram_with_virtual_gb": 55.439327462983755,
+        "recommended_strategy": "EnableCompaction",
+        "confidence": 0.65
+      },
+      "stability": {
+        "lyapunov_exponent_mean": 0.18222404648475699,
+        "chaos_index": 0.5454303692376903,
+        "high_risk_layers_count": 0,
+        "fp32_required_pct": 0.0,
+        "global_robustness_score": 0.8270527147913054,
+        "fp32_fallback_memory_overhead_gb": 0.0,
+        "confidence": 0.7
+      },
+      "behavioral": {
+        "expert_load_imbalance": 0.0,
+        "memory_contention_score": 0.1,
+        "cache_locality_score": 0.8,
+        "numerical_sensitivity": 0.5,
+        "load_balance_efficiency": 100.0,
+        "memory_bank_conflict_rate": 1.5,
+        "prediction_confidence": 0.65
+      }
+    }
+  },
+  "diagnostics": [],
+  "recommendations": [],
+  "warnings": []
+}

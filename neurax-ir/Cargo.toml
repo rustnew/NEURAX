@@ -1,0 +1,52 @@
+[package]
+name = "neurax-ir"
+version = "0.1.0"
+edition = "2021"
+description = "10 IR dialects for NEURAX"
+
+[dependencies]
+# Sérialisation
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Erreurs
+thiserror = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# Parallélisme
+rayon = { workspace = true }
+
+# Graphes
+petgraph = { workspace = true }
+
+# Expression evaluator
+evalexpr = { workspace = true }
+
+# Temps
+chrono = { workspace = true }
+
+# Hardware detection
+num_cpus = { workspace = true }
+
+# Performance
+ahash = { workspace = true }
+parking_lot = { workspace = true }
+dashmap = { workspace = true }
+smallvec = { workspace = true }
+indexmap = { workspace = true }
+itertools = { workspace = true }
+once_cell = { workspace = true }
+
+# Crates internes
+neurax-parser = { path = "../neurax-parser" }
+neurax-formulas = { path = "../neurax-formulas" }
+neurax-hardware-db = { path = "../neurax-hardware-db" }
+
+[dev-dependencies]
+approx = { workspace = true }
+proptest = { workspace = true }
+
+[lints]
+workspace = true

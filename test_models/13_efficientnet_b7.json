@@ -1,0 +1,104 @@
+{
+  "schema_version": "1.0.0",
+  "model": {
+    "name": "EfficientNet-B7-66M",
+    "type": "transformer",
+    "layers": [
+      {
+        "id": "stem",
+        "layer_type": "conv",
+        "params": {
+          "in_channels": 3,
+          "out_channels": 64,
+          "kernel_size": 3,
+          "hidden_size": 64
+        }
+      },
+      {
+        "id": "block1",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 32,
+          "num_attention_heads": 4
+        }
+      },
+      {
+        "id": "block2",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 48,
+          "num_attention_heads": 4
+        }
+      },
+      {
+        "id": "block3",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 80,
+          "num_attention_heads": 8
+        }
+      },
+      {
+        "id": "block4",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 160,
+          "num_attention_heads": 8
+        }
+      },
+      {
+        "id": "block5",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 224,
+          "num_attention_heads": 8
+        }
+      },
+      {
+        "id": "block6",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 384,
+          "num_attention_heads": 16
+        }
+      },
+      {
+        "id": "block7",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 640,
+          "num_attention_heads": 16
+        }
+      },
+      {
+        "id": "classifier",
+        "layer_type": "linear",
+        "params": {
+          "hidden_size": 640,
+          "output_size": 1000
+        }
+      }
+    ]
+  },
+  "training": {
+    "batch_size": 32,
+    "sequence_length": 600,
+    "precision": "fp32",
+    "learning_rate": 0.016,
+    "num_epochs": 350
+  },
+  "hardware": {
+    "gpus": [
+      {
+        "name": "V100",
+        "memory_gb": 32,
+        "count": 4
+      }
+    ]
+  },
+  "data": {
+    "dataset_size": 1281167,
+    "vocab_size": 0,
+    "num_classes": 1000
+  }
+}

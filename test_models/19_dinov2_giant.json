@@ -1,0 +1,415 @@
+{
+  "schema_version": "1.0.0",
+  "model": {
+    "name": "DINOv2-Giant-1.1B",
+    "type": "transformer",
+    "layers": [
+      {
+        "id": "patch_embed",
+        "layer_type": "conv",
+        "params": {
+          "in_channels": 3,
+          "out_channels": 1536,
+          "kernel_size": 14,
+          "hidden_size": 1536
+        }
+      },
+      {
+        "id": "layer_0",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1536,
+          "num_attention_heads": 24,
+          "intermediate_size": 6144
+        }
+      },
+      {
+        "id": "layer_1",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1536,
+          "num_attention_heads": 24,
+          "intermediate_size": 6144
+        }
+      },
+      {
+        "id": "layer_2",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1536,
+          "num_attention_heads": 24,
+          "intermediate_size": 6144
+        }
+      },
+      {
+        "id": "layer_3",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1536,
+          "num_attention_heads": 24,
+          "intermediate_size": 6144
+        }
+      },
+      {
+        "id": "layer_4",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1536,
+          "num_attention_heads": 24,
+          "intermediate_size": 6144
+        }
+      },
+      {
+        "id": "layer_5",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1536,
+          "num_attention_heads": 24,
+          "intermediate_size": 6144
+        }
+      },
+      {
+        "id": "layer_6",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1536,
+          "num_attention_heads": 24,
+          "intermediate_size": 6144
+        }
+      },
+      {
+        "id": "layer_7",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1536,
+          "num_attention_heads": 24,
+          "intermediate_size": 6144
+        }
+      },
+      {
+        "id": "layer_8",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1536,
+          "num_attention_heads": 24,
+          "intermediate_size": 6144
+        }
+      },
+      {
+        "id": "layer_9",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1536,
+          "num_attention_heads": 24,
+          "intermediate_size": 6144
+        }
+      },
+      {
+        "id": "layer_10",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1536,
+          "num_attention_heads": 24,
+          "intermediate_size": 6144
+        }
+      },
+      {
+        "id": "layer_11",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1536,
+          "num_attention_heads": 24,
+          "intermediate_size": 6144
+        }
+      },
+      {
+        "id": "layer_12",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1536,
+          "num_attention_heads": 24,
+          "intermediate_size": 6144
+        }
+      },
+      {
+        "id": "layer_13",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1536,
+          "num_attention_heads": 24,
+          "intermediate_size": 6144
+        }
+      },
+      {
+        "id": "layer_14",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1536,
+          "num_attention_heads": 24,
+          "intermediate_size": 6144
+        }
+      },
+      {
+        "id": "layer_15",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1536,
+          "num_attention_heads": 24,
+          "intermediate_size": 6144
+        }
+      },
+      {
+        "id": "layer_16",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1536,
+          "num_attention_heads": 24,
+          "intermediate_size": 6144
+        }
+      },
+      {
+        "id": "layer_17",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1536,
+          "num_attention_heads": 24,
+          "intermediate_size": 6144
+        }
+      },
+      {
+        "id": "layer_18",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1536,
+          "num_attention_heads": 24,
+          "intermediate_size": 6144
+        }
+      },
+      {
+        "id": "layer_19",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1536,
+          "num_attention_heads": 24,
+          "intermediate_size": 6144
+        }
+      },
+      {
+        "id": "layer_20",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1536,
+          "num_attention_heads": 24,
+          "intermediate_size": 6144
+        }
+      },
+      {
+        "id": "layer_21",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1536,
+          "num_attention_heads": 24,
+          "intermediate_size": 6144
+        }
+      },
+      {
+        "id": "layer_22",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1536,
+          "num_attention_heads": 24,
+          "intermediate_size": 6144
+        }
+      },
+      {
+        "id": "layer_23",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1536,
+          "num_attention_heads": 24,
+          "intermediate_size": 6144
+        }
+      },
+      {
+        "id": "layer_24",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1536,
+          "num_attention_heads": 24,
+          "intermediate_size": 6144
+        }
+      },
+      {
+        "id": "layer_25",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1536,
+          "num_attention_heads": 24,
+          "intermediate_size": 6144
+        }
+      },
+      {
+        "id": "layer_26",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1536,
+          "num_attention_heads": 24,
+          "intermediate_size": 6144
+        }
+      },
+      {
+        "id": "layer_27",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1536,
+          "num_attention_heads": 24,
+          "intermediate_size": 6144
+        }
+      },
+      {
+        "id": "layer_28",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1536,
+          "num_attention_heads": 24,
+          "intermediate_size": 6144
+        }
+      },
+      {
+        "id": "layer_29",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1536,
+          "num_attention_heads": 24,
+          "intermediate_size": 6144
+        }
+      },
+      {
+        "id": "layer_30",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1536,
+          "num_attention_heads": 24,
+          "intermediate_size": 6144
+        }
+      },
+      {
+        "id": "layer_31",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1536,
+          "num_attention_heads": 24,
+          "intermediate_size": 6144
+        }
+      },
+      {
+        "id": "layer_32",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1536,
+          "num_attention_heads": 24,
+          "intermediate_size": 6144
+        }
+      },
+      {
+        "id": "layer_33",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1536,
+          "num_attention_heads": 24,
+          "intermediate_size": 6144
+        }
+      },
+      {
+        "id": "layer_34",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1536,
+          "num_attention_heads": 24,
+          "intermediate_size": 6144
+        }
+      },
+      {
+        "id": "layer_35",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1536,
+          "num_attention_heads": 24,
+          "intermediate_size": 6144
+        }
+      },
+      {
+        "id": "layer_36",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1536,
+          "num_attention_heads": 24,
+          "intermediate_size": 6144
+        }
+      },
+      {
+        "id": "layer_37",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1536,
+          "num_attention_heads": 24,
+          "intermediate_size": 6144
+        }
+      },
+      {
+        "id": "layer_38",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1536,
+          "num_attention_heads": 24,
+          "intermediate_size": 6144
+        }
+      },
+      {
+        "id": "layer_39",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 1536,
+          "num_attention_heads": 24,
+          "intermediate_size": 6144
+        }
+      },
+      {
+        "id": "ln_f",
+        "layer_type": "normalization",
+        "params": {
+          "hidden_size": 1536
+        }
+      },
+      {
+        "id": "head",
+        "layer_type": "linear",
+        "params": {
+          "hidden_size": 1536,
+          "output_size": 65536
+        }
+      }
+    ]
+  },
+  "training": {
+    "batch_size": 1024,
+    "sequence_length": 257,
+    "precision": "fp16",
+    "learning_rate": 0.002,
+    "num_epochs": 500
+  },
+  "hardware": {
+    "gpus": [
+      {
+        "name": "A100",
+        "memory_gb": 80,
+        "count": 16
+      }
+    ]
+  },
+  "data": {
+    "dataset_size": 142000000,
+    "vocab_size": 0,
+    "num_classes": 0
+  }
+}

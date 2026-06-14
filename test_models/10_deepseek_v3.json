@@ -1,0 +1,111 @@
+{
+  "schema_version": "1.0.0",
+  "model": {
+    "name": "DeepSeek-V3-671B",
+    "type": "moe",
+    "layers": [
+      {
+        "id": "embed",
+        "layer_type": "embedding",
+        "params": {
+          "vocab_size": 102400,
+          "hidden_size": 7168
+        }
+      },
+      {
+        "id": "layer_0",
+        "layer_type": "moe",
+        "params": {
+          "hidden_size": 7168,
+          "num_attention_heads": 128,
+          "intermediate_size": 18432,
+          "num_experts": 256,
+          "top_k": 8
+        }
+      },
+      {
+        "id": "layer_1",
+        "layer_type": "moe",
+        "params": {
+          "hidden_size": 7168,
+          "num_attention_heads": 128,
+          "intermediate_size": 18432,
+          "num_experts": 256,
+          "top_k": 8
+        }
+      },
+      {
+        "id": "layer_2",
+        "layer_type": "moe",
+        "params": {
+          "hidden_size": 7168,
+          "num_attention_heads": 128,
+          "intermediate_size": 18432,
+          "num_experts": 256,
+          "top_k": 8
+        }
+      },
+      {
+        "id": "layer_3",
+        "layer_type": "moe",
+        "params": {
+          "hidden_size": 7168,
+          "num_attention_heads": 128,
+          "intermediate_size": 18432,
+          "num_experts": 256,
+          "top_k": 8
+        }
+      },
+      {
+        "id": "layer_4",
+        "layer_type": "moe",
+        "params": {
+          "hidden_size": 7168,
+          "num_attention_heads": 128,
+          "intermediate_size": 18432,
+          "num_experts": 256,
+          "top_k": 8
+        }
+      },
+      {
+        "id": "layer_5",
+        "layer_type": "moe",
+        "params": {
+          "hidden_size": 7168,
+          "num_attention_heads": 128,
+          "intermediate_size": 18432,
+          "num_experts": 256,
+          "top_k": 8
+        }
+      },
+      {
+        "id": "ln_f",
+        "layer_type": "normalization",
+        "params": {
+          "hidden_size": 7168
+        }
+      }
+    ]
+  },
+  "training": {
+    "batch_size": 8,
+    "sequence_length": 4096,
+    "precision": "bf16",
+    "learning_rate": 2.2e-05,
+    "num_epochs": 1
+  },
+  "hardware": {
+    "gpus": [
+      {
+        "name": "H100",
+        "memory_gb": 80,
+        "count": 2048
+      }
+    ]
+  },
+  "data": {
+    "dataset_size": 14700000000000,
+    "vocab_size": 102400,
+    "num_classes": 0
+  }
+}

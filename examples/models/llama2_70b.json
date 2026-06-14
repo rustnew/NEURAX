@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0.0",
+  "model": {
+    "name": "LLaMA2-7B",
+    "type": "transformer",
+    "layers": [
+      {"id": "embed", "layer_type": "embedding", "params": {"vocab_size": 32000, "hidden_size": 4096}},
+      {"id": "layer_0", "layer_type": "attention", "params": {"hidden_size": 4096, "num_attention_heads": 32, "intermediate_size": 11008}},
+      {"id": "layer_1", "layer_type": "attention", "params": {"hidden_size": 4096, "num_attention_heads": 32, "intermediate_size": 11008}},
+      {"id": "layer_2", "layer_type": "attention", "params": {"hidden_size": 4096, "num_attention_heads": 32, "intermediate_size": 11008}},
+      {"id": "layer_3", "layer_type": "attention", "params": {"hidden_size": 4096, "num_attention_heads": 32, "intermediate_size": 11008}},
+      {"id": "layer_4", "layer_type": "attention", "params": {"hidden_size": 4096, "num_attention_heads": 32, "intermediate_size": 11008}},
+      {"id": "layer_5", "layer_type": "attention", "params": {"hidden_size": 4096, "num_attention_heads": 32, "intermediate_size": 11008}},
+      {"id": "layer_6", "layer_type": "attention", "params": {"hidden_size": 4096, "num_attention_heads": 32, "intermediate_size": 11008}},
+      {"id": "layer_7", "layer_type": "attention", "params": {"hidden_size": 4096, "num_attention_heads": 32, "intermediate_size": 11008}},
+      {"id": "ln_f", "layer_type": "normalization", "params": {"hidden_size": 4096}}
+    ]
+  },
+  "training": {
+    "batch_size": 32,
+    "sequence_length": 4096,
+    "precision": "bf16",
+    "learning_rate": 0.0001,
+    "num_epochs": 1
+  },
+  "hardware": {
+    "gpus": [{"name": "A100", "memory_gb": 80, "count": 8}]
+  },
+  "data": {
+    "dataset_size": 2000000000000,
+    "vocab_size": 32000,
+    "num_classes": 0
+  }
+}

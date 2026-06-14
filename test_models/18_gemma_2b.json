@@ -1,0 +1,207 @@
+{
+  "schema_version": "1.0.0",
+  "model": {
+    "name": "Gemma-2B",
+    "type": "transformer",
+    "layers": [
+      {
+        "id": "embed",
+        "layer_type": "embedding",
+        "params": {
+          "vocab_size": 256128,
+          "hidden_size": 2048
+        }
+      },
+      {
+        "id": "layer_0",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 2048,
+          "num_attention_heads": 8,
+          "intermediate_size": 16384
+        }
+      },
+      {
+        "id": "layer_1",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 2048,
+          "num_attention_heads": 8,
+          "intermediate_size": 16384
+        }
+      },
+      {
+        "id": "layer_2",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 2048,
+          "num_attention_heads": 8,
+          "intermediate_size": 16384
+        }
+      },
+      {
+        "id": "layer_3",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 2048,
+          "num_attention_heads": 8,
+          "intermediate_size": 16384
+        }
+      },
+      {
+        "id": "layer_4",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 2048,
+          "num_attention_heads": 8,
+          "intermediate_size": 16384
+        }
+      },
+      {
+        "id": "layer_5",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 2048,
+          "num_attention_heads": 8,
+          "intermediate_size": 16384
+        }
+      },
+      {
+        "id": "layer_6",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 2048,
+          "num_attention_heads": 8,
+          "intermediate_size": 16384
+        }
+      },
+      {
+        "id": "layer_7",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 2048,
+          "num_attention_heads": 8,
+          "intermediate_size": 16384
+        }
+      },
+      {
+        "id": "layer_8",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 2048,
+          "num_attention_heads": 8,
+          "intermediate_size": 16384
+        }
+      },
+      {
+        "id": "layer_9",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 2048,
+          "num_attention_heads": 8,
+          "intermediate_size": 16384
+        }
+      },
+      {
+        "id": "layer_10",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 2048,
+          "num_attention_heads": 8,
+          "intermediate_size": 16384
+        }
+      },
+      {
+        "id": "layer_11",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 2048,
+          "num_attention_heads": 8,
+          "intermediate_size": 16384
+        }
+      },
+      {
+        "id": "layer_12",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 2048,
+          "num_attention_heads": 8,
+          "intermediate_size": 16384
+        }
+      },
+      {
+        "id": "layer_13",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 2048,
+          "num_attention_heads": 8,
+          "intermediate_size": 16384
+        }
+      },
+      {
+        "id": "layer_14",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 2048,
+          "num_attention_heads": 8,
+          "intermediate_size": 16384
+        }
+      },
+      {
+        "id": "layer_15",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 2048,
+          "num_attention_heads": 8,
+          "intermediate_size": 16384
+        }
+      },
+      {
+        "id": "layer_16",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 2048,
+          "num_attention_heads": 8,
+          "intermediate_size": 16384
+        }
+      },
+      {
+        "id": "layer_17",
+        "layer_type": "attention",
+        "params": {
+          "hidden_size": 2048,
+          "num_attention_heads": 8,
+          "intermediate_size": 16384
+        }
+      },
+      {
+        "id": "ln_f",
+        "layer_type": "normalization",
+        "params": {
+          "hidden_size": 2048
+        }
+      }
+    ]
+  },
+  "training": {
+    "batch_size": 16,
+    "sequence_length": 8192,
+    "precision": "bf16",
+    "learning_rate": 0.0001,
+    "num_epochs": 1
+  },
+  "hardware": {
+    "gpus": [
+      {
+        "name": "A100",
+        "memory_gb": 80,
+        "count": 16
+      }
+    ]
+  },
+  "data": {
+    "dataset_size": 2000000000000,
+    "vocab_size": 256128,
+    "num_classes": 0
+  }
+}
