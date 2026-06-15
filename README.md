@@ -1,6 +1,5 @@
 <div align="center">
 
-<<<<<<< HEAD
 <h1>⚡ NEURAX</h1>
 
 ### The Pre‑Flight Compiler for Artificial Intelligence
@@ -37,21 +36,11 @@
 ![Tests](https://img.shields.io/badge/tests-126%20passing-success?style=flat-square)
 ![Backend](https://img.shields.io/badge/compiler-neurax--mlir-orange?style=flat-square)
 ![Build](https://img.shields.io/badge/workspace-green-success?style=flat-square)
-=======
-# NEURAX
-
-### The Analytical Compiler for Neural Network Architectures
-
-**Predict the cost, memory, speed and feasibility of *any* AI model — before writing a single line of training code.**
-
-`Rust 2021` · `MLIR / LLVM 18` · `Pure analytical simulation` · `35+ engineering metrics`
->>>>>>> aa54f97c054ef43c4c56281c9d90f96bf8a5993d
 
 </div>
 
 ---
 
-<<<<<<< HEAD
 > ## 🎯 Mission
 > **NEURAX exists to revolutionize AI research by making the *economics and physics* of any neural network knowable in advance.**
 > Today, the cost of a model is discovered the hard way — after weeks of engineering, a launched cluster job, and a budget already spent. NEURAX turns that gamble into a **prediction**: design an architecture, and instantly see exactly what it will cost, how much memory it will demand, how fast it will run, and whether it will even fit — *before you write the training loop.*
@@ -153,102 +142,10 @@ It supports **Transformers, Mixture‑of‑Experts, CNNs, RNN/LSTM, State‑Spac
 ## 5. How It Works — The IR Pipeline
 
 NEURAX is built like a production compiler. The parsed model is lowered through **ten IR dialects**, each a *pass* that enriches the program with new analysis. Each dialect owns a clearly defined slice of the metrics.
-=======
-## Table of Contents
-
-1. [The Problem](#1-the-problem)
-2. [What NEURAX Is](#2-what-neurax-is)
-3. [Key Features](#3-key-features)
-4. [How It Works — The IR Pipeline](#4-how-it-works--the-ir-pipeline)
-5. [The MLIR Compiler Backend](#5-the-mlir-compiler-backend)
-6. [The Metrics](#6-the-metrics)
-7. [Repository Layout](#7-repository-layout)
-8. [Installation](#8-installation)
-9. [Building](#9-building)
-10. [Usage](#10-usage)
-11. [The Universal Model JSON](#11-the-universal-model-json)
-12. [Technology Stack](#12-technology-stack)
-13. [Project Status](#13-project-status)
-14. [License](#14-license)
-
----
-
-## 1. The Problem
-
-Training and serving large neural networks is **expensive and risky**. A single GPT‑class
-training run can cost millions of dollars and weeks of cluster time. Yet today most teams
-only discover the real cost, memory footprint, or hardware bottleneck of an architecture
-**after** they have written the model, launched a job, and watched it crash with
-`CUDA out of memory` — or burned the budget on a configuration that never fit.
-
-The core questions are almost always answered too late:
-
-- **Will this model fit?** How much VRAM do parameters, activations, gradients and optimizer
-  states actually need on an A100 / H100?
-- **How fast will it be?** What is the realistic latency and throughput given the GPU's
-  compute roofline and memory bandwidth?
-- **What will it cost?** How many GPU‑hours, dollars, kWh and kg of CO₂ for the planned run?
-- **Where is the bottleneck?** Is the model compute‑bound or memory‑bound, and which layers
-  dominate?
-
-NEURAX answers all of these **statically, in milliseconds, without executing the model**.
-
----
-
-## 2. What NEURAX Is
-
-NEURAX is an **analytical compiler**: it ingests a single JSON description of a neural
-architecture and runs it through a **multi‑dialect IR pipeline** that progressively lowers and
-analyzes the model, exactly like a real compiler — but instead of emitting machine code to be
-*run*, it emits a complete **engineering report** of the model's behaviour on target hardware.
-
-```
-            ┌──────────────┐      ┌───────────────────────────┐      ┌──────────────┐
-  model.json│   PARSER     │ IR   │   10-DIALECT IR PIPELINE   │ IR   │   REPORT     │ 35+ metrics
- ──────────▶│ (typed AST)  │─────▶│ arch ▸ graph ▸ tensor ▸ op │─────▶│ JSON / MD    │──────────▶
-            └──────────────┘      │ ▸ compute ▸ memory ▸ par   │      └──────────────┘
-                                  │ ▸ hardware ▸ cost ▸ report │              │
-                                  └───────────────────────────┘              ▼
-                                              │                       ┌──────────────┐
-                                              └──────────────────────▶│  NEURAX-MLIR │ model.mlir
-                                                  (code generation)   │  (LLVM 18)   │──────────▶
-                                                                      └──────────────┘
-```
-
-The same front‑end that produces the analysis also feeds the **MLIR backend**, which lowers the
-architecture to real MLIR using custom dialects and, ultimately, toward LLVM and multiple
-hardware targets.
-
----
-
-## 3. Key Features
-
-- **Universal input** — one JSON schema describes Transformers, MoE, CNNs, RNN/LSTM, State‑Space
-  Models (Mamba/RWKV), Diffusion (U‑Net/SDXL), GNNs and custom architectures.
-- **35+ metrics** — parameters, FLOPs, VRAM breakdown, latency, throughput, training cost,
-  energy, CO₂, roofline analysis, parallelism strategy and automated diagnostics.
-- **Instant** — full analysis of a 175B‑parameter model runs in **single‑digit milliseconds**.
-- **No execution, no GPU required** — everything is computed analytically from first principles
-  and a calibrated hardware database.
-- **Real MLIR compiler** — the `neurax-mlir` backend emits genuine MLIR (15 custom dialects via
-  `melior` / LLVM 18) with lowering passes and multi‑target backends.
-- **Multiple front‑ends** — a CLI, a Ratatui terminal UI, an actix‑web HTTP service, a React/TS
-  web UI, and a Python/LangChain agent for architecture planning.
-- **Pure Rust core** — safe, fast, dependency‑light analytical engine.
-
----
-
-## 4. How It Works — The IR Pipeline
-
-NEURAX is built like a production compiler. The parsed model is lowered through **ten IR
-dialects**, each a *pass* that enriches the program with new analysis. Every dialect owns a
-clearly defined slice of the 35 metrics.
->>>>>>> aa54f97c054ef43c4c56281c9d90f96bf8a5993d
 
 | # | Dialect | Responsibility |
 |---|---------|----------------|
 | 1 | **Architecture** | Layer inventory, parameter counting, model topology |
-<<<<<<< HEAD
 | 2 | **Graph** | Builds the computation DAG, topological order, critical path / depth |
 | 3 | **Tensor** | Shape propagation (incl. symbolic dims), activation tensor sizing |
 | 4 | **Operator** | Lowers layers to atomic ops (MatMul, Attention, Conv…) |
@@ -268,48 +165,17 @@ Each pass is independently unit‑tested and the whole pipeline is trivially ext
 `neurax-mlir` is the project's **canonical code‑generation compiler**, selected for its depth and structure. It is built on **MLIR** through the `melior` Rust bindings against **LLVM 18**, and provides:
 
 - **15 custom MLIR dialects** — `arch`, `graph`, `tensor`, `operator`, `compute`, `memory`, `parallelism`, `hardware`, `cost`, `report`, `virt`, `training`, `data`, `optimization`, `utils`.
-=======
-| 2 | **Graph** | Builds the computation DAG, topological order, critical path/depth |
-| 3 | **Tensor** | Shape propagation (incl. symbolic dims), activation tensor sizing |
-| 4 | **Operator** | Lowers layers to atomic ops (MatMul, Attention, Conv…) |
-| 5 | **Compute** | Aggregates forward/backward/optimizer FLOPs, arithmetic intensity |
-| 6 | **Memory** | Liveness analysis, peak VRAM, fragmentation, max batch that fits |
-| 7 | **Parallelism** | Data/tensor/pipeline strategy, all‑reduce cost, scaling efficiency |
-| 8 | **Hardware** | Roofline model, compute‑ vs memory‑bound, tensor‑core utilization |
-| 9 | **Cost** | GPU‑hours, USD, energy (kWh), CO₂ from a pricing/energy database |
-| 10 | **Report** | Final aggregation, diagnostics (OOM, bottleneck) and recommendations |
-
-This separation makes each analysis independently testable and the whole pipeline easy to
-extend with new architecture families.
-
----
-
-## 5. The MLIR Compiler Backend
-
-`neurax-mlir` is the project's **code‑generation compiler**, selected as the canonical backend
-for its depth and structure. It is built on **MLIR** through the `melior` Rust bindings against
-**LLVM 18**, and provides:
-
-- **15 custom MLIR dialects** — `arch`, `graph`, `tensor`, `operator`, `compute`, `memory`,
-  `parallelism`, `hardware`, `cost`, `report`, `virt`, `training`, `data`, `optimization`, `utils`.
->>>>>>> aa54f97c054ef43c4c56281c9d90f96bf8a5993d
 - **Lowering passes**, including LLVM lowering and a code‑generation pass.
 - **Multi‑target backends** — CPU, CUDA, ROCm, Metal, Vulkan — plus **IREE** integration.
 - **TableGen (ODS)** dialect definitions alongside the Rust implementation.
 
-<<<<<<< HEAD
 It consumes the typed model from the parser and emits textual MLIR. The public entry point:
-=======
-It consumes the typed model produced by the parser and emits textual MLIR. The public entry
-point is:
->>>>>>> aa54f97c054ef43c4c56281c9d90f96bf8a5993d
 
 ```rust
 neurax_mlir::compile_model_to_mlir(context: &melior::Context, config: &ModelConfig)
     -> Result<String, String>
 ```
 
-<<<<<<< HEAD
 is wired directly into the CLI's `compile` command (behind the `mlir` feature), so one command turns a model JSON into a `model.mlir` module.
 
 > **Note:** the analytical pipeline (metrics) is always available and needs no system dependencies. The MLIR code‑generation layer is **feature‑gated** (`--features mlir`) and requires LLVM 18.
@@ -401,53 +267,25 @@ NEURAX ships as a **SaaS** with four tiers, billed **monthly or annually** throu
 ---
 
 ## 11. The 35+ Metrics
-=======
-This is wired directly into the CLI's `compile` command (behind the `mlir` feature), so a single
-command turns a model JSON into a `model.mlir` module.
-
-> **Note:** the analytical pipeline (metrics) is always available and needs no system
-> dependencies. The MLIR code‑generation layer is **feature‑gated** (`--features mlir`) and
-> requires LLVM 18 to be installed.
-
----
-
-## 6. The Metrics
->>>>>>> aa54f97c054ef43c4c56281c9d90f96bf8a5993d
 
 A NEURAX report covers, among others:
 
 - **Architecture** — total / trainable parameters, layer count, params by family.
-<<<<<<< HEAD
-- **Compute** — forward, backward and optimizer FLOPs; FLOPs/token; arithmetic intensity; top‑10 most expensive layers.
+- **Compute** — forward, backward and optimizer FLOPs; FLOPs/token; **incremental‑decode FLOPs** (KV‑cache); arithmetic intensity; top‑10 most expensive layers.
 - **Memory** — parameter / activation / gradient / optimizer memory; peak VRAM; fragmentation estimate; maximum batch size that fits a given GPU.
 - **Hardware** — latency (ms/token), throughput (tokens/s), roofline bottleneck classification, tensor‑core utilization.
 - **Parallelism** — recommended data / tensor / pipeline configuration and scaling efficiency.
-- **Cost** — training hours, GPU‑hours, USD, energy (kWh) and CO₂ estimate.
+- **Cost** — training hours, GPU‑hours, USD, cost per million tokens, energy (kWh) and CO₂ estimate.
+- **Dynamic (M36–M55)** — virtual‑memory defrag savings, stability/chaos indices, and behavioral metrics (expert load imbalance, cache locality, numerical sensitivity…).
 - **Diagnostics** — automatic OOM / bottleneck warnings and optimization recommendations (gradient checkpointing, more GPUs, precision changes…).
+
+Every one of these metrics is surfaced in the web UI's Metrics Dashboard and per‑layer charts.
 
 ---
 
 ## 12. Repository Layout
 
 Everything lives in a single, self‑contained workspace.
-=======
-- **Compute** — forward, backward and optimizer FLOPs; FLOPs/token; arithmetic intensity;
-  top‑10 most expensive layers.
-- **Memory** — parameter / activation / gradient / optimizer memory; peak VRAM; fragmentation
-  estimate; maximum batch size that fits a given GPU.
-- **Hardware** — latency (ms/token), throughput (tokens/s), roofline bottleneck classification,
-  tensor‑core utilization.
-- **Parallelism** — recommended data/tensor/pipeline configuration and scaling efficiency.
-- **Cost** — training hours, GPU‑hours, USD, energy (kWh) and CO₂ estimate.
-- **Diagnostics** — automatic OOM / bottleneck warnings and optimization recommendations
-  (gradient checkpointing, more GPUs, precision changes…).
-
----
-
-## 7. Repository Layout
-
-Everything lives in a single self‑contained workspace.
->>>>>>> aa54f97c054ef43c4c56281c9d90f96bf8a5993d
 
 ```
 neurax_full/
@@ -465,13 +303,8 @@ neurax_full/
 ├── neurax-cli/             # `neurax` command-line tool  (analyze / compile / validate)
 ├── neurax-tui/             # Ratatui terminal user interface
 ├── neurax-service/         # actix-web HTTP API (auth, billing, analysis)
-<<<<<<< HEAD
 ├── neurax-ui/              # React 18 + TypeScript + Vite web front-end (visual canvas)
 ├── neurax-agent/           # Python / FastAPI / LangChain architecture-planning agent
-=======
-├── neurax-ui/              # React 18 + TypeScript + Vite web front-end
-├── neurax-agent/           # Python / LangChain architecture-planning agent
->>>>>>> aa54f97c054ef43c4c56281c9d90f96bf8a5993d
 │
 ├── models/                 # Sample model definitions + reference outputs
 ├── test_models/            # 20 curated architectures for testing
@@ -484,32 +317,20 @@ neurax_full/
 neurax-cli ─┬─▶ neurax-core ─┬─▶ neurax-ir ──▶ neurax-formulas
             │                ├─▶ neurax-parser
             │                └─▶ neurax-hardware-db
-<<<<<<< HEAD
             └─▶ neurax-mlir ──▶ neurax-parser          (feature "mlir")
 neurax-tui / neurax-service ──▶ neurax-core
 neurax-ui  ──HTTP──▶ neurax-service ◀──HTTP── neurax-agent
-=======
-            └─▶ neurax-mlir ──▶ neurax-parser        (feature "mlir")
-neurax-tui / neurax-service ──▶ neurax-core
->>>>>>> aa54f97c054ef43c4c56281c9d90f96bf8a5993d
 ```
 
 ---
 
-<<<<<<< HEAD
 ## 13. Installation
-=======
-## 8. Installation
->>>>>>> aa54f97c054ef43c4c56281c9d90f96bf8a5993d
 
 ### Prerequisites
 
 - **Rust** (edition 2021) — install via [rustup](https://rustup.rs).
 - **LLVM 18** — *only required for the MLIR backend* (`--features mlir`).
-<<<<<<< HEAD
 - **Node.js / Bun** — for the web UI. **Python 3.11+** — for the agent.
-=======
->>>>>>> aa54f97c054ef43c4c56281c9d90f96bf8a5993d
 
 On Debian/Ubuntu:
 
@@ -528,20 +349,12 @@ export PATH="/usr/lib/llvm-18/bin:$PATH"
 
 ---
 
-<<<<<<< HEAD
 ## 14. Building
-=======
-## 9. Building
->>>>>>> aa54f97c054ef43c4c56281c9d90f96bf8a5993d
 
 **Analytical engine only** (no LLVM needed):
 
 ```bash
 cargo build -p neurax-cli            # the `neurax` CLI, analysis features
-<<<<<<< HEAD
-=======
-cargo build -p neurax-core           # core library
->>>>>>> aa54f97c054ef43c4c56281c9d90f96bf8a5993d
 ```
 
 **Full build, including the MLIR compiler** (requires the LLVM 18 env above):
@@ -559,15 +372,9 @@ cargo test -p neurax-mlir            # 118 tests (needs LLVM 18 env)
 
 ---
 
-<<<<<<< HEAD
 ## 15. Usage
 
 ### Command‑line (`neurax`)
-=======
-## 10. Usage
-
-### Command-line (`neurax`)
->>>>>>> aa54f97c054ef43c4c56281c9d90f96bf8a5993d
 
 ```bash
 # Full analytical report (Markdown or JSON)
@@ -596,7 +403,6 @@ Example `compile` output:
 ✅ Compilation complete!
 ```
 
-<<<<<<< HEAD
 ### The other surfaces
 
 ```bash
@@ -604,44 +410,13 @@ cargo run -p neurax-tui                         # interactive terminal UI
 cargo run -p neurax-service                     # HTTP API on :9098
 cd neurax-ui && npm install && npm run dev      # web canvas (Vite, :8081)
 cd neurax-agent && pip install -r requirements.txt && python app.py   # AI agent
-=======
-### Terminal UI
-
-```bash
-cargo run -p neurax-tui              # interactive model browser + analysis
-```
-
-### HTTP service
-
-```bash
-cargo run -p neurax-service          # actix-web API (analysis, auth, billing)
-```
-
-### Web UI
-
-```bash
-cd neurax-ui && npm install && npm run dev    # React + Vite front-end
-```
-
-### Planning agent
-
-```bash
-cd neurax-agent && python app.py     # LangChain architecture-planning agent
->>>>>>> aa54f97c054ef43c4c56281c9d90f96bf8a5993d
 ```
 
 ---
 
-<<<<<<< HEAD
 ## 16. The Universal Model JSON
 
 A model is one JSON document: global parameters, an ordered list of layers, the training config, the target hardware, and a cost config.
-=======
-## 11. The Universal Model JSON
-
-A model is described by a single JSON document: global parameters, an ordered list of layers,
-the training configuration, the target hardware, and a cost configuration.
->>>>>>> aa54f97c054ef43c4c56281c9d90f96bf8a5993d
 
 ```json
 {
@@ -655,19 +430,11 @@ the training configuration, the target hardware, and a cost configuration.
       "num_layers": 12
     },
     "layers": [
-<<<<<<< HEAD
       { "id": "embed", "layer_type": "embedding",
         "params": { "vocab_size": 50257, "embedding_dim": 768 } },
       { "id": "blk",   "layer_type": "attention",
         "params": { "hidden_size": 768, "num_heads": 12 } },
       { "id": "ffn",   "layer_type": "mlp",
-=======
-      { "id": "embed",  "layer_type": "embedding",
-        "params": { "vocab_size": 50257, "embedding_dim": 768 } },
-      { "id": "blk",    "layer_type": "attention",
-        "params": { "hidden_size": 768, "num_heads": 12 } },
-      { "id": "ffn",    "layer_type": "mlp",
->>>>>>> aa54f97c054ef43c4c56281c9d90f96bf8a5993d
         "params": { "hidden_size": 768, "intermediate_size": 3072 } }
     ]
   },
@@ -679,7 +446,6 @@ the training configuration, the target hardware, and a cost configuration.
 }
 ```
 
-<<<<<<< HEAD
 See `test_models/` for **20 complete, ready‑to‑analyze examples** spanning every supported family.
 
 ---
@@ -700,32 +466,10 @@ See `test_models/` for **20 complete, ready‑to‑analyze examples** spanning e
 ## 18. Project Status & Roadmap
 
 **Status**
-=======
-See `test_models/` for 20 complete, ready‑to‑analyze examples spanning every supported family.
-
----
-
-## 12. Technology Stack
-
-| Layer | Technology |
-|-------|------------|
-| Core engine | **Rust** (edition 2021), `rayon`, `petgraph`, `evalexpr` |
-| Compiler backend | **MLIR** via `melior`, **LLVM 18**, TableGen ODS |
-| HTTP service | **actix‑web**, `tokio`, Stripe billing |
-| Terminal UI | **Ratatui** + `crossterm` |
-| Web UI | **React 18** + **TypeScript** + **Vite** |
-| Planning agent | **Python** + **LangChain** |
-
----
-
-## 13. Project Status
-
->>>>>>> aa54f97c054ef43c4c56281c9d90f96bf8a5993d
 - ✅ Analytical pipeline (10 dialects, 35+ metrics) — operational.
 - ✅ `neurax-mlir` integrated as the canonical compiler backend; **118 tests pass**.
 - ✅ End‑to‑end `neurax compile` emits real MLIR.
 - ✅ Full workspace builds green (`--features neurax-cli/mlir`).
-<<<<<<< HEAD
 - ✅ Single self‑contained folder; the legacy Pliron backend fully removed.
 - ✅ Web UI, AI agent, and SaaS service (auth + Stripe billing) in place.
 
@@ -747,14 +491,3 @@ Proprietary — © NEURAX. All rights reserved unless a separate license file st
 **NEURAX** — _See the cost of intelligence, before you pay for it._
 
 </div>
-=======
-- ✅ Single self‑contained folder; the legacy Pliron backend has been fully removed.
-- 🚧 Some `neurax-core` integration tests rely on external fixtures and are being migrated to
-  bundled models.
-
----
-
-## 14. License
-
-Proprietary — © NEURAX. All rights reserved unless a separate license file states otherwise.
->>>>>>> aa54f97c054ef43c4c56281c9d90f96bf8a5993d

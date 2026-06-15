@@ -23,6 +23,18 @@ struct AnalyzeResponse {
     report: neurax_ir::report::ReportIR,
 }
 
+#[derive(Debug, serde::Deserialize)]
+struct TimeMachineRequest {
+    topology: serde_json::Value,
+    #[serde(default)]
+    params: neurax_ir::report::TimeMachineParams,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct TimeMachineResponse {
+    projection: neurax_ir::report::TimeMachineProjection,
+}
+
 #[derive(Debug, serde::Serialize)]
 struct HealthResponse {
     status: &'static str,
@@ -904,6 +916,55 @@ async fn analyze(http_req: HttpRequest, req: web::Json<AnalyzeRequest>) -> impl 
     }
 }
 
+async fn time_machine(http_req: HttpRequest, req: web::Json<TimeMachineRequest>) -> impl Responder {
+    let start = std::time::Instant::now();
+    tracing::info!("[TIMEMACHINE] Request received");
+
+    if let Err(resp) = require_verified_email(&http_req).await {
+        return resp;
+    }
+
+    let input = match serde_json::to_string(&req.topology) {
+        Ok(v) => v,
+        Err(e) => return HttpResponse::build(StatusCode::BAD_REQUEST).body(e.to_string()),
+    };
+
+    let config = match neurax_parser::parse_model_config(&input) {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::error!("[TIMEMACHINE] Parse failed: {}", e);
+            return HttpResponse::build(StatusCode::BAD_REQUEST).body(e.to_string());
+        }
+    };
+
+    let params = req.params.clone();
+    let result = actix_web::rt::task::spawn_blocking(move || neurax_core::run_analysis(config));
+    let timeout_result = actix_web::rt::time::timeout(Duration::from_secs(60), result).await;
+
+    match timeout_result {
+        Ok(Ok(Ok(analysis_result))) => {
+            let report = &analysis_result.report;
+            let projection = neurax_ir::report::project_time_machine(
+                &report.metrics,
+                &report.recommendations,
+                report.confidence_score,
+                &params,
+            );
+            tracing::info!(
+                "[TIMEMACHINE] Success in {}ms",
+                start.elapsed().as_millis()
+            );
+            HttpResponse::Ok().json(TimeMachineResponse { projection })
+        }
+        Ok(Ok(Err(e))) => HttpResponse::build(StatusCode::BAD_REQUEST).body(e.to_string()),
+        Ok(Err(_)) => HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR)
+            .body("Time Machine task failed unexpectedly"),
+        Err(_) => {
+            HttpResponse::build(StatusCode::GATEWAY_TIMEOUT).body("Time Machine timed out")
+        }
+    }
+}
+
 async fn health() -> impl Responder {
     HttpResponse::Ok().json(HealthResponse { status: "ok" })
 }
@@ -1008,6 +1069,7 @@ async fn main() -> std::io::Result<()> {
             .route("/presets", web::get().to(get_presets))
             .route("/presets/{id}", web::get().to(get_preset))
             .route("/analyze", web::post().to(analyze))
+            .route("/timemachine", web::post().to(time_machine))
     })
     .bind(bind_addr)?
     .run()

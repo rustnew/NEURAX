@@ -276,6 +276,7 @@ export function MetricsDashboard({ nodes: _nodes, selectedNodeId, onSelectNode, 
                 <div className="rounded-lg border border-border/50 bg-secondary/20 px-3 py-2 space-y-0.5">
                   <StatRow label="Total FLOPs" value={analysis!.estimatedFlops} />
                   <StatRow label="FLOPs/Token" value={fmtNum(analysis!.flopsPerToken)} />
+                  <StatRow label="FLOPs/Token (decode)" value={fmtNum(analysis!.flopsIncrementalDecode)} />
                   <StatRow label="Arithmetic Intensity" value={`${fmt(analysis!.arithmeticIntensity)} FLOP/byte`} />
                   <div className="flex items-center justify-between py-0.5">
                     <span className="text-[10px] text-muted-foreground">Bottleneck</span>

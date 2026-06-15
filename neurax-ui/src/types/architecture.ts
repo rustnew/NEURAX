@@ -669,6 +669,7 @@ export interface AnalysisResult {
   forwardFlops: number;
   backwardFlops: number;
   flopsPerToken: number;
+  flopsIncrementalDecode: number;
   arithmeticIntensity: number;
   bottleneck: string;
   rooflinePosition: number;

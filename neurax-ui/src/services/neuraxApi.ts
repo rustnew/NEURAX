@@ -75,6 +75,75 @@ export interface HardwareDetail {
   vram_bytes: number;
 }
 
+// ─── Time Machine (compiler-backed multi-year projection) ─────────
+
+/** What-if scenario params (snake_case → matches Rust TimeMachineParams) */
+export interface TimeMachineParams {
+  growth_rate_pct: number;
+  horizon_years: number;
+  annual_budget_usd: number;
+  hardware_track: 'a100' | 'h200' | 'b100';
+  start_year?: number;
+}
+
+export interface TmScenarioPoint {
+  year: number;
+  nominal: number;
+  optimistic: number;
+  pessimistic: number;
+  breakingPoint: boolean;
+  migration?: string;
+  hardwareEvent?: string;
+}
+
+export interface TmCostBreakdownPoint {
+  year: number;
+  compute: number;
+  storage: number;
+  network: number;
+  egress: number;
+}
+
+export interface TmCarbonPoint {
+  year: number;
+  baseline: number;
+  optimized: number;
+  withGreenRegions: number;
+}
+
+export interface TmRecommendation {
+  title: string;
+  description: string;
+  savings: string;
+  timing: string;
+  priority: string;
+}
+
+export interface TmSummary {
+  totalCostNominalUsd: number;
+  firstBreakYear?: number;
+  baseMonthlyUsd: number;
+  costGrowthRatio: number;
+  hardwareTrack: string;
+}
+
+export interface TimeMachineProjection {
+  timeline: TmScenarioPoint[];
+  costBreakdown: TmCostBreakdownPoint[];
+  carbon: TmCarbonPoint[];
+  recommendations: TmRecommendation[];
+  summary: TmSummary;
+}
+
+export interface TimeMachineRequest {
+  topology: Record<string, unknown>;
+  params?: TimeMachineParams;
+}
+
+export interface TimeMachineResponse {
+  projection: TimeMachineProjection;
+}
+
 export interface HealthResponse {
   status: string;
 }
