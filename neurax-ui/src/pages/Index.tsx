@@ -879,9 +879,12 @@ const Index = () => {
         : null;
 
       const compilationRaw = (((rpt as any)?.compilation ?? {}) as Record<string, unknown>);
-      const phaseTimelineRaw = Array.isArray((compilationRaw as any)?.phase_timeline)
-        ? (compilationRaw as any).phase_timeline
-        : [];
+      // phase_timeline is now a top-level field on ReportIR, fall back to compilation sub-object
+      const phaseTimelineRaw = Array.isArray((rpt as any)?.phase_timeline)
+        ? (rpt as any).phase_timeline
+        : Array.isArray((compilationRaw as any)?.phase_timeline)
+          ? (compilationRaw as any).phase_timeline
+          : [];
       const normalizedPhaseTimeline = phaseTimelineRaw.map((phase: any) => ({
         name: typeof phase?.name === 'string' ? phase.name : 'Unknown',
         duration_ms: typeof phase?.duration_ms === 'number' ? phase.duration_ms : 0,
@@ -940,30 +943,38 @@ const Index = () => {
           ))
           .filter((entry): entry is { layer: string; timeline: number[] } => entry !== null)
         : [];
-      const gradientMemoryBreakdown = Array.isArray(liveTraceRaw.gradient_memory_breakdown)
-        ? liveTraceRaw.gradient_memory_breakdown
-          .map((entry: any) => (
-            typeof entry?.name === 'string'
-              ? {
-                name: entry.name,
-                forward: typeof entry?.forward === 'number' ? entry.forward : 0,
-                backward: typeof entry?.backward === 'number' ? entry.backward : 0,
-              }
-              : null
-          ))
-          .filter((entry): entry is { name: string; forward: number; backward: number } => entry !== null)
-        : [];
-      const kvCacheScaling = Array.isArray(liveTraceRaw.kv_cache_scaling)
-        ? liveTraceRaw.kv_cache_scaling
-          .map((entry: any) => (
-            typeof entry?.[0] === 'number' && typeof entry?.[1] === 'number'
+      // gradient_memory_per_layer: now a top-level AllMetrics field (compiled per-layer)
+      const gradientRaw = Array.isArray((metricsRoot as any)?.gradient_memory_per_layer)
+        ? (metricsRoot as any).gradient_memory_per_layer
+        : Array.isArray(liveTraceRaw.gradient_memory_breakdown)
+          ? liveTraceRaw.gradient_memory_breakdown
+          : [];
+      const gradientMemoryBreakdown = gradientRaw
+        .map((entry: any) => (
+          typeof entry?.name === 'string'
+            ? {
+              name: entry.name,
+              forward: typeof entry?.forward === 'number' ? entry.forward : 0,
+              backward: typeof entry?.backward === 'number' ? entry.backward : 0,
+            }
+            : null
+        ))
+        .filter((entry: any): entry is { name: string; forward: number; backward: number } => entry !== null);
+      // kv_cache_scaling: now a top-level AllMetrics field
+      const kvRaw = Array.isArray((metricsRoot as any)?.kv_cache_scaling)
+        ? (metricsRoot as any).kv_cache_scaling
+        : Array.isArray(liveTraceRaw.kv_cache_scaling)
+          ? liveTraceRaw.kv_cache_scaling
+          : [];
+      const kvCacheScaling = kvRaw
+        .map((entry: any) => (
+          typeof entry?.seq === 'number' && typeof entry?.value === 'number'
+            ? { seq: entry.seq, value: entry.value }
+            : (typeof entry?.[0] === 'number' && typeof entry?.[1] === 'number'
               ? { seq: entry[0], value: entry[1] }
-              : (typeof entry?.seq === 'number' && typeof entry?.value === 'number'
-                ? { seq: entry.seq, value: entry.value }
-                : null)
-          ))
-          .filter((entry): entry is { seq: number; value: number } => entry !== null)
-        : [];
+              : null)
+        ))
+        .filter((entry: any): entry is { seq: number; value: number } => entry !== null);
       const liveTrace = {
         partial_metrics: normalizeTupleSeries(liveTraceRaw.partial_metrics),
         throughput_trace: normalizeTupleSeries(liveTraceRaw.throughput_trace),
@@ -1421,6 +1432,7 @@ const Index = () => {
       missing_mandatory_fields: hwValidation.missingFields,
       hw_config: hwConfig as any,
       analysis_warnings: warnings,
+      active_tab: activeWorkspaceTab,
     };
   }, [selectedArchitecture, nodes, connections, groups, hwConfig, warnings, toHwFamily]);
 
@@ -1587,7 +1599,49 @@ const Index = () => {
       triggerAgentAutoAnalysis();
       return;
     }
-  }, [handleClearCanvas, layerConfigByType, toast, handleAddNode, handleUpdateNode, handleAddConnection, triggerAgentAutoAnalysis, handleArchitectureChange, updateHwConfig, nodes]);
+
+    if (name === 'disconnect') {
+      const fromId = String(args.from_id ?? '');
+      const toId = String(args.to_id ?? '');
+      if (!fromId || !toId) return;
+      const conn = connections.find((c) => c.from === fromId && c.to === toId);
+      if (conn) {
+        handleDeleteConnection(conn.id);
+        triggerAgentAutoAnalysis();
+      }
+      return;
+    }
+
+    if (name === 'delete_node') {
+      const nodeId = String(args.node_id ?? '');
+      if (!nodeId) return;
+      handleDeleteNode(nodeId);
+      triggerAgentAutoAnalysis();
+      return;
+    }
+
+    if (name === 'navigate_to') {
+      const validTabs: WorkspaceTab[] = ['architecture', 'simulation', 'production', 'inference', 'timemachine'];
+      const tab = String(args.tab ?? '') as WorkspaceTab;
+      if (!validTabs.includes(tab)) {
+        console.warn(`Agent navigate_to: unknown tab "${tab}", ignoring`);
+        return;
+      }
+      setActiveWorkspaceTab(tab);
+      return;
+    }
+
+    if (name === 'run_analysis') {
+      void handleRunAnalysis();
+      return;
+    }
+
+    if (name === 'select_node') {
+      const nodeId = String(args.node_id ?? '');
+      handleSelectNode(nodeId || null);
+      return;
+    }
+  }, [handleClearCanvas, layerConfigByType, toast, handleAddNode, handleUpdateNode, handleAddConnection, handleDeleteConnection, handleDeleteNode, handleSelectNode, triggerAgentAutoAnalysis, handleArchitectureChange, updateHwConfig, nodes, connections, setActiveWorkspaceTab, handleRunAnalysis]);
 
   const handleImportArchitecture = useCallback((result: ImportResult) => {
     // 1. Update family if present

@@ -838,10 +838,5 @@ export function deriveFusionCandidates(
     .sort((a, b) => b.gainPct - a.gainPct)
     .slice(0, 4);
 
-  if (candidates.length > 0) return candidates;
-
-  return [
-    { label: 'MatMul + Activation', gainPct: 8, difficulty: 'Easy' },
-    { label: 'Attention + Output Proj', gainPct: 10, difficulty: 'Medium' },
-  ];
+  return candidates;
 }

@@ -1,8 +1,9 @@
 //! Report IR pass
 
 use super::{
-    AllMetrics, Diagnostic, DiagnosticCategory, DiagnosticCode, Priority, Recommendation,
-    RecommendationCategory, ReportIR, ReportMetadata, Severity,
+    AllMetrics, Diagnostic, DiagnosticCategory, DiagnosticCode, GradientMemoryEntry,
+    KvCacheEntry, Priority, Recommendation, RecommendationCategory, ReportIR, ReportMetadata,
+    Severity,
 };
 use crate::architecture::ArchitectureIR;
 use crate::compute::ComputeIR;
@@ -268,6 +269,17 @@ impl<'a> ReportPassTrait<'a> for ReportPass {
             } else {
                 std::collections::HashMap::new()
             },
+
+            // === Rich per-layer metrics ===
+            gradient_memory_per_layer: build_gradient_memory_per_layer(
+                &input.arch.metrics.params_per_layer,
+                input.memory.metrics.gradient_memory_bytes,
+                input.memory.metrics.activation_memory_bytes,
+            ),
+            kv_cache_scaling: build_kv_cache_scaling(
+                ctx.config.model.global_params.num_layers.unwrap_or(0) as usize,
+                ctx.config.model.global_params.embedding_dim.unwrap_or(0),
+            ),
         };
 
         // Generate diagnostics
@@ -472,4 +484,48 @@ fn collect_warnings(input: &ReportInput) -> Vec<String> {
     }
 
     warnings
+}
+
+/// Distribute gradient + activation memory proportionally across layers
+fn build_gradient_memory_per_layer(
+    params_per_layer: &std::collections::HashMap<String, u64>,
+    total_gradient_bytes: u64,
+    total_activation_bytes: u64,
+) -> Vec<GradientMemoryEntry> {
+    if params_per_layer.is_empty() {
+        return Vec::new();
+    }
+    let total_params: u64 = params_per_layer.values().sum();
+    if total_params == 0 {
+        return Vec::new();
+    }
+    let mut entries: Vec<GradientMemoryEntry> = params_per_layer
+        .iter()
+        .map(|(name, &params)| {
+            let share = params as f64 / total_params as f64;
+            GradientMemoryEntry {
+                name: name.clone(),
+                forward: (total_activation_bytes as f64 * share) as u64,
+                backward: (total_gradient_bytes as f64 * share) as u64,
+            }
+        })
+        .collect();
+    entries.sort_by(|a, b| b.backward.cmp(&a.backward));
+    entries
+}
+
+/// Compute KV cache size for representative sequence lengths (attention models only)
+fn build_kv_cache_scaling(num_layers: usize, hidden_size: usize) -> Vec<KvCacheEntry> {
+    if num_layers == 0 || hidden_size == 0 {
+        return Vec::new();
+    }
+    let seq_lengths: &[u32] = &[256, 512, 1024, 2048, 4096, 8192, 16384];
+    seq_lengths
+        .iter()
+        .map(|&seq| {
+            // KV cache: 2 (K+V) * num_layers * hidden_size * seq_len * 2 bytes (BF16)
+            let value = 2u64 * num_layers as u64 * hidden_size as u64 * seq as u64 * 2;
+            KvCacheEntry { seq, value }
+        })
+        .collect()
 }

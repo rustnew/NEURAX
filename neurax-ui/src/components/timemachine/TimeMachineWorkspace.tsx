@@ -1,7 +1,7 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   Clock, TrendingUp, DollarSign, Leaf, Shield, SlidersHorizontal,
-  AlertTriangle, Zap, Award, Info
+  AlertTriangle, Zap, Award, Info, Loader2
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card.tsx';
 import { Badge } from '@/components/ui/badge.tsx';
@@ -14,150 +14,23 @@ import {
   Legend, ReferenceLine,
   Tooltip as RechartsTooltip
 } from 'recharts';
-import { AnalysisResult, CanvasNode, Connection } from '@/types/architecture.ts';
+import { CanvasNode, Connection } from '@/types/architecture.ts';
+import {
+  runTimeMachine,
+  TimeMachineProjection,
+  TmScenarioPoint,
+  TmCarbonPoint,
+  TmCostBreakdownPoint,
+  TmRecommendation,
+} from '@/services/neuraxApi.ts';
+import { compileToNeuraxIR } from '@/utils/neuraxCompiler.ts';
 
-// ── Types ──────────────────────────────────────────────────────
-interface ScenarioPoint {
-  year: number;
-  nominal: number;
-  optimistic: number;
-  pessimistic: number;
-  breakingPoint?: boolean;
-  migration?: string;
-  hardwareEvent?: string;
-}
+// ── Type aliases so sub-view components keep their signatures ──
+type ScenarioPoint = TmScenarioPoint;
+type CarbonPoint = TmCarbonPoint;
+type CostBreakdown = TmCostBreakdownPoint;
+type Recommendation = TmRecommendation;
 
-interface Recommendation {
-  title: string;
-  description: string;
-  savings: string;
-  timing: string;
-  priority: 'high' | 'medium' | 'low';
-}
-
-interface CarbonPoint {
-  year: number;
-  baseline: number;
-  optimized: number;
-  withGreenRegions: number;
-}
-
-interface CostBreakdown {
-  year: number;
-  compute: number;
-  storage: number;
-  network: number;
-  egress: number;
-}
-
-// ── Simulation Engine (mock – will be replaced by backend) ────
-function simulateTimeline(
-  nodes: CanvasNode[],
-  growthRate: number,
-  horizonYears: number,
-  budgetMax: number,
-  hardware: string,
-  analysis?: AnalysisResult
-): { timeline: ScenarioPoint[]; recommendations: Recommendation[]; carbon: CarbonPoint[]; costBreakdown: CostBreakdown[] } {
-  // Use real parameters from analysis if available, fallback to node-based heuristic
-  const baseParams = analysis?.totalParams || nodes.reduce((acc, n) => {
-    const dim = typeof n.params.dim === 'number' ? n.params.dim : 768;
-    const heads = typeof n.params.heads === 'number' ? n.params.heads : 0;
-    return acc + dim * 100 + heads * dim * 50;
-  }, 0) || 25_600_000;
-
-  // Use real training cost from analysis if available, otherwise heuristic
-  const baseCostMonth = (analysis?.trainingCostUsd && analysis.trainingCostUsd > 0)
-    ? analysis.trainingCostUsd / 12
-    : (baseParams / 1_000_000) * 12; // rough $/month
-  const currentYear = 2026;
-  const timeline: ScenarioPoint[] = [];
-  const carbon: CarbonPoint[] = [];
-  const costBreakdown: CostBreakdown[] = [];
-  const growth = growthRate / 100;
-
-  for (let i = 0; i <= horizonYears; i++) {
-    const year = currentYear + i;
-    const scale = Math.pow(1 + growth, i);
-    const hardwareDiscount = hardware === 'a100' ? 1 + i * 0.05 : hardware === 'h200' ? Math.max(0.7, 1 - i * 0.08) : Math.max(0.5, 1 - i * 0.12);
-
-    const nominal = Math.round(baseCostMonth * scale * hardwareDiscount);
-    const optimistic = Math.round(nominal * 0.65);
-    const pessimistic = Math.round(nominal * 1.55);
-    const breakingPoint = nominal * 12 > budgetMax;
-
-    timeline.push({
-      year,
-      nominal,
-      optimistic,
-      pessimistic,
-      breakingPoint,
-      migration: breakingPoint ? 'Consider lighter architecture' : undefined,
-      hardwareEvent: i === 1 ? 'H200 available' : i === 2 ? 'B100 available' : undefined,
-    });
-
-    const baseCO2 = (analysis?.co2Kg && analysis.co2Kg > 0)
-      ? (analysis.co2Kg / 1000) * scale // analysis provides kg, baseline works in tonnes
-      : (baseParams / 1_000_000) * 0.035 * scale;
-
-    carbon.push({
-      year,
-      baseline: Math.round(baseCO2 * 10) / 10,
-      optimized: Math.round(baseCO2 * 0.55 * 10) / 10,
-      withGreenRegions: Math.round(baseCO2 * 0.2 * 10) / 10,
-    });
-
-    costBreakdown.push({
-      year,
-      compute: Math.round(nominal * 0.72),
-      storage: Math.round(nominal * 0.12),
-      network: Math.round(nominal * 0.1),
-      egress: Math.round(nominal * 0.06),
-    });
-  }
-
-  const recommendations: Recommendation[] = [];
-
-  // Use real recommendations from analysis if provided, otherwise use rule-based ones
-  if (analysis?.recommendations && analysis.recommendations.length > 0) {
-    analysis.recommendations.forEach(r => {
-      recommendations.push({
-        title: r.title,
-        description: r.description,
-        savings: r.impact || 'N/A',
-        timing: 'Immediate',
-        priority: (r.priority?.toLowerCase() || 'medium') as any,
-      });
-    });
-  } else {
-    const firstBreak = timeline.find(t => t.breakingPoint);
-    if (firstBreak) {
-      recommendations.push({
-        title: 'Migrate to lighter architecture',
-        description: `Budget exceeded by ${firstBreak.year}. Consider Mamba-2.8B or quantized variant.`,
-        savings: '60-70%',
-        timing: `Before Q1 ${firstBreak.year}`,
-        priority: 'high',
-      });
-    }
-    recommendations.push({
-      title: 'Enable INT8 quantization',
-      description: 'Reduce compute costs immediately with minimal accuracy impact.',
-      savings: '35-45%',
-      timing: 'Immediate',
-      priority: 'medium',
-    });
-    recommendations.push({
-      title: `Migrate to ${hardware === 'a100' ? 'H200' : 'B100'} when available`,
-      description: 'Next-gen hardware offers better perf/$ ratio.',
-      savings: '20-35%',
-      timing: hardware === 'a100' ? 'Q2 2025' : 'Q2 2026',
-      priority: 'low',
-    });
-  }
-
-  return { timeline, recommendations, carbon, costBreakdown };
-}
 
 // ── Custom chart tooltip ──────────────────────────────────────
 function CustomTooltip({ active, payload, label }: any) {
@@ -203,27 +76,53 @@ function BreakingDot(props: any) {
 interface TimeMachineWorkspaceProps {
   nodes: CanvasNode[];
   connections: Connection[];
-  analysis?: AnalysisResult;
+  analysis?: unknown;
 }
 
-export function TimeMachineWorkspace({ nodes, connections, analysis }: TimeMachineWorkspaceProps) {
+export function TimeMachineWorkspace({ nodes, connections }: TimeMachineWorkspaceProps) {
   const [growthRate, setGrowthRate] = useState(100);
   const [budgetMax, setBudgetMax] = useState(500000);
   const [horizon, setHorizon] = useState(5);
-  const [hardware, setHardware] = useState('a100');
+  const [hardware, setHardware] = useState<'a100' | 'h200' | 'b100'>('a100');
   const [activeView, setActiveView] = useState('timeline');
+  const [projection, setProjection] = useState<TimeMachineProjection | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [projError, setProjError] = useState<string | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const { timeline, recommendations, carbon, costBreakdown } = useMemo(
-    () => simulateTimeline(nodes, growthRate, horizon, budgetMax, hardware, analysis),
-    [nodes, growthRate, horizon, budgetMax, hardware, analysis]
-  );
+  useEffect(() => {
+    if (nodes.length === 0) { setProjection(null); return; }
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      setIsLoading(true);
+      setProjError(null);
+      try {
+        const ir = compileToNeuraxIR(nodes, connections, { modelName: 'NeuraxModel' });
+        const { projection: proj } = await runTimeMachine({
+          topology: ir as unknown as Record<string, unknown>,
+          params: {
+            growth_rate_pct: growthRate,
+            horizon_years: horizon,
+            annual_budget_usd: budgetMax,
+            hardware_track: hardware,
+          },
+        });
+        setProjection(proj);
+      } catch (e) {
+        setProjError(e instanceof Error ? e.message : 'Projection failed');
+      } finally {
+        setIsLoading(false);
+      }
+    }, 600);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [nodes, connections, growthRate, horizon, budgetMax, hardware]);
 
-  const totalCostNominal = useMemo(
-    () => timeline.reduce((sum, t) => sum + t.nominal * 12, 0),
-    [timeline]
-  );
-
-  const firstBreakYear = timeline.find(t => t.breakingPoint)?.year;
+  const timeline = projection?.timeline ?? [];
+  const recommendations = projection?.recommendations ?? [];
+  const carbon = projection?.carbon ?? [];
+  const costBreakdown = projection?.costBreakdown ?? [];
+  const totalCostNominal = projection?.summary.totalCostNominalUsd ?? 0;
+  const firstBreakYear = projection?.summary.firstBreakYear;
 
   const priorityColor = (p: string) =>
     p === 'high' ? 'text-destructive' : p === 'medium' ? 'text-yellow-500' : 'text-muted-foreground';
@@ -240,17 +139,20 @@ export function TimeMachineWorkspace({ nodes, connections, analysis }: TimeMachi
             <div className="min-w-0">
               <h2 className="text-xs sm:text-sm font-semibold text-foreground flex items-center gap-2">
                 <span className="truncate">Time Machine</span>
+                {isLoading && <Loader2 className="w-3 h-3 animate-spin text-primary shrink-0" />}
               </h2>
               <p className="text-[10px] sm:text-xs text-muted-foreground hidden sm:block">
-                Multi-scenario cost & scaling projection
+                Compiler-backed multi-scenario cost &amp; scaling projection
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2 sm:gap-4 text-xs shrink-0">
-            <div className="text-right hidden sm:block">
-              <span className="text-muted-foreground">Total ({horizon}yr nominal)</span>
-              <p className="font-mono font-semibold text-foreground">${(totalCostNominal / 1000).toFixed(0)}k</p>
-            </div>
+            {projection && (
+              <div className="text-right hidden sm:block">
+                <span className="text-muted-foreground">Total ({horizon}yr nominal)</span>
+                <p className="font-mono font-semibold text-foreground">${(totalCostNominal / 1000).toFixed(0)}k</p>
+              </div>
+            )}
             {firstBreakYear && (
               <Badge variant="destructive" className="text-[10px] gap-1">
                 <AlertTriangle className="w-3 h-3" />
@@ -310,7 +212,7 @@ export function TimeMachineWorkspace({ nodes, connections, analysis }: TimeMachi
             {/* Hardware */}
             <div className="space-y-2">
               <label className="text-xs text-muted-foreground">Target Hardware</label>
-              <Select value={hardware} onValueChange={setHardware}>
+              <Select value={hardware} onValueChange={(v) => setHardware(v as 'a100' | 'h200' | 'b100')}>
                 <SelectTrigger className="h-8 text-xs">
                   <SelectValue />
                 </SelectTrigger>
@@ -328,7 +230,15 @@ export function TimeMachineWorkspace({ nodes, connections, analysis }: TimeMachi
                 <Award className="w-4 h-4 text-primary" />
                 Recommendations
               </div>
-              {recommendations.map((rec, i) => (
+              {isLoading && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Loader2 className="w-3 h-3 animate-spin" /> Computing…
+                </div>
+              )}
+              {!isLoading && projError && (
+                <p className="text-xs text-destructive">{projError}</p>
+              )}
+              {!isLoading && !projError && recommendations.map((rec: Recommendation, i: number) => (
                 <div key={i} className="p-2.5 rounded-md bg-secondary/50 space-y-1">
                   <div className="flex items-center gap-2">
                     <span className={`text-[10px] font-bold uppercase ${priorityColor(rec.priority)}`}>
@@ -377,17 +287,30 @@ export function TimeMachineWorkspace({ nodes, connections, analysis }: TimeMachi
 
             {/* Chart content */}
             <div className="flex-1 overflow-auto p-4 scrollbar-thin">
-              {activeView === 'timeline' && (
-                <TimelineView timeline={timeline} budgetMax={budgetMax} />
-              )}
-              {activeView === 'breakdown' && (
-                <BreakdownView data={costBreakdown} />
-              )}
-              {activeView === 'carbon' && (
-                <CarbonView data={carbon} />
-              )}
-              {activeView === 'compliance' && (
-                <ComplianceView timeline={timeline} horizon={horizon} />
+              {nodes.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-muted-foreground gap-3">
+                  <Clock className="w-10 h-10 opacity-20" />
+                  <p className="text-sm font-medium">No model on the canvas</p>
+                  <p className="text-xs">Add layers to generate a Time Machine projection.</p>
+                </div>
+              ) : isLoading && !projection ? (
+                <div className="h-full flex flex-col items-center justify-center gap-3 text-muted-foreground">
+                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                  <p className="text-sm">Computing projection…</p>
+                </div>
+              ) : projError && !projection ? (
+                <div className="h-full flex flex-col items-center justify-center gap-3">
+                  <AlertTriangle className="w-8 h-8 text-destructive" />
+                  <p className="text-sm font-medium text-destructive">Projection failed</p>
+                  <p className="text-xs text-muted-foreground">{projError}</p>
+                </div>
+              ) : (
+                <>
+                  {activeView === 'timeline' && <TimelineView timeline={timeline} budgetMax={budgetMax} />}
+                  {activeView === 'breakdown' && <BreakdownView data={costBreakdown} />}
+                  {activeView === 'carbon' && <CarbonView data={carbon} />}
+                  {activeView === 'compliance' && <ComplianceView horizon={horizon} />}
+                </>
               )}
             </div>
           </div>
@@ -506,7 +429,7 @@ function CarbonView({ data }: { data: CarbonPoint[] }) {
   );
 }
 
-function ComplianceView({ timeline, horizon }: { timeline: ScenarioPoint[]; horizon: number }) {
+function ComplianceView({ horizon }: { horizon: number }) {
   const regulations = [
     { name: 'EU AI Act Phase 1', year: 2027, limit: 300, unit: 'GFLOPs/req', status: 'upcoming' },
     { name: 'EU AI Act Phase 2', year: 2028, limit: 150, unit: 'GFLOPs/req', status: 'upcoming' },

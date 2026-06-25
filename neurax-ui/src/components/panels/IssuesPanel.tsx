@@ -13,8 +13,8 @@ interface IssuesPanelProps {
 }
 
 export function IssuesPanel({ warnings, jumpToIssuesSignal = 0 }: IssuesPanelProps) {
-  const issuesRef = useRef<HTMLDivElement>(null);
-  const firstCompilerWarningRef = useRef<HTMLDivElement>(null);
+  const issuesRef = useRef<HTMLDivElement | null>(null);
+  const firstCompilerWarningRef = useRef<HTMLDivElement | null>(null);
   const compilerWarningPattern = /custom operations|estimated flops|unsupported/i;
 
   const errorCount = warnings.filter(w => w.type === 'error').length;

@@ -5,6 +5,7 @@ import {
   ChevronDown,
   GripHorizontal,
   Activity,
+  AlertTriangle,
   Binary,
   Clock3,
   HardDrive,

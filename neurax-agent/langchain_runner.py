@@ -278,6 +278,7 @@ async def run_controller_step(
     nodes = snapshot.get("nodes") or []
     connections = snapshot.get("connections") or []
     hw_config = snapshot.get("hw_config") or {}
+    active_tab = snapshot.get("active_tab") or "architecture"
 
     # Build detailed catalogue with all parameters
     def _fmt_block(item: dict[str, Any]) -> str:
@@ -416,8 +417,12 @@ You are building a computational graph that transforms input data to output pred
 - `add_node`: Add a block to the canvas (args: layer_type, node_id, x, y)
 - `connect`: Wire blocks together (args: from_id, to_id)
 - `disconnect`: Remove a connection (args: from_id, to_id) - use to rewire when a node is FULL
+- `delete_node`: Remove a block from the canvas entirely (args: node_id)
 - `set_node_params`: Set block hyperparameters (args: node_id, updates)
 - `set_hw_config`: Set global config (args: updates) - use for batchSize, numClasses, seqLen, etc.
+- `navigate_to`: Switch the active workspace tab (args: tab) - tab is one of: architecture, simulation, production, inference, timemachine
+- `run_analysis`: Trigger the compiler to analyse the current canvas (no args)
+- `select_node`: Focus/highlight a specific block (args: node_id)
 - `done`: Finalize the architecture
 
 ## Construction Principles
@@ -487,7 +492,8 @@ Return JSON with:
     user_template = """## User Request
 {user_message}
 
-## Current Architecture State
+## Current Workspace State
+Active Tab: {active_tab}
 Nodes: {node_count} total
 {node_summary}
 Connections: {connection_count}
@@ -544,6 +550,7 @@ What is the next step to progress toward a complete architecture?"""
                 missing_fields=", ".join(str(f) for f in missing_fields[:8]) if missing_fields else "none",
                 warnings_desc=warnings_desc,
                 history_text=history_text or "(no history)",
+                active_tab=active_tab,
             )
             out = await structured.ainvoke(messages)
             

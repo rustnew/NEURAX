@@ -33,7 +33,7 @@ use neurax_ir::{
 use neurax_ir::parallelism::ParallelismMetrics;
 use neurax_ir::hardware::HardwareMetrics;
 use neurax_ir::traits::{IrPass, ReportPass as ReportPassTrait};
-use neurax_ir::report::ReportInput;
+use neurax_ir::report::{ReportInput, PhaseTimingEntry};
 use std::time::Instant;
 
 /// Analysis result containing all IR outputs
@@ -92,42 +92,80 @@ impl AnalysisResult {
 pub fn run_analysis(config: ModelConfig) -> Result<AnalysisResult, NeuraxError> {
     let start = Instant::now();
     let ctx = NeuraxContext::new(config.clone());
-    
+    let mut phase_timeline: Vec<PhaseTimingEntry> = Vec::new();
+
+    macro_rules! timed_phase {
+        ($name:expr, $block:expr) => {{
+            let t0 = Instant::now();
+            let result = $block;
+            phase_timeline.push(PhaseTimingEntry {
+                name: $name.to_string(),
+                duration_ms: t0.elapsed().as_millis() as u64,
+                status: "completed".to_string(),
+            });
+            result
+        }};
+    }
+
     // Phase 1: Architecture
     let arch_pass = ArchitecturePass;
-    let (mut arch, _) = arch_pass.run(&config, &ctx)?;
-    let arch_metrics = arch_pass.compute_metrics(&mut arch, &ctx)?;
-    arch_pass.validate(&arch, &arch_metrics)?;
+    let (mut arch, arch_metrics) = timed_phase!("Architecture", {
+        let (mut a, _) = arch_pass.run(&config, &ctx)?;
+        let m = arch_pass.compute_metrics(&mut a, &ctx)?;
+        arch_pass.validate(&a, &m)?;
+        (a, m)
+    });
+    let _ = arch_metrics;
     
     // Phase 2: Graph
     let graph_pass = GraphPass;
-    let (mut graph, _) = graph_pass.run(&arch, &ctx)?;
-    let graph_metrics = graph_pass.compute_metrics(&mut graph, &ctx)?;
-    graph_pass.validate(&graph, &graph_metrics)?;
+    let (mut graph, graph_metrics) = timed_phase!("Graph", {
+        let (mut g, _) = graph_pass.run(&arch, &ctx)?;
+        let m = graph_pass.compute_metrics(&mut g, &ctx)?;
+        graph_pass.validate(&g, &m)?;
+        (g, m)
+    });
+    let _ = graph_metrics;
     
     // Phase 3: Tensor
     let tensor_pass = TensorPass;
-    let (mut tensor, _) = tensor_pass.run(&graph, &ctx)?;
-    let tensor_metrics = tensor_pass.compute_metrics(&mut tensor, &ctx)?;
-    tensor_pass.validate(&tensor, &tensor_metrics)?;
+    let (mut tensor, tensor_metrics) = timed_phase!("Tensor", {
+        let (mut t, _) = tensor_pass.run(&graph, &ctx)?;
+        let m = tensor_pass.compute_metrics(&mut t, &ctx)?;
+        tensor_pass.validate(&t, &m)?;
+        (t, m)
+    });
+    let _ = tensor_metrics;
     
     // Phase 4: Operator
     let operator_pass = OperatorPass;
-    let (mut operator, _) = operator_pass.run(&(tensor.clone(), arch.clone()), &ctx)?;
-    let operator_metrics = operator_pass.compute_metrics(&mut operator, &ctx)?;
-    operator_pass.validate(&operator, &operator_metrics)?;
+    let (mut operator, operator_metrics) = timed_phase!("Operator", {
+        let (mut o, _) = operator_pass.run(&(tensor.clone(), arch.clone()), &ctx)?;
+        let m = operator_pass.compute_metrics(&mut o, &ctx)?;
+        operator_pass.validate(&o, &m)?;
+        (o, m)
+    });
+    let _ = operator_metrics;
     
     // Phase 5: Compute
     let compute_pass = ComputePass;
-    let (mut compute, _) = compute_pass.run(&operator, &ctx)?;
-    let compute_metrics = compute_pass.compute_metrics(&mut compute, &ctx)?;
-    compute_pass.validate(&compute, &compute_metrics)?;
+    let (mut compute, compute_metrics) = timed_phase!("Compute", {
+        let (mut c, _) = compute_pass.run(&operator, &ctx)?;
+        let m = compute_pass.compute_metrics(&mut c, &ctx)?;
+        compute_pass.validate(&c, &m)?;
+        (c, m)
+    });
+    let _ = compute_metrics;
     
     // Phase 6: Memory
     let memory_pass = MemoryPass;
-    let (mut memory, _) = memory_pass.run(&(compute.clone(), tensor.clone(), arch.clone()), &ctx)?;
-    let memory_metrics = memory_pass.compute_metrics(&mut memory, &ctx)?;
-    memory_pass.validate(&memory, &memory_metrics)?;
+    let (mut memory, memory_metrics) = timed_phase!("Memory", {
+        let (mut m, _) = memory_pass.run(&(compute.clone(), tensor.clone(), arch.clone()), &ctx)?;
+        let metrics = memory_pass.compute_metrics(&mut m, &ctx)?;
+        memory_pass.validate(&m, &metrics)?;
+        (m, metrics)
+    });
+    let _ = memory_metrics;
     
     // Phase 7 & 8: Parallelism and Hardware in parallel (rayon::join per impl_2.md)
     // These passes are independent and can run concurrently
@@ -160,23 +198,30 @@ pub fn run_analysis(config: ModelConfig) -> Result<AnalysisResult, NeuraxError> 
     
     // Phase 9: Cost
     let cost_pass = CostPass;
-    let (mut cost, _) = cost_pass.run(&(hardware.clone(), parallelism.clone()), &ctx)?;
-    let cost_metrics = cost_pass.compute_metrics(&mut cost, &ctx)?;
-    cost_pass.validate(&cost, &cost_metrics)?;
-    
+    let (mut cost, cost_metrics) = timed_phase!("Cost", {
+        let (mut c, _) = cost_pass.run(&(hardware.clone(), parallelism.clone()), &ctx)?;
+        let m = cost_pass.compute_metrics(&mut c, &ctx)?;
+        cost_pass.validate(&c, &m)?;
+        (c, m)
+    });
+    let _ = cost_metrics;
+
     // Phase 10: Report
     let report_pass = ReportPass;
-    let report = report_pass.build_report(&ReportInput {
-        arch: &arch,
-        graph: &graph,
-        tensor: &tensor,
-        operator: &operator,
-        compute: &compute,
-        memory: &memory,
-        parallelism: &parallelism,
-        hardware: &hardware,
-        cost: &cost,
-    }, &ctx)?;
+    let mut report = timed_phase!("Report", {
+        report_pass.build_report(&ReportInput {
+            arch: &arch,
+            graph: &graph,
+            tensor: &tensor,
+            operator: &operator,
+            compute: &compute,
+            memory: &memory,
+            parallelism: &parallelism,
+            hardware: &hardware,
+            cost: &cost,
+        }, &ctx)?
+    });
+    report.phase_timeline = phase_timeline;
     
     // Phase 11: Dynamic Analysis (M36-M55)
     let dynamic_config = DynamicConfig::default();

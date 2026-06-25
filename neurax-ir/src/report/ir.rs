@@ -3,6 +3,29 @@
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 
+/// Per-pass timing entry for compilation timeline
+#[derive(Debug, Clone, Serialize, serde::Deserialize)]
+pub struct PhaseTimingEntry {
+    pub name: String,
+    pub duration_ms: u64,
+    pub status: String,
+}
+
+/// Per-layer gradient memory breakdown
+#[derive(Debug, Clone, Serialize, serde::Deserialize)]
+pub struct GradientMemoryEntry {
+    pub name: String,
+    pub forward: u64,
+    pub backward: u64,
+}
+
+/// KV cache scaling point (seq_len → cache_bytes)
+#[derive(Debug, Clone, Serialize, serde::Deserialize)]
+pub struct KvCacheEntry {
+    pub seq: u32,
+    pub value: u64,
+}
+
 /// Report IR - rapport final consolidé
 #[derive(Debug, Clone, Serialize)]
 pub struct ReportIR {
@@ -13,6 +36,8 @@ pub struct ReportIR {
     pub warnings: Vec<String>,
     /// Confidence score [0.0, 1.0] based on shape resolution and custom layers
     pub confidence_score: f64,
+    /// Compilation phase timeline (timing per IR pass)
+    pub phase_timeline: Vec<PhaseTimingEntry>,
 }
 
 impl Default for ReportIR {
@@ -24,6 +49,7 @@ impl Default for ReportIR {
             recommendations: Vec::new(),
             warnings: Vec::new(),
             confidence_score: 1.0,
+            phase_timeline: Vec::new(),
         }
     }
 }
@@ -132,6 +158,10 @@ pub struct AllMetrics {
     pub params_per_layer: std::collections::HashMap<String, u64>,
     pub flops_per_layer: std::collections::HashMap<String, f64>,
     pub latency_per_layer: std::collections::HashMap<String, f64>,
+
+    // === Rich per-layer metrics (optional) ===
+    pub gradient_memory_per_layer: Vec<GradientMemoryEntry>,
+    pub kv_cache_scaling: Vec<KvCacheEntry>,
 }
 
 /// Diagnostic information (re-exported from lib.rs for convenience)

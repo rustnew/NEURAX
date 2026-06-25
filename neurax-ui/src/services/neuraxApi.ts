@@ -321,3 +321,13 @@ export async function getPresets(): Promise<PresetMetadata[]> {
 export async function getPreset(id: string): Promise<PresetFull> {
   return request<PresetFull>(`/presets/${id}`);
 }
+
+/** POST /timemachine — Compiler-backed multi-year cost/carbon/scaling projection */
+export async function runTimeMachine(
+  body: TimeMachineRequest,
+): Promise<TimeMachineResponse> {
+  return request<TimeMachineResponse>('/timemachine', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}

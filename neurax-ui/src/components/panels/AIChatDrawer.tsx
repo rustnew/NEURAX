@@ -28,6 +28,7 @@ type AgentSnapshot = {
   missing_mandatory_fields?: unknown[];
   hw_config?: Record<string, unknown>;
   analysis_warnings?: unknown[];
+  active_tab?: string;
 };
 
 type AgentToolEvent = {
@@ -137,6 +138,24 @@ export default function AIChatDrawer({
     if (toolName === 'clear_canvas') {
       return { title: 'Reset canvas', detail: 'Cleared the canvas for a fresh build.', tone: 'neutral' };
     }
+    if (toolName === 'disconnect') {
+      return { title: 'Disconnect', detail: 'Removed a connection between blocks.', tone: 'neutral' };
+    }
+    if (toolName === 'delete_node') {
+      const id = typeof args?.node_id === 'string' ? args.node_id : '';
+      return { title: 'Remove block', detail: id ? `Removed block ${id}.` : 'Removed a block from the canvas.', tone: 'neutral' };
+    }
+    if (toolName === 'navigate_to') {
+      const tab = typeof args?.tab === 'string' ? args.tab : '';
+      return { title: 'Navigate', detail: tab ? `Switched to ${tab} workspace.` : 'Navigated to another tab.', tone: 'neutral' };
+    }
+    if (toolName === 'run_analysis') {
+      return { title: 'Compile', detail: 'Triggered compiler analysis on the current canvas.', tone: 'neutral' };
+    }
+    if (toolName === 'select_node') {
+      const id = typeof args?.node_id === 'string' ? args.node_id : '';
+      return { title: 'Select', detail: id ? `Focused block ${id}.` : 'Selected a block.', tone: 'neutral' };
+    }
     if (toolName === 'done') {
       return { title: 'Finalize', detail: 'Finalized the run.', tone: 'success' };
     }
@@ -179,6 +198,14 @@ export default function AIChatDrawer({
     if (name === 'add_node') return 'Added a required building block.';
     if (name === 'connect') return 'Wired blocks to ensure data flows end-to-end.';
     if (name === 'move_node') return 'Adjusted layout for readability.';
+    if (name === 'disconnect') return 'Removed a connection between blocks.';
+    if (name === 'delete_node') return 'Removed a block from the canvas.';
+    if (name === 'navigate_to') {
+      const tab = String(args.tab ?? '').trim();
+      return tab ? `Navigated to the ${tab} workspace.` : 'Navigated to another tab.';
+    }
+    if (name === 'run_analysis') return 'Triggered compiler analysis.';
+    if (name === 'select_node') return 'Focused a block on the canvas.';
     if (name === 'done') return null;
     return 'Applied a tool action.';
   }, []);
