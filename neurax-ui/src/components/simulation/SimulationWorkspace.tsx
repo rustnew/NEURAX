@@ -30,9 +30,10 @@ interface SimulationWorkspaceProps {
   analysis?: AnalysisResult;
   perLayer?: PerLayerBreakdownRow[];
   warnings?: Warning[];
+  topology?: Record<string, unknown>;
 }
 
-export function SimulationWorkspace({ nodes, connections, analysis, perLayer, warnings }: SimulationWorkspaceProps) {
+export function SimulationWorkspace({ nodes, connections, analysis, perLayer, warnings, topology }: SimulationWorkspaceProps) {
   const [activeCategory, setActiveCategory] = useState('realtime');
 
   return (
@@ -70,7 +71,7 @@ export function SimulationWorkspace({ nodes, connections, analysis, perLayer, wa
         {activeCategory === 'global' && <GlobalResultsCharts analysis={analysis} />}
         {activeCategory === 'perlayer' && <PerLayerCharts analysis={analysis} perLayer={perLayer} />}
         {activeCategory === 'memory' && <MemoryCharts analysis={analysis} />}
-        {activeCategory === 'comparison' && <ComparisonCharts analysis={analysis} />}
+        {activeCategory === 'comparison' && <ComparisonCharts analysis={analysis} topology={topology} />}
         {activeCategory === 'optimization' && (
           <OptimizationCharts
             analysis={analysis}

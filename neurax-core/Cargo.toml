@@ -31,6 +31,9 @@ indexmap = { workspace = true }
 itertools = { workspace = true }
 once_cell = { workspace = true }
 
+# Async runtime (for streaming broadcast channels)
+tokio = { workspace = true }
+
 # Crates internes
 neurax-parser = { path = "../neurax-parser" }
 neurax-ir = { path = "../neurax-ir" }

@@ -10,6 +10,8 @@ import {
   BookOpen,
   Menu,
   MessageSquareText,
+  FolderOpen,
+  CloudUpload,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button.tsx';
 import { ArchitectureSelector } from '@/components/architecture/ArchitectureSelector.tsx';
@@ -19,6 +21,7 @@ import { VariantPresetsPanel } from '@/components/catalog/VariantPresetsPanel.ts
 import { ArchitectureFamily } from '@/types/plugins.ts';
 import { VariantPreset } from '@/types/catalog.ts';
 import { CanvasNode, Connection } from '@/types/architecture.ts';
+import type { Project } from '@/services/neuraxApi.ts';
 import {
   Popover,
   PopoverContent,
@@ -47,6 +50,13 @@ interface TopNavProps {
   currentPresetId?: string | null;
   nodes?: CanvasNode[];
   connections?: Connection[];
+  // Project management
+  projects?: Project[];
+  currentProjectId?: string | null;
+  onSaveProject?: () => void;
+  onLoadProject?: (project: Project) => void;
+  onDeleteProject?: (projectId: string) => void;
+  isProjectsLoading?: boolean;
 }
 
 export function TopNav({
@@ -66,6 +76,12 @@ export function TopNav({
   currentPresetId,
   nodes = [],
   connections = [],
+  projects = [],
+  currentProjectId,
+  onSaveProject,
+  onLoadProject,
+  onDeleteProject,
+  isProjectsLoading,
 }: TopNavProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const canClearCanvas = nodes.length > 0 || connections.length > 0;
@@ -146,6 +162,71 @@ export function TopNav({
             <Save className="w-4 h-4 mr-1.5" />
             Save
           </Button>
+
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground hover:text-foreground"
+                title="Cloud Projects"
+              >
+                <FolderOpen className="w-4 h-4 mr-1.5" />
+                Projects
+                <ChevronDown className="w-3.5 h-3.5 ml-1" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80 p-3" align="start">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Cloud Projects</p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={onSaveProject}
+                    disabled={!onSaveProject}
+                  >
+                    <CloudUpload className="w-3.5 h-3.5 mr-1" />
+                    Save Current
+                  </Button>
+                </div>
+                {isProjectsLoading && (
+                  <p className="text-xs text-muted-foreground py-2">Loading projects...</p>
+                )}
+                {!isProjectsLoading && projects.length === 0 && (
+                  <p className="text-xs text-muted-foreground py-2">No saved projects yet. Click "Save Current" to save your work.</p>
+                )}
+                <div className="max-h-[300px] overflow-y-auto space-y-1.5">
+                  {projects.map((project) => (
+                    <div
+                      key={project.id}
+                      className={`flex items-center justify-between rounded-md px-2.5 py-2 text-sm hover:bg-accent/50 cursor-pointer ${project.id === currentProjectId ? 'bg-accent' : ''}`}
+                      onClick={() => onLoadProject?.(project)}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-xs truncate">{project.name}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {project.architecture || 'No architecture'} · {new Date(project.updated_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteProject?.(project.id);
+                        }}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
           <Button
             variant="ghost"
             size="sm"
@@ -264,6 +345,17 @@ export function TopNav({
               <Button
                 variant="ghost"
                 size="sm"
+                className="w-full justify-start"
+                onClick={() => {
+                  onSaveProject?.();
+                  setMobileMenuOpen(false);
+                }}
+              >
+                <CloudUpload className="w-4 h-4 mr-2" /> Save to Cloud
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
                 className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10"
                 onClick={() => {
                   onClearCanvas?.();
@@ -279,6 +371,34 @@ export function TopNav({
               <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => { onOpenPricing?.(); setMobileMenuOpen(false); }}>
                 <CreditCard className="w-4 h-4 mr-2" /> Pricing
               </Button>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Cloud Projects</p>
+              <div className="max-h-[200px] overflow-y-auto space-y-1">
+                {isProjectsLoading && <p className="text-xs text-muted-foreground py-1">Loading...</p>}
+                {!isProjectsLoading && projects.length === 0 && <p className="text-xs text-muted-foreground py-1">No saved projects</p>}
+                {projects.map((project) => (
+                  <div
+                    key={project.id}
+                    className={`flex items-center justify-between rounded-md px-2 py-1.5 text-sm hover:bg-accent/50 cursor-pointer ${project.id === currentProjectId ? 'bg-accent' : ''}`}
+                    onClick={() => { onLoadProject?.(project); setMobileMenuOpen(false); }}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-xs truncate">{project.name}</p>
+                      <p className="text-[10px] text-muted-foreground">{project.architecture || 'N/A'}</p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-5 w-5 shrink-0 text-destructive hover:text-destructive"
+                      onClick={(e) => { e.stopPropagation(); onDeleteProject?.(project.id); }}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div className="space-y-2">

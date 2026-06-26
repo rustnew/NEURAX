@@ -11,7 +11,7 @@ use neurax_core::analyze_json;
 /// C01: flops_per_token × seq_len = forward_flops (±0.1%)
 #[test]
 fn test_c01_flops_per_token_coherence() {
-    let json = include_str!("../../../../Neurax-IR/models/gpt2_medium.json");
+    let json = include_str!("../../models/gpt2_medium.json");
     let result = analyze_json(json).expect("Analysis should succeed");
     
     let seq_len = 1024u64;
@@ -32,7 +32,7 @@ fn test_c01_flops_per_token_coherence() {
 #[test]
 fn test_c02_resnet50_params() {
     // Note: ResNet-50 model file may not exist, skip if not found
-    let json_result = std::fs::read_to_string("../../../../Neurax-IR/models/resnet50.json");
+    let json_result = std::fs::read_to_string("../../models/resnet50.json");
     if let Ok(json) = json_result {
         let result = analyze_json(&json).expect("Analysis should succeed");
         let expected_params = 25_557_032u64;
@@ -53,7 +53,7 @@ fn test_c02_resnet50_params() {
 /// C03: GPT-2 Small : 124,439,808 params ± 0.1%
 #[test]
 fn test_c03_gpt2_small_params() {
-    let json = include_str!("../../../../Neurax-IR/models/gpt2_small.json");
+    let json = include_str!("../../models/gpt2_small.json");
     let result = analyze_json(json).expect("Analysis should succeed");
     
     let expected_params = 124_439_808u64;
@@ -72,7 +72,7 @@ fn test_c03_gpt2_small_params() {
 /// C04: LLaMA 3.1 8B : 8,030,261,248 params ± 0.1%
 #[test]
 fn test_c04_llama8b_params() {
-    let json_result = std::fs::read_to_string("../../../../Neurax-IR/models/llama_8b.json");
+    let json_result = std::fs::read_to_string("../../models/llama_8b.json");
     if let Ok(json) = json_result {
         let result = analyze_json(&json).expect("Analysis should succeed");
         let expected_params = 8_030_261_248u64;
@@ -93,7 +93,7 @@ fn test_c04_llama8b_params() {
 /// C05: FLOPs backward ≥ FLOPs forward pour toutes les ops
 #[test]
 fn test_c05_backward_gte_forward() {
-    let json = include_str!("../../../../Neurax-IR/models/gpt2_medium.json");
+    let json = include_str!("../../models/gpt2_medium.json");
     let result = analyze_json(json).expect("Analysis should succeed");
     
     assert!(
@@ -110,7 +110,7 @@ fn test_c06_batchnorm_params() {
     // BatchNorm a 2 params par channel: gamma (weight) et beta (bias)
     // Running mean/variance ne sont pas des paramètres entraînables
     // Ce test vérifie que le compilateur ne compte pas 4×C
-    let json = include_str!("../../../../Neurax-IR/models/gpt2_medium.json");
+    let json = include_str!("../../models/gpt2_medium.json");
     let result = analyze_json(json).expect("Analysis should succeed");
     
     // Vérifier que LayerNorm est compté correctement (2 params par dim: weight + bias)
@@ -124,7 +124,7 @@ fn test_c06_batchnorm_params() {
 /// C07: Tied embeddings comptés une seule fois (LLaMA, GPT-2)
 #[test]
 fn test_c07_tied_embeddings() {
-    let json = include_str!("../../../../Neurax-IR/models/gpt2_medium.json");
+    let json = include_str!("../../models/gpt2_medium.json");
     let result = analyze_json(json).expect("Analysis should succeed");
     
     // GPT-2 utilise tied embeddings (wte = lm_head)
@@ -175,7 +175,7 @@ fn test_c10_moe_flops() {
 /// C11: VRAM training ≥ VRAM inference pour tous les modèles
 #[test]
 fn test_c11_vram_training_gte_inference() {
-    let json = include_str!("../../../../Neurax-IR/models/gpt2_medium.json");
+    let json = include_str!("../../models/gpt2_medium.json");
     let result = analyze_json(json).expect("Analysis should succeed");
     
     // Training nécessite: params + gradients + optimizer + activations
@@ -195,7 +195,7 @@ fn test_c11_vram_training_gte_inference() {
 /// C12: VRAM params = total_params × dtype_bytes / 1e9 ± 1%
 #[test]
 fn test_c12_vram_params_formula() {
-    let json = include_str!("../../../../Neurax-IR/models/gpt2_medium.json");
+    let json = include_str!("../../models/gpt2_medium.json");
     let result = analyze_json(json).expect("Analysis should succeed");
     
     let total_params = result.arch.metrics.total_parameters;
@@ -215,7 +215,7 @@ fn test_c12_vram_params_formula() {
 /// C13: Optimizer states = params × 8 bytes pour Adam ± 1%
 #[test]
 fn test_c13_optimizer_states_adam() {
-    let json = include_str!("../../../../Neurax-IR/models/gpt2_medium.json");
+    let json = include_str!("../../models/gpt2_medium.json");
     let result = analyze_json(json).expect("Analysis should succeed");
     
     let param_memory = result.memory.metrics.parameter_memory_bytes;
@@ -237,7 +237,7 @@ fn test_c13_optimizer_states_adam() {
 /// C14: Fragmentation incluse (PyTorch Caching Allocator)
 #[test]
 fn test_c14_fragmentation_included() {
-    let json = include_str!("../../../../Neurax-IR/models/gpt2_medium.json");
+    let json = include_str!("../../models/gpt2_medium.json");
     let result = analyze_json(json).expect("Analysis should succeed");
     
     let frag = result.memory.metrics.fragmentation_estimate;
@@ -277,7 +277,7 @@ fn test_c17_gradient_checkpointing() {
 /// C18: VRAM LLaMA 8B bf16 ≈ 15.5 GB ± 8%
 #[test]
 fn test_c18_llama8b_vram() {
-    let json_result = std::fs::read_to_string("../../../../Neurax-IR/models/llama_8b.json");
+    let json_result = std::fs::read_to_string("../../models/llama_8b.json");
     if let Ok(json) = json_result {
         let result = analyze_json(&json).expect("Analysis should succeed");
         let expected_vram_gb = 15.5;
@@ -350,7 +350,7 @@ fn test_c24_roofline_ridge_point() {
 /// C25: throughput = batch × seq / latency ± 5%
 #[test]
 fn test_c25_throughput_formula() {
-    let json = include_str!("../../../../Neurax-IR/models/gpt2_medium.json");
+    let json = include_str!("../../models/gpt2_medium.json");
     let result = analyze_json(json).expect("Analysis should succeed");
     
     let batch = 1u64;
@@ -387,7 +387,7 @@ fn test_c26_all_coherence_assertions() {
 /// C27: flops_per_token cohérent avec forward_flops (F01 corrigé)
 #[test]
 fn test_c27_f01_corrected() {
-    let json = include_str!("../../../../Neurax-IR/models/gpt2_medium.json");
+    let json = include_str!("../../models/gpt2_medium.json");
     let result = analyze_json(json).expect("Analysis should succeed");
     
     let seq_len = 1024u64;
@@ -414,7 +414,7 @@ fn test_c28_vram_precision_ratio() {
 /// C29: sum(params_by_family) = total_params ± 1%
 #[test]
 fn test_c29_params_by_family_sum() {
-    let json = include_str!("../../../../Neurax-IR/models/gpt2_medium.json");
+    let json = include_str!("../../models/gpt2_medium.json");
     let result = analyze_json(json).expect("Analysis should succeed");
     
     // La somme des params par famille doit égaler total_params
@@ -425,7 +425,7 @@ fn test_c29_params_by_family_sum() {
 /// C30: sum(flops_by_layer_top10) ≤ forward_flops
 #[test]
 fn test_c30_top10_flops_sum() {
-    let json = include_str!("../../../../Neurax-IR/models/gpt2_medium.json");
+    let json = include_str!("../../models/gpt2_medium.json");
     let result = analyze_json(json).expect("Analysis should succeed");
     
     let mut flops_values: Vec<f64> = result.compute.metrics.flops_per_layer.values().cloned().collect();
@@ -444,7 +444,7 @@ fn test_c30_top10_flops_sum() {
 /// C31: backward_ratio ∈ [1.0, 5.0] pour toutes les ops
 #[test]
 fn test_c31_backward_ratio_range() {
-    let json = include_str!("../../../../Neurax-IR/models/gpt2_medium.json");
+    let json = include_str!("../../models/gpt2_medium.json");
     let result = analyze_json(json).expect("Analysis should succeed");
     
     let backward_ratio = result.compute.metrics.backward_flops / result.compute.metrics.forward_flops;
@@ -475,7 +475,7 @@ fn test_c33_confidence_score_range() {
 /// C34: latency > 0 et fini
 #[test]
 fn test_c34_latency_positive_finite() {
-    let json = include_str!("../../../../Neurax-IR/models/gpt2_medium.json");
+    let json = include_str!("../../models/gpt2_medium.json");
     let result = analyze_json(json).expect("Analysis should succeed");
     
     assert!(
@@ -489,7 +489,7 @@ fn test_c34_latency_positive_finite() {
 /// C35: energy ≥ 0
 #[test]
 fn test_c35_energy_nonnegative() {
-    let json = include_str!("../../../../Neurax-IR/models/gpt2_medium.json");
+    let json = include_str!("../../models/gpt2_medium.json");
     let result = analyze_json(json).expect("Analysis should succeed");
     
     assert!(
@@ -509,7 +509,7 @@ fn test_c35_energy_nonnegative() {
 fn test_c36_gpt2_small_compile_time() {
     use std::time::Instant;
     
-    let json = include_str!("../../../../Neurax-IR/models/gpt2_small.json");
+    let json = include_str!("../../models/gpt2_small.json");
     let start = Instant::now();
     let result = analyze_json(json).expect("Analysis should succeed");
     let elapsed = start.elapsed();
@@ -525,7 +525,7 @@ fn test_c36_gpt2_small_compile_time() {
 /// C37: LLaMA 3.1 8B : < 200ms sur CPU 8 cœurs
 #[test]
 fn test_c37_llama8b_compile_time() {
-    let json_result = std::fs::read_to_string("../../../../Neurax-IR/models/llama_8b.json");
+    let json_result = std::fs::read_to_string("../../models/llama_8b.json");
     if let Ok(json) = json_result {
         use std::time::Instant;
         
@@ -545,7 +545,7 @@ fn test_c37_llama8b_compile_time() {
 /// C38: LLaMA 3.1 70B : < 500ms sur CPU 8 cœurs
 #[test]
 fn test_c38_llama70b_compile_time() {
-    let json_result = std::fs::read_to_string("../../../../Neurax-IR/models/llama_70b.json");
+    let json_result = std::fs::read_to_string("../../models/llama_70b.json");
     if let Ok(json) = json_result {
         use std::time::Instant;
         
@@ -567,7 +567,7 @@ fn test_c38_llama70b_compile_time() {
 fn test_c39_rss_memory() {
     // Note: La mesure RSS nécessite un outil externe ou une instrumentation
     // Ce test vérifie juste que le compilateur fonctionne
-    let json = include_str!("../../../../Neurax-IR/models/gpt2_medium.json");
+    let json = include_str!("../../models/gpt2_medium.json");
     let result = analyze_json(json).expect("Analysis should succeed");
     
     println!("✓ C39: RSS memory < 256 MB (à vérifier avec outil externe)");

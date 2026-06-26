@@ -6,6 +6,8 @@ pub mod ir;
 mod engine;
 mod runner;
 pub mod units;
+pub mod streaming;
+pub mod export;
 
 pub use ir::{IrBackend, MlirBackend, select_backend};
 pub use engine::*;

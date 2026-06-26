@@ -33,7 +33,7 @@ import { ImportResult } from '@/utils/architectureImporter.ts';
 import { compileToNeuraxIR } from '@/utils/neuraxCompiler.ts';
 import { getBlockDefaults } from '@/utils/blockDefaults.ts';
 import { DEFAULT_HARDWARE_CONFIG, HardwareConfig, useHardware, validateHardwareConfig, ArchitectureFamily as HwFamily } from '@/contexts/HardwareContext.tsx';
-import { analyze, NeuraxApiError } from '@/services/neuraxApi.ts';
+import { analyze, analyzeStream, NeuraxApiError, listProjects, createProject, updateProject, deleteProject, getCredits, type Project, type CreditInfo } from '@/services/neuraxApi.ts';
 import { useToast } from '@/hooks/use-toast.ts';
 import { getPluginLayers } from '@/plugins/registry.ts';
 
@@ -338,12 +338,409 @@ function buildHardwareConfigFromPreset(
   }
 }
 
+// ─── Report Parsing Helper ───────────────────────────────────────────
+// Extracted so both synchronous and streaming analysis handlers can share it.
+
+interface ParsedReportState {
+  analysis: AnalysisResult;
+  perLayer: PerLayerBreakdownRow[];
+  warnings: Warning[];
+  perLayerLatency: Record<string, number>;
+  perLayerVram: Record<string, number>;
+}
+
+function parseAnalysisReport(
+  rawReport: unknown,
+  precision: string,
+  batchSize: number,
+): ParsedReportState {
+  const r = rawReport as Record<string, unknown>;
+  const rpt = ((r as any)?.report ?? r) as Record<string, unknown>;
+  const metricsRoot = ((rpt as any)?.metrics ?? rpt) as Record<string, unknown>;
+
+  const sub = (key: string) => {
+    const nested = (metricsRoot as any)[key];
+    if (nested && typeof nested === 'object' && !Array.isArray(nested) && Object.keys(nested).length > 0)
+      return nested as any;
+    return metricsRoot as any;
+  };
+
+  const struct = sub('structure');
+  const compute = sub('compute');
+  const memory = sub('memory');
+  const hardware = sub('hardware');
+  const parallelism = sub('parallelism');
+  const performance = sub('performance');
+  const cost = sub('cost');
+  const graph = sub('graph');
+  const dynamic = (metricsRoot.dynamic ?? {}) as any;
+
+  const formatFlopsHuman = (flops: number): string => {
+    if (!Number.isFinite(flops) || flops <= 0) return '0 FLOPs';
+    if (flops >= 1e12) return `${(flops / 1e12).toFixed(2)} TFLOPs`;
+    if (flops >= 1e9) return `${(flops / 1e9).toFixed(2)} GFLOPs`;
+    if (flops >= 1e6) return `${(flops / 1e6).toFixed(2)} MFLOPs`;
+    if (flops >= 1e3) return `${(flops / 1e3).toFixed(2)} KFLOPs`;
+    return `${flops.toFixed(0)} FLOPs`;
+  };
+
+  const formatBytesGb = (bytes: number): string => {
+    if (!Number.isFinite(bytes) || bytes <= 0) return '0 GB';
+    const gb = bytes / 1e9;
+    return `${gb.toFixed(gb >= 10 ? 1 : 2)} GB`;
+  };
+
+  const forwardFlops = compute.forward_flops ?? 0;
+  const backwardFlops = compute.backward_flops ?? 0;
+  const totalFlops = compute.total_flops ?? forwardFlops;
+  const peakVramBytes = memory.peak_vram_bytes ?? 0;
+  const throughputGraphsPerS = typeof performance.throughput_graphs_per_s === 'number'
+    ? performance.throughput_graphs_per_s
+    : null;
+
+  const compilationRaw = (((rpt as any)?.compilation ?? {}) as Record<string, unknown>);
+  const phaseTimelineRaw = Array.isArray((rpt as any)?.phase_timeline)
+    ? (rpt as any).phase_timeline
+    : Array.isArray((compilationRaw as any)?.phase_timeline)
+      ? (compilationRaw as any).phase_timeline
+      : [];
+  const normalizedPhaseTimeline = phaseTimelineRaw.map((phase: any) => ({
+    name: typeof phase?.name === 'string' ? phase.name : 'Unknown',
+    duration_ms: typeof phase?.duration_ms === 'number' ? phase.duration_ms : 0,
+    status: typeof phase?.status === 'string' ? phase.status.toLowerCase() : 'completed',
+  }));
+  const hasCompilationPayload =
+    typeof compilationRaw.current_phase === 'string'
+    || typeof compilationRaw.total_progress === 'number'
+    || normalizedPhaseTimeline.length > 0;
+  const compilation = hasCompilationPayload
+    ? {
+      current_phase: typeof compilationRaw.current_phase === 'string'
+        ? compilationRaw.current_phase
+        : 'Completed',
+      total_progress: typeof compilationRaw.total_progress === 'number'
+        ? compilationRaw.total_progress
+        : 1,
+      phase_timeline: normalizedPhaseTimeline,
+    }
+    : undefined;
+
+  const liveTraceRaw = (((rpt as any)?.live_trace ?? {}) as Record<string, unknown>);
+  const normalizeTupleSeries = (value: unknown): [number, number][] =>
+    Array.isArray(value)
+      ? value
+        .map((entry) => {
+          if (!Array.isArray(entry) || entry.length < 2) return null;
+          const x = entry[0];
+          const y = entry[1];
+          if (typeof x !== 'number' || typeof y !== 'number') return null;
+          return [x, y] as [number, number];
+        })
+        .filter((entry): entry is [number, number] => entry !== null)
+      : [];
+
+  const memoryLiveness = Array.isArray(liveTraceRaw.memory_liveness)
+    ? liveTraceRaw.memory_liveness
+      .map((entry: any) => (
+        typeof entry?.[0] === 'number' && typeof entry?.[1] === 'number'
+          ? { step: entry[0], value: entry[1] }
+          : (typeof entry?.step === 'number' && typeof entry?.value === 'number'
+            ? { step: entry.step, value: entry.value }
+            : null)
+      ))
+      .filter((entry): entry is { step: number; value: number } => entry !== null)
+    : [];
+  const memoryHeatmap = Array.isArray(liveTraceRaw.memory_heatmap)
+    ? liveTraceRaw.memory_heatmap
+      .map((entry: any) => (
+        typeof entry?.layer === 'string' && Array.isArray(entry?.timeline)
+          ? {
+            layer: entry.layer,
+            timeline: entry.timeline.filter((step: unknown): step is number => typeof step === 'number'),
+          }
+          : null
+      ))
+      .filter((entry): entry is { layer: string; timeline: number[] } => entry !== null)
+    : [];
+  const gradientRaw = Array.isArray((metricsRoot as any)?.gradient_memory_per_layer)
+    ? (metricsRoot as any).gradient_memory_per_layer
+    : Array.isArray(liveTraceRaw.gradient_memory_breakdown)
+      ? liveTraceRaw.gradient_memory_breakdown
+      : [];
+  const gradientMemoryBreakdown = gradientRaw
+    .map((entry: any) => (
+      typeof entry?.name === 'string'
+        ? {
+          name: entry.name,
+          forward: typeof entry?.forward === 'number' ? entry.forward : 0,
+          backward: typeof entry?.backward === 'number' ? entry.backward : 0,
+        }
+        : null
+    ))
+    .filter((entry: any): entry is { name: string; forward: number; backward: number } => entry !== null);
+  const kvRaw = Array.isArray((metricsRoot as any)?.kv_cache_scaling)
+    ? (metricsRoot as any).kv_cache_scaling
+    : Array.isArray(liveTraceRaw.kv_cache_scaling)
+      ? liveTraceRaw.kv_cache_scaling
+      : [];
+  const kvCacheScaling = kvRaw
+    .map((entry: any) => (
+      typeof entry?.seq === 'number' && typeof entry?.value === 'number'
+        ? { seq: entry.seq, value: entry.value }
+        : (typeof entry?.[0] === 'number' && typeof entry?.[1] === 'number'
+          ? { seq: entry[0], value: entry[1] }
+          : null)
+    ))
+    .filter((entry: any): entry is { seq: number; value: number } => entry !== null);
+  const liveTrace = {
+    partial_metrics: normalizeTupleSeries(liveTraceRaw.partial_metrics),
+    throughput_trace: normalizeTupleSeries(liveTraceRaw.throughput_trace),
+    memory_liveness: memoryLiveness,
+    memory_heatmap: memoryHeatmap,
+    gradient_memory_breakdown: gradientMemoryBreakdown,
+    kv_cache_scaling: kvCacheScaling,
+  };
+
+  const normalizedDiagnostics = (Array.isArray((rpt as any)?.diagnostics) ? (rpt as any).diagnostics : [])
+    .map((diag: any) => ({
+      category: typeof diag?.category === 'string' ? diag.category.toLowerCase() : 'general',
+      severity: typeof diag?.severity === 'string' ? diag.severity.toLowerCase() : 'info',
+      code: typeof diag?.code === 'string' ? diag.code : undefined,
+      message: typeof diag?.message === 'string' ? diag.message : 'Unknown diagnostic',
+      layer_id: typeof diag?.layer_id === 'string' ? diag.layer_id : undefined,
+      suggestion: typeof diag?.suggestion === 'string' ? diag.suggestion : undefined,
+      precision_impact: typeof diag?.precision_impact === 'number' ? diag.precision_impact : undefined,
+    }));
+
+  const recommendations = (Array.isArray((rpt as any)?.recommendations) ? (rpt as any).recommendations : [])
+    .map((rec: any) => ({
+      category: typeof rec?.category === 'string' ? rec.category.toLowerCase() : 'general',
+      priority: typeof rec?.priority === 'string' ? rec.priority.toLowerCase() : 'medium',
+      title: typeof rec?.title === 'string' ? rec.title : 'Recommendation',
+      description: typeof rec?.description === 'string' ? rec.description : '',
+      impact: typeof rec?.impact === 'string' ? rec.impact : '',
+    }));
+  const reportWarnings = (Array.isArray((rpt as any)?.warnings) ? (rpt as any).warnings : [])
+    .filter((warning: unknown): warning is string => typeof warning === 'string' && warning.trim().length > 0);
+
+  const analysis: AnalysisResult = {
+    totalParams: struct.total_parameters ?? 0,
+    numLayers: struct.num_layers ?? 0,
+    modelType: struct.model_type ?? '',
+    graphDepth: graph.graph_depth ?? 0,
+    totalOperations: graph.total_operations ?? 0,
+    criticalPathLength: graph.critical_path_length ?? 0,
+    tensorResolutionRatio: graph.tensor_resolution_ratio ?? 1,
+    unresolvedDimCount: graph.unresolved_dim_count ?? 0,
+    totalTensorCount: graph.total_tensor_count ?? 0,
+    largestTensorBytes: graph.largest_tensor_bytes ?? 0,
+    opsDistribution: compute.ops_distribution ?? compute.op_type_distribution ?? {},
+
+    totalFlops,
+    forwardFlops,
+    backwardFlops,
+    flopsPerToken: compute.flops_per_token ?? 0,
+    flopsIncrementalDecode: compute.flops_incremental_decode ?? 0,
+    arithmeticIntensity: compute.arithmetic_intensity ?? 0,
+    bottleneck: performance.bottleneck ?? '',
+    rooflinePosition: compute.roofline_position ?? 0,
+
+    estimatedFlops: formatFlopsHuman(totalFlops),
+    forwardFlopsHuman: formatFlopsHuman(forwardFlops),
+    backwardFlopsHuman: formatFlopsHuman(backwardFlops),
+
+    peakVramBytes,
+    parameterMemoryBytes: memory.parameter_memory_bytes ?? 0,
+    activationMemoryBytes: memory.activation_memory_bytes ?? 0,
+    gradientMemoryBytes: memory.gradient_memory_bytes ?? 0,
+    optimizerStateBytes: memory.optimizer_state_bytes ?? 0,
+    maxBatchSizeFit: memory.max_batch_size_fit ?? 0,
+    memoryFragmentation: (dynamic.virtual_memory?.fragmentation_pct ?? 0) / 100,
+    memoryUsage: formatBytesGb(peakVramBytes),
+
+    gpuName: hardware.gpu_name ?? '',
+    gpuCount: hardware.gpu_count ?? 1,
+    gpuMemoryGb: hardware.gpu_memory_gb ?? 0,
+    gpuTflops: hardware.gpu_tflops_fp16 ?? 0,
+    gpuBandwidthGbs: hardware.gpu_memory_bandwidth_gbs ?? 0,
+    interconnect: hardware.interconnect ?? '',
+    interconnectBandwidthGbs: hardware.interconnect_bandwidth_gbs ?? 0,
+
+    dataParallelEfficiency: parallelism.data_parallel_efficiency ?? 1,
+    communicationOverhead: parallelism.communication_overhead ?? 0,
+    optimalGpuCount: parallelism.optimal_gpu_count ?? 1,
+    pipelineStages: parallelism.pipeline_stages ?? parallelism.pipeline_parallel ?? 1,
+    tensorParallelDegree: parallelism.tensor_parallel_degree ?? parallelism.tensor_parallel ?? 1,
+    dataParallel: parallelism.data_parallel ?? 1,
+    tensorParallel: parallelism.tensor_parallel ?? 1,
+    pipelineParallel: parallelism.pipeline_parallel ?? 1,
+
+    latencyMs: performance.latency_ms ?? null,
+    throughputTokensPerS: performance.throughput_tokens_per_s ?? 0,
+    throughputGraphsPerS,
+    gpuUtilization: performance.gpu_utilization ?? null,
+
+    trainingCostUsd: cost.training_cost_usd ?? 0,
+    trainingTimeHours: cost.training_time_hours ?? 0,
+    energyKwh: cost.energy_kwh ?? 0,
+    co2Kg: cost.co2_kg ?? 0,
+    costPerMillionTokensUsd: cost.cost_per_million_tokens_usd ?? 0,
+    provider: cost.provider ?? '',
+
+    selectedPrecision: precision,
+    selectedBatchSize: batchSize,
+
+    confidenceScore: (rpt as any)?.confidence_score ?? 1.0,
+    depth: (rpt as any)?.depth ?? 1,
+    isSequenceModel: ((metricsRoot as any)?.is_sequence_model ?? true),
+    customLayerCount: (metricsRoot as any)?.custom_layer_count ?? 0,
+    diagnosticCount: normalizedDiagnostics.length,
+    reportWarnings,
+    recommendations,
+
+    compilation,
+    live_trace: liveTrace,
+    memory_liveness: memoryLiveness,
+    memory_heatmap: memoryHeatmap,
+    gradient_memory_breakdown: gradientMemoryBreakdown,
+    kv_cache_scaling: kvCacheScaling,
+    diagnostics: normalizedDiagnostics,
+
+    dynamic: {
+      virtual_memory: dynamic.virtual_memory ? {
+        fragmentation_overhead_gb: dynamic.virtual_memory.fragmentation_overhead_gb ?? 0,
+        fragmentation_pct: dynamic.virtual_memory.fragmentation_pct ?? 0,
+        defrag_savings_gb: dynamic.virtual_memory.defrag_savings_gb ?? 0,
+        virtual_savings_gb: dynamic.virtual_memory.virtual_savings_gb ?? 0,
+        virtual_savings_pct: dynamic.virtual_memory.virtual_savings_pct ?? 0,
+        peak_vram_with_defrag_gb: dynamic.virtual_memory.peak_vram_with_defrag_gb ?? 0,
+        peak_vram_with_virtual_gb: dynamic.virtual_memory.peak_vram_with_virtual_gb ?? 0,
+        recommended_strategy: dynamic.virtual_memory.recommended_strategy ?? 'NoAction',
+        confidence: dynamic.virtual_memory.confidence ?? 0,
+      } : undefined,
+      stability: dynamic.stability ? {
+        lyapunov_exponent_mean: dynamic.stability.lyapunov_exponent_mean ?? 0,
+        chaos_index: dynamic.stability.chaos_index ?? 0,
+        high_risk_layers_count: dynamic.stability.high_risk_layers_count ?? 0,
+        fp32_required_pct: dynamic.stability.fp32_required_pct ?? 0,
+        global_robustness_score: dynamic.stability.global_robustness_score ?? 1.0,
+        fp32_fallback_memory_overhead_gb: dynamic.stability.fp32_fallback_memory_overhead_gb ?? 0,
+        confidence: dynamic.stability.confidence ?? 0,
+      } : undefined,
+      behavioral: dynamic.behavioral ? {
+        expert_load_imbalance: dynamic.behavioral.expert_load_imbalance ?? 0,
+        memory_contention_score: dynamic.behavioral.memory_contention_score ?? 0,
+        cache_locality_score: dynamic.behavioral.cache_locality_score ?? 0,
+        numerical_sensitivity: dynamic.behavioral.numerical_sensitivity ?? 0,
+        load_balance_efficiency: dynamic.behavioral.load_balance_efficiency ?? 100,
+        memory_bank_conflict_rate: dynamic.behavioral.memory_bank_conflict_rate ?? 0,
+        prediction_confidence: dynamic.behavioral.prediction_confidence ?? 0,
+      } : undefined,
+    },
+  };
+
+  // Per-layer breakdown
+  const perLayerMetrics: Record<string, number> = compute.flops_per_layer ?? {};
+  const perLayerParams: Record<string, number> = struct.params_per_layer ?? {};
+  const perLayerLatency: Record<string, number> = performance.latency_per_layer ?? {};
+  const perLayerVram: Record<string, number> = memory.vram_per_layer ?? {};
+
+  const allLayerIds = Array.from(new Set([
+    ...Object.keys(perLayerMetrics),
+    ...Object.keys(perLayerParams),
+    ...Object.keys(perLayerLatency),
+    ...Object.keys(perLayerVram),
+  ]));
+
+  const perLayer: PerLayerBreakdownRow[] = allLayerIds.map(id => {
+    const vramBytes = perLayerVram[id] ?? 0;
+    const memStr = vramBytes >= 1e9
+      ? `${(vramBytes / 1e9).toFixed(2)} GB`
+      : vramBytes >= 1e6
+        ? `${(vramBytes / 1e6).toFixed(1)} MB`
+        : vramBytes > 0 ? `${(vramBytes / 1e3).toFixed(1)} KB` : '—';
+
+    const latencyVal = perLayerLatency[id];
+    const latencyStr = latencyVal !== undefined
+      ? latencyVal < 1 ? `${(latencyVal * 1000).toFixed(1)}µs` : `${latencyVal.toFixed(2)}ms`
+      : '—';
+
+    return {
+      id,
+      name: id,
+      params: perLayerParams[id] ?? 0,
+      flops: formatFlopsHuman(perLayerMetrics[id] ?? 0),
+      memory: memStr,
+      latency: latencyStr,
+    };
+  });
+
+  // Warnings
+  const confidence = (r as any)?.confidence as
+    | { verdict?: string; blocked_reason?: string; }
+    | undefined;
+
+  const newWarnings: Warning[] = [];
+
+  if (confidence?.verdict === 'blocked') {
+    const reason = confidence.blocked_reason?.trim();
+    newWarnings.push({
+      id: `blocked:${reason ?? 'unknown'}`,
+      type: 'error',
+      message: reason ? `Blocked: ${reason}` : 'Blocked: the backend could not analyze this model.',
+      hint: 'Provide more complete shapes/params or simplify unknown dimensions, then retry.',
+      code: 'BLOCKED',
+    });
+  }
+
+  for (let i = 0; i < normalizedDiagnostics.length; i++) {
+    const d = normalizedDiagnostics[i];
+    const sev = d.severity.toLowerCase();
+    const type: Warning['type'] =
+      sev === 'critical' || sev === 'error'
+        ? 'error'
+        : sev === 'warning'
+          ? 'warning'
+          : 'info';
+    const code = d.code;
+    const message = d.message;
+    const id = code ? `${code}:${message}` : `diag-${i}:${message}`;
+    newWarnings.push({
+      id,
+      type,
+      message,
+      hint: d.suggestion ?? undefined,
+      code: code ?? undefined,
+      nodeId: d.layer_id,
+    });
+  }
+
+  for (const warningText of reportWarnings) {
+    newWarnings.push({
+      id: `warn:${warningText}`,
+      type: 'warning',
+      message: warningText,
+    });
+  }
+
+  if (newWarnings.length === 0) {
+    newWarnings.push({
+      id: 'ok',
+      type: 'info',
+      message: 'Architecture validated successfully by backend.',
+    });
+  }
+
+  return { analysis, perLayer, warnings: newWarnings, perLayerLatency, perLayerVram };
+}
+
 const Index = () => {
   const [nodes, setNodes] = useState<CanvasNode[]>(initialNodes);
   const [connections, setConnections] = useState<Connection[]>(initialConnections);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectionRevision, setSelectionRevision] = useState(0);
   const [analysis, setAnalysis] = useState<AnalysisResult>(initialAnalysis);
+  const [compiledTopology, setCompiledTopology] = useState<Record<string, unknown> | undefined>(undefined);
   const [warnings, setWarnings] = useState<Warning[]>(initialWarnings);
   const [perLayer, setPerLayer] = useState<PerLayerBreakdownRow[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -360,6 +757,10 @@ const Index = () => {
   const [currentPresetId, setCurrentPresetId] = useState<string | null>(null);
   const [presetAutoAnalysisTick, setPresetAutoAnalysisTick] = useState(0);
   const [groups, setGroups] = useState<NodeGroup[]>([]);
+  const [savedProjects, setSavedProjects] = useState<Project[]>([]);
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
+  const [isProjectsLoading, setIsProjectsLoading] = useState(false);
+  const [creditInfo, setCreditInfo] = useState<CreditInfo | null>(null);
   const { toast } = useToast();
   const { config: hwConfig, setConfig: setHwConfig, updateConfig: updateHwConfig, triggerAttempt } = useHardware();
 
@@ -821,444 +1222,40 @@ const Index = () => {
       });
 
       // Send to backend — topology IS the full IR (env already embedded)
+      setCompiledTopology(ir as unknown as Record<string, unknown>);
       const { report } = await analyze({
         topology: ir as unknown as Record<string, unknown>,
       });
 
-      // Parse report into local state
-      // The backend response shape: { report: { metadata, metrics, diagnostics, warnings, confidence_score } }
-      const r = report as Record<string, unknown>;
-      // Support both wrapped { report: { metrics } } and direct { metrics } shapes
-      const rpt = ((r as any)?.report ?? r) as Record<string, unknown>;
-      const metricsRoot = ((rpt as any)?.metrics ?? rpt) as Record<string, unknown>;
-
-      // ─── Sub-metrics Accessors ──────────────────────────────────
-      // The backend returns a FLAT report.metrics object (all keys at one level).
-      // These helpers read the nested sub-object first, then fall back to the flat root.
-      // This supports both the nested JSON schema (future) and the current flat shape.
-      const sub = (key: string) => {
-        const nested = (metricsRoot as any)[key];
-        if (nested && typeof nested === 'object' && !Array.isArray(nested) && Object.keys(nested).length > 0)
-          return nested as any;
-        return metricsRoot as any; // flat fallback
-      };
-
-      const struct = sub('structure');
-      const compute = sub('compute');
-      const memory = sub('memory');
-      const hardware = sub('hardware');
-      const parallelism = sub('parallelism');
-      const performance = sub('performance');
-      const cost = sub('cost');
-      const graph = sub('graph');
-      const dynamic = (metricsRoot.dynamic ?? {}) as any; // optional nested only
-
-      const formatFlopsHuman = (flops: number): string => {
-        if (!Number.isFinite(flops) || flops <= 0) return '0 FLOPs';
-        if (flops >= 1e12) return `${(flops / 1e12).toFixed(2)} TFLOPs`;
-        if (flops >= 1e9) return `${(flops / 1e9).toFixed(2)} GFLOPs`;
-        if (flops >= 1e6) return `${(flops / 1e6).toFixed(2)} MFLOPs`;
-        if (flops >= 1e3) return `${(flops / 1e3).toFixed(2)} KFLOPs`;
-        return `${flops.toFixed(0)} FLOPs`;
-      };
-
-      const formatBytesGb = (bytes: number): string => {
-        if (!Number.isFinite(bytes) || bytes <= 0) return '0 GB';
-        const gb = bytes / 1e9;
-        return `${gb.toFixed(gb >= 10 ? 1 : 2)} GB`;
-      };
-
-      // total_flops may be absent in older reports; derive from forward_flops
-      const forwardFlops = compute.forward_flops ?? 0;
-      const backwardFlops = compute.backward_flops ?? 0;
-      const totalFlops = compute.total_flops ?? forwardFlops;
-      const peakVramBytes = memory.peak_vram_bytes ?? 0;
-
-      const throughputGraphsPerS = typeof performance.throughput_graphs_per_s === 'number'
-        ? performance.throughput_graphs_per_s
-        : null;
-
-      const compilationRaw = (((rpt as any)?.compilation ?? {}) as Record<string, unknown>);
-      // phase_timeline is now a top-level field on ReportIR, fall back to compilation sub-object
-      const phaseTimelineRaw = Array.isArray((rpt as any)?.phase_timeline)
-        ? (rpt as any).phase_timeline
-        : Array.isArray((compilationRaw as any)?.phase_timeline)
-          ? (compilationRaw as any).phase_timeline
-          : [];
-      const normalizedPhaseTimeline = phaseTimelineRaw.map((phase: any) => ({
-        name: typeof phase?.name === 'string' ? phase.name : 'Unknown',
-        duration_ms: typeof phase?.duration_ms === 'number' ? phase.duration_ms : 0,
-        status: typeof phase?.status === 'string' ? phase.status.toLowerCase() : 'completed',
-      }));
-      const hasCompilationPayload =
-        typeof compilationRaw.current_phase === 'string'
-        || typeof compilationRaw.total_progress === 'number'
-        || normalizedPhaseTimeline.length > 0;
-      const compilation = hasCompilationPayload
-        ? {
-          current_phase: typeof compilationRaw.current_phase === 'string'
-            ? compilationRaw.current_phase
-            : 'Completed',
-          total_progress: typeof compilationRaw.total_progress === 'number'
-            ? compilationRaw.total_progress
-            : 1,
-          phase_timeline: normalizedPhaseTimeline,
-        }
-        : undefined;
-
-      const liveTraceRaw = (((rpt as any)?.live_trace ?? {}) as Record<string, unknown>);
-      const normalizeTupleSeries = (value: unknown): [number, number][] =>
-        Array.isArray(value)
-          ? value
-            .map((entry) => {
-              if (!Array.isArray(entry) || entry.length < 2) return null;
-              const x = entry[0];
-              const y = entry[1];
-              if (typeof x !== 'number' || typeof y !== 'number') return null;
-              return [x, y] as [number, number];
-            })
-            .filter((entry): entry is [number, number] => entry !== null)
-          : [];
-
-      const memoryLiveness = Array.isArray(liveTraceRaw.memory_liveness)
-        ? liveTraceRaw.memory_liveness
-          .map((entry: any) => (
-            typeof entry?.[0] === 'number' && typeof entry?.[1] === 'number'
-              ? { step: entry[0], value: entry[1] }
-              : (typeof entry?.step === 'number' && typeof entry?.value === 'number'
-                ? { step: entry.step, value: entry.value }
-                : null)
-          ))
-          .filter((entry): entry is { step: number; value: number } => entry !== null)
-        : [];
-      const memoryHeatmap = Array.isArray(liveTraceRaw.memory_heatmap)
-        ? liveTraceRaw.memory_heatmap
-          .map((entry: any) => (
-            typeof entry?.layer === 'string' && Array.isArray(entry?.timeline)
-              ? {
-                layer: entry.layer,
-                timeline: entry.timeline.filter((step: unknown): step is number => typeof step === 'number'),
-              }
-              : null
-          ))
-          .filter((entry): entry is { layer: string; timeline: number[] } => entry !== null)
-        : [];
-      // gradient_memory_per_layer: now a top-level AllMetrics field (compiled per-layer)
-      const gradientRaw = Array.isArray((metricsRoot as any)?.gradient_memory_per_layer)
-        ? (metricsRoot as any).gradient_memory_per_layer
-        : Array.isArray(liveTraceRaw.gradient_memory_breakdown)
-          ? liveTraceRaw.gradient_memory_breakdown
-          : [];
-      const gradientMemoryBreakdown = gradientRaw
-        .map((entry: any) => (
-          typeof entry?.name === 'string'
-            ? {
-              name: entry.name,
-              forward: typeof entry?.forward === 'number' ? entry.forward : 0,
-              backward: typeof entry?.backward === 'number' ? entry.backward : 0,
-            }
-            : null
-        ))
-        .filter((entry: any): entry is { name: string; forward: number; backward: number } => entry !== null);
-      // kv_cache_scaling: now a top-level AllMetrics field
-      const kvRaw = Array.isArray((metricsRoot as any)?.kv_cache_scaling)
-        ? (metricsRoot as any).kv_cache_scaling
-        : Array.isArray(liveTraceRaw.kv_cache_scaling)
-          ? liveTraceRaw.kv_cache_scaling
-          : [];
-      const kvCacheScaling = kvRaw
-        .map((entry: any) => (
-          typeof entry?.seq === 'number' && typeof entry?.value === 'number'
-            ? { seq: entry.seq, value: entry.value }
-            : (typeof entry?.[0] === 'number' && typeof entry?.[1] === 'number'
-              ? { seq: entry[0], value: entry[1] }
-              : null)
-        ))
-        .filter((entry: any): entry is { seq: number; value: number } => entry !== null);
-      const liveTrace = {
-        partial_metrics: normalizeTupleSeries(liveTraceRaw.partial_metrics),
-        throughput_trace: normalizeTupleSeries(liveTraceRaw.throughput_trace),
-        memory_liveness: memoryLiveness,
-        memory_heatmap: memoryHeatmap,
-        gradient_memory_breakdown: gradientMemoryBreakdown,
-        kv_cache_scaling: kvCacheScaling,
-      };
-
-      const normalizedDiagnostics = (Array.isArray((rpt as any)?.diagnostics) ? (rpt as any).diagnostics : [])
-        .map((diag: any) => ({
-          category: typeof diag?.category === 'string' ? diag.category.toLowerCase() : 'general',
-          severity: typeof diag?.severity === 'string' ? diag.severity.toLowerCase() : 'info',
-          code: typeof diag?.code === 'string' ? diag.code : undefined,
-          message: typeof diag?.message === 'string' ? diag.message : 'Unknown diagnostic',
-          layer_id: typeof diag?.layer_id === 'string' ? diag.layer_id : undefined,
-          suggestion: typeof diag?.suggestion === 'string' ? diag.suggestion : undefined,
-          precision_impact: typeof diag?.precision_impact === 'number' ? diag.precision_impact : undefined,
-        }));
-
-      const recommendations = (Array.isArray((rpt as any)?.recommendations) ? (rpt as any).recommendations : [])
-        .map((rec: any) => ({
-          category: typeof rec?.category === 'string' ? rec.category.toLowerCase() : 'general',
-          priority: typeof rec?.priority === 'string' ? rec.priority.toLowerCase() : 'medium',
-          title: typeof rec?.title === 'string' ? rec.title : 'Recommendation',
-          description: typeof rec?.description === 'string' ? rec.description : '',
-          impact: typeof rec?.impact === 'string' ? rec.impact : '',
-        }));
-      const reportWarnings = (Array.isArray((rpt as any)?.warnings) ? (rpt as any).warnings : [])
-        .filter((warning: unknown): warning is string => typeof warning === 'string' && warning.trim().length > 0);
-
-      setAnalysis({
-        // Model stats
-        totalParams: struct.total_parameters ?? 0,
-        numLayers: struct.num_layers ?? 0,
-        modelType: struct.model_type ?? '',
-        graphDepth: graph.graph_depth ?? 0,
-        totalOperations: graph.total_operations ?? 0,
-        criticalPathLength: graph.critical_path_length ?? 0,
-        tensorResolutionRatio: graph.tensor_resolution_ratio ?? 1,
-        unresolvedDimCount: graph.unresolved_dim_count ?? 0,
-        totalTensorCount: graph.total_tensor_count ?? 0,
-        largestTensorBytes: graph.largest_tensor_bytes ?? 0,
-        // Backend may emit ops_distribution (flat) or op_type_distribution (nested compute)
-        opsDistribution: compute.ops_distribution ?? compute.op_type_distribution ?? {},
-
-        // Compute
-        totalFlops,
-        forwardFlops,
-        backwardFlops,
-        flopsPerToken: compute.flops_per_token ?? 0,
-        flopsIncrementalDecode: compute.flops_incremental_decode ?? 0,
-        arithmeticIntensity: compute.arithmetic_intensity ?? 0,
-        bottleneck: performance.bottleneck ?? '',
-        rooflinePosition: compute.roofline_position ?? 0,
-
-        // Formatted
-        estimatedFlops: formatFlopsHuman(totalFlops),
-        forwardFlopsHuman: formatFlopsHuman(forwardFlops),
-        backwardFlopsHuman: formatFlopsHuman(backwardFlops),
-
-        // Memory
-        peakVramBytes,
-        parameterMemoryBytes: memory.parameter_memory_bytes ?? 0,
-        activationMemoryBytes: memory.activation_memory_bytes ?? 0,
-        gradientMemoryBytes: memory.gradient_memory_bytes ?? 0,
-        optimizerStateBytes: memory.optimizer_state_bytes ?? 0,
-        maxBatchSizeFit: memory.max_batch_size_fit ?? 0,
-        memoryFragmentation: (dynamic.virtual_memory?.fragmentation_pct ?? 0) / 100,
-        memoryUsage: formatBytesGb(peakVramBytes),
-
-        // Hardware
-        gpuName: hardware.gpu_name ?? '',
-        gpuCount: hardware.gpu_count ?? 1,
-        gpuMemoryGb: hardware.gpu_memory_gb ?? 0,
-        gpuTflops: hardware.gpu_tflops_fp16 ?? 0,
-        gpuBandwidthGbs: hardware.gpu_memory_bandwidth_gbs ?? 0,
-        interconnect: hardware.interconnect ?? '',
-        interconnectBandwidthGbs: hardware.interconnect_bandwidth_gbs ?? 0,
-
-        // Parallelism
-        dataParallelEfficiency: parallelism.data_parallel_efficiency ?? 1,
-        communicationOverhead: parallelism.communication_overhead ?? 0,
-        optimalGpuCount: parallelism.optimal_gpu_count ?? 1,
-        pipelineStages: parallelism.pipeline_stages ?? parallelism.pipeline_parallel ?? 1,
-        tensorParallelDegree: parallelism.tensor_parallel_degree ?? parallelism.tensor_parallel ?? 1,
-        dataParallel: parallelism.data_parallel ?? 1,
-        tensorParallel: parallelism.tensor_parallel ?? 1,
-        pipelineParallel: parallelism.pipeline_parallel ?? 1,
-
-        // Performance
-        latencyMs: performance.latency_ms ?? null,
-        throughputTokensPerS: performance.throughput_tokens_per_s ?? 0,
-        throughputGraphsPerS,
-        gpuUtilization: performance.gpu_utilization ?? null,
-
-        // Training cost
-        trainingCostUsd: cost.training_cost_usd ?? 0,
-        trainingTimeHours: cost.training_time_hours ?? 0,
-        energyKwh: cost.energy_kwh ?? 0,
-        co2Kg: cost.co2_kg ?? 0,
-        costPerMillionTokensUsd: cost.cost_per_million_tokens_usd ?? 0,
-        provider: cost.provider ?? '',
-
-        // Runtime context
-        selectedPrecision: hwConfig.precision,
-        selectedBatchSize: hwConfig.batchSize,
-
-        // Meta
-        confidenceScore: (rpt as any)?.confidence_score ?? 1.0,
-        depth: (rpt as any)?.depth ?? 1,
-        isSequenceModel: ((metricsRoot as any)?.is_sequence_model ?? true),
-        customLayerCount: (metricsRoot as any)?.custom_layer_count ?? 0,
-        diagnosticCount: normalizedDiagnostics.length,
-        reportWarnings,
-        recommendations,
-
-        // Real-time fields
-        compilation,
-        live_trace: liveTrace,
-        memory_liveness: memoryLiveness,
-        memory_heatmap: memoryHeatmap,
-        gradient_memory_breakdown: gradientMemoryBreakdown,
-        kv_cache_scaling: kvCacheScaling,
-        diagnostics: normalizedDiagnostics,
-
-        // ─── Dynamic Metrics (Nested) ──────────────────────────────
-        dynamic: {
-          virtual_memory: dynamic.virtual_memory ? {
-            fragmentation_overhead_gb: dynamic.virtual_memory.fragmentation_overhead_gb ?? 0,
-            fragmentation_pct: dynamic.virtual_memory.fragmentation_pct ?? 0,
-            defrag_savings_gb: dynamic.virtual_memory.defrag_savings_gb ?? 0,
-            virtual_savings_gb: dynamic.virtual_memory.virtual_savings_gb ?? 0,
-            virtual_savings_pct: dynamic.virtual_memory.virtual_savings_pct ?? 0,
-            peak_vram_with_defrag_gb: dynamic.virtual_memory.peak_vram_with_defrag_gb ?? 0,
-            peak_vram_with_virtual_gb: dynamic.virtual_memory.peak_vram_with_virtual_gb ?? 0,
-            recommended_strategy: dynamic.virtual_memory.recommended_strategy ?? 'NoAction',
-            confidence: dynamic.virtual_memory.confidence ?? 0,
-          } : undefined,
-          stability: dynamic.stability ? {
-            lyapunov_exponent_mean: dynamic.stability.lyapunov_exponent_mean ?? 0,
-            chaos_index: dynamic.stability.chaos_index ?? 0,
-            high_risk_layers_count: dynamic.stability.high_risk_layers_count ?? 0,
-            fp32_required_pct: dynamic.stability.fp32_required_pct ?? 0,
-            global_robustness_score: dynamic.stability.global_robustness_score ?? 1.0,
-            fp32_fallback_memory_overhead_gb: dynamic.stability.fp32_fallback_memory_overhead_gb ?? 0,
-            confidence: dynamic.stability.confidence ?? 0,
-          } : undefined,
-          behavioral: dynamic.behavioral ? {
-            expert_load_imbalance: dynamic.behavioral.expert_load_imbalance ?? 0,
-            memory_contention_score: dynamic.behavioral.memory_contention_score ?? 0,
-            cache_locality_score: dynamic.behavioral.cache_locality_score ?? 0,
-            numerical_sensitivity: dynamic.behavioral.numerical_sensitivity ?? 0,
-            load_balance_efficiency: dynamic.behavioral.load_balance_efficiency ?? 100,
-            memory_bank_conflict_rate: dynamic.behavioral.memory_bank_conflict_rate ?? 0,
-            prediction_confidence: dynamic.behavioral.prediction_confidence ?? 0,
-          } : undefined,
-        },
-      });
-
-      // Parse per-layer breakdown for other charts
-      const perLayerMetrics: Record<string, number> = compute.flops_per_layer ?? {};
-      const perLayerParams: Record<string, number> = struct.params_per_layer ?? {};
-      const perLayerLatency: Record<string, number> = performance.latency_per_layer ?? {};
-      const perLayerVram: Record<string, number> = memory.vram_per_layer ?? {};
-
-      // Get union of all keys to ensure we don't miss any layers
-      const allLayerIds = Array.from(new Set([
-        ...Object.keys(perLayerMetrics),
-        ...Object.keys(perLayerParams),
-        ...Object.keys(perLayerLatency),
-        ...Object.keys(perLayerVram),
-      ]));
-
-      const newPerLayer: PerLayerBreakdownRow[] = allLayerIds.map(id => {
-        const vramBytes = perLayerVram[id] ?? 0;
-        const memStr = vramBytes >= 1e9
-          ? `${(vramBytes / 1e9).toFixed(2)} GB`
-          : vramBytes >= 1e6
-            ? `${(vramBytes / 1e6).toFixed(1)} MB`
-            : vramBytes > 0 ? `${(vramBytes / 1e3).toFixed(1)} KB` : '—';
-
-        const latencyVal = perLayerLatency[id];
-        const latencyStr = latencyVal !== undefined
-          ? latencyVal < 1 ? `${(latencyVal * 1000).toFixed(1)}µs` : `${latencyVal.toFixed(2)}ms`
-          : '—';
-
-        return {
-          id,
-          name: id,
-          params: perLayerParams[id] ?? 0,
-          flops: formatFlopsHuman(perLayerMetrics[id] ?? 0),
-          memory: memStr,
-          latency: latencyStr,
-        };
-      });
-      setPerLayer(newPerLayer);
+      // Parse report using shared helper
+      const parsed = parseAnalysisReport(report, hwConfig.precision, hwConfig.batchSize);
+      setAnalysis(parsed.analysis);
+      setPerLayer(parsed.perLayer);
+      setWarnings(parsed.warnings);
 
       // Backfill perLayerLatency and perLayerVram into the analysis state
-      if (Object.keys(perLayerLatency).length > 0 || Object.keys(perLayerVram).length > 0) {
+      if (Object.keys(parsed.perLayerLatency).length > 0 || Object.keys(parsed.perLayerVram).length > 0) {
         setAnalysis(prev => prev ? {
           ...prev,
-          perLayerLatency,
-          perLayerVram,
+          perLayerLatency: parsed.perLayerLatency,
+          perLayerVram: parsed.perLayerVram,
         } : prev);
       }
 
-      // Map backend diagnostics + confidence blockage into Issues
-      const confidence = (r as any)?.confidence as
-        | {
-          verdict?: string;
-          blocked_reason?: string;
-        }
-        | undefined;
-
-      const newWarnings: Warning[] = [];
-
-      if (confidence?.verdict === 'blocked') {
-        const reason = confidence.blocked_reason?.trim();
-        newWarnings.push({
-          id: `blocked:${reason ?? 'unknown'}`,
-          type: 'error',
-          message: reason ? `Blocked: ${reason}` : 'Blocked: the backend could not analyze this model.',
-          hint: 'Provide more complete shapes/params or simplify unknown dimensions, then retry.',
-          code: 'BLOCKED',
-        });
-      }
-
-      for (let i = 0; i < normalizedDiagnostics.length; i++) {
-        const d = normalizedDiagnostics[i];
-        const sev = d.severity.toLowerCase();
-        const type: Warning['type'] =
-          sev === 'critical' || sev === 'error'
-            ? 'error'
-            : sev === 'warning'
-              ? 'warning'
-              : 'info';
-        const code = d.code;
-        const message = d.message;
-
-        // Prefer stable keys (code + message) to avoid flicker
-        const id = code ? `${code}:${message}` : `diag-${i}:${message}`;
-
-        newWarnings.push({
-          id,
-          type,
-          message,
-          hint: d.suggestion ?? undefined,
-          code: code ?? undefined,
-          nodeId: d.layer_id,
-        });
-      }
-
-      for (const warningText of reportWarnings) {
-        newWarnings.push({
-          id: `warn:${warningText}`,
-          type: 'warning',
-          message: warningText,
-        });
-      }
-
-      if (newWarnings.length === 0) {
-        newWarnings.push({
-          id: 'ok',
-          type: 'info',
-          message: 'Architecture validated successfully by backend.',
-        });
-      }
-      setWarnings(newWarnings);
-
       toast({
         title: "Analysis complete",
-        description: `Found ${newWarnings.filter(w => w.type === 'error').length} errors, ${newWarnings.filter(w => w.type === 'warning').length} warnings`,
+        description: `Found ${parsed.warnings.filter(w => w.type === 'error').length} errors, ${parsed.warnings.filter(w => w.type === 'warning').length} warnings`,
       });
       // Trigger success toast only if there are no errors
-      if (newWarnings.some(w => w.type === 'error')) {
+      if (parsed.warnings.some(w => w.type === 'error')) {
         toast({
           title: "Compilation warnings",
-          description: `Architecture has ${newWarnings.filter(w => w.type === 'error').length} design issues. See issues tab for details.`,
+          description: `Architecture has ${parsed.warnings.filter(w => w.type === 'error').length} design issues. See issues tab for details.`,
         });
       } else {
         toast({
           title: "Analysis complete",
-          description: `Found ${newWarnings.length} architectural warnings. Performance metrics are now live.`,
+          description: `Found ${parsed.warnings.length} architectural warnings. Performance metrics are now live.`,
         });
       }
     } catch (err) {
@@ -1371,6 +1368,192 @@ const Index = () => {
       setIsAnalyzing(false);
     }
   }, [nodes, connections, groups, selectedArchitecture, hwConfig, toast, triggerAttempt, toHwFamily]);
+
+  // ─── Streaming Analysis Handler ────────────────────────────────────────
+  // Uses SSE to show real-time compilation progress, then falls back to
+  // synchronous analysis if streaming is unavailable.
+  const handleRunAnalysisStream = useCallback(async () => {
+    const validation = validateHardwareConfig(hwConfig, toHwFamily(selectedArchitecture));
+    if (!validation.isValid) {
+      triggerAttempt();
+      setWarnings(validation.missingFields.map(field => ({
+        id: `missing-${field}`,
+        type: 'error',
+        message: `Mandatory Hyperparameter: ${field} is unset or zero.`,
+        code: 'E_MISSING_HYPERPARAMETER',
+      })));
+      return;
+    }
+
+    setIsAnalyzing(true);
+
+    try {
+      const ir = compileToNeuraxIR(nodes, connections, {
+        modelName: 'NeuraxModel',
+        family: selectedArchitecture,
+        hardware: hwConfig.hardware,
+        precision: hwConfig.precision,
+        batchSize: hwConfig.batchSize,
+        groups,
+        learningRate: hwConfig.learningRate,
+        numEpochs: hwConfig.numEpochs,
+        seqLen: hwConfig.seqLen,
+        gpuCount: hwConfig.gpuCount,
+        gpuMemoryGb: hwConfig.gpuMemoryGb,
+        datasetSize: hwConfig.datasetSize,
+        vocabSize: hwConfig.vocabSize,
+        numClasses: hwConfig.numClasses,
+      });
+
+      setCompiledTopology(ir as unknown as Record<string, unknown>);
+
+      // Set initial compilation state
+      setAnalysis(prev => prev ? {
+        ...prev,
+        compilation: {
+          current_phase: 'Initializing',
+          total_progress: 0,
+          phase_timeline: [],
+        },
+      } : prev);
+
+      await new Promise<void>((resolve, reject) => {
+        analyzeStream(
+          { topology: ir as unknown as Record<string, unknown> },
+          {
+            onStarted: () => {
+              setAnalysis(prev => prev ? {
+                ...prev,
+                compilation: { current_phase: 'Started', total_progress: 0.05, phase_timeline: [] },
+              } : prev);
+            },
+            onPhaseStarted: (phase) => {
+              setAnalysis(prev => {
+                const existing = prev?.compilation?.phase_timeline ?? [];
+                const progress = phase.total_phases > 0 ? phase.phase_index / phase.total_phases : 0;
+                return prev ? {
+                  ...prev,
+                  compilation: {
+                    current_phase: phase.phase,
+                    total_progress: progress,
+                    phase_timeline: [
+                      ...existing,
+                      { name: phase.phase, duration_ms: 0, status: 'running' },
+                    ],
+                  },
+                } : prev;
+              });
+            },
+            onPhaseCompleted: (phase) => {
+              setAnalysis(prev => {
+                const existing = prev?.compilation?.phase_timeline ?? [];
+                const updated = existing.map(p =>
+                  p.name === phase.phase && p.status === 'running'
+                    ? { ...p, status: 'completed', duration_ms: phase.duration_ms }
+                    : p
+                );
+                // If no running entry was found, add it as completed
+                if (!existing.some(p => p.name === phase.phase)) {
+                  updated.push({ name: phase.phase, duration_ms: phase.duration_ms, status: 'completed' });
+                }
+                const progress = phase.total_phases > 0 ? phase.phase_index / phase.total_phases : 0;
+                return prev ? {
+                  ...prev,
+                  compilation: {
+                    current_phase: phase.phase,
+                    total_progress: progress,
+                    phase_timeline: updated,
+                  },
+                } : prev;
+              });
+            },
+            onProgress: (progress) => {
+              setAnalysis(prev => prev ? {
+                ...prev,
+                compilation: {
+                  ...prev.compilation!,
+                  current_phase: prev.compilation?.current_phase ?? 'Processing',
+                  total_progress: progress.progress_pct / 100,
+                  phase_timeline: prev.compilation?.phase_timeline ?? [],
+                },
+              } : prev);
+            },
+            onDiagnostic: (diag) => {
+              // Optionally show diagnostics as they arrive
+              console.log('[neurax] Streaming diagnostic:', diag);
+            },
+            onCompleted: () => {
+              setAnalysis(prev => prev ? {
+                ...prev,
+                compilation: {
+                  current_phase: 'Completed',
+                  total_progress: 1,
+                  phase_timeline: prev.compilation?.phase_timeline ?? [],
+                },
+              } : prev);
+            },
+            onResult: (result) => {
+              const parsed = parseAnalysisReport(result, hwConfig.precision, hwConfig.batchSize);
+              setAnalysis(parsed.analysis);
+              setPerLayer(parsed.perLayer);
+              setWarnings(parsed.warnings);
+
+              if (Object.keys(parsed.perLayerLatency).length > 0 || Object.keys(parsed.perLayerVram).length > 0) {
+                setAnalysis(prev => prev ? {
+                  ...prev,
+                  perLayerLatency: parsed.perLayerLatency,
+                  perLayerVram: parsed.perLayerVram,
+                } : prev);
+              }
+
+              toast({
+                title: "Analysis complete",
+                description: `Found ${parsed.warnings.filter(w => w.type === 'error').length} errors, ${parsed.warnings.filter(w => w.type === 'warning').length} warnings`,
+              });
+              if (parsed.warnings.some(w => w.type === 'error')) {
+                toast({
+                  title: "Compilation warnings",
+                  description: `Architecture has ${parsed.warnings.filter(w => w.type === 'error').length} design issues. See issues tab for details.`,
+                });
+              } else {
+                toast({
+                  title: "Analysis complete",
+                  description: `Found ${parsed.warnings.length} architectural warnings. Performance metrics are now live.`,
+                });
+              }
+              resolve();
+            },
+            onFailed: (error) => {
+              console.error('[neurax] Streaming analysis failed:', error);
+              const errorMsg = error.error || 'Streaming analysis failed.';
+              setWarnings([{
+                id: 'stream-failed',
+                type: 'error',
+                message: errorMsg,
+              }]);
+              toast({
+                title: "Analysis failed",
+                description: errorMsg,
+                variant: "destructive",
+              });
+              reject(new Error(errorMsg));
+            },
+            onError: (error) => {
+              console.error('[neurax] SSE connection error:', error);
+              // Fall back to synchronous analysis
+              reject(new Error('SSE connection error'));
+            },
+          },
+        );
+      });
+    } catch (err) {
+      console.warn('[neurax] Streaming analysis failed, falling back to synchronous:', err);
+      // Fall back to synchronous analysis
+      await handleRunAnalysis();
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }, [nodes, connections, groups, selectedArchitecture, hwConfig, toast, triggerAttempt, toHwFamily, handleRunAnalysis]);
 
   useEffect(() => {
     if (presetAutoAnalysisTick <= 0) return;
@@ -1513,6 +1696,89 @@ const Index = () => {
         : "Started a fresh workspace.",
     });
   }, [downloadCanvasSnapshot, resetWorkspace, toast]);
+
+  // ─── Project Save/Load ──────────────────────────────────────────────
+
+  const handleLoadProjects = useCallback(async () => {
+    setIsProjectsLoading(true);
+    try {
+      const resp = await listProjects();
+      setSavedProjects(resp.projects);
+    } catch (err) {
+      console.error('[neurax] Failed to load projects:', err);
+    } finally {
+      setIsProjectsLoading(false);
+    }
+  }, []);
+
+  const handleSaveProject = useCallback(async () => {
+    const canvasData = { nodes, connections, groups };
+    const projectBody = {
+      name: `Project ${new Date().toLocaleDateString()}`,
+      architecture: selectedArchitecture,
+      canvas: canvasData,
+      hardware_config: hwConfig as unknown as Record<string, unknown>,
+      last_analysis: analysis as unknown as Record<string, unknown> | undefined,
+    };
+
+    try {
+      if (currentProjectId) {
+        // Update existing project
+        await updateProject(currentProjectId, {
+          canvas: canvasData,
+          architecture: selectedArchitecture,
+          hardware_config: hwConfig as unknown as Record<string, unknown>,
+          last_analysis: analysis as unknown as Record<string, unknown>,
+        });
+        toast({ title: 'Project saved', description: 'Changes saved successfully.' });
+      } else {
+        // Create new project
+        const resp = await createProject(projectBody);
+        setCurrentProjectId(resp.project.id);
+        toast({ title: 'Project saved', description: `Created "${resp.project.name}".` });
+      }
+      // Refresh project list
+      await handleLoadProjects();
+    } catch (err) {
+      toast({ title: 'Save failed', description: String(err), variant: 'destructive' });
+    }
+  }, [nodes, connections, groups, selectedArchitecture, hwConfig, analysis, currentProjectId, toast, handleLoadProjects]);
+
+  const handleLoadProject = useCallback(async (project: Project) => {
+    const canvas = project.canvas as any;
+    if (canvas?.nodes) setNodes(canvas.nodes);
+    if (canvas?.connections) setConnections(canvas.connections);
+    if (canvas?.groups) setGroups(canvas.groups);
+    if (project.architecture) setSelectedArchitecture(project.architecture as ArchitectureFamily);
+    if (project.hardware_config) setHwConfig(project.hardware_config as any);
+    setCurrentProjectId(project.id);
+    toast({ title: 'Project loaded', description: `Loaded "${project.name}".` });
+  }, [setNodes, setConnections, setGroups, setSelectedArchitecture, setHwConfig, toast]);
+
+  const handleDeleteProject = useCallback(async (projectId: string) => {
+    try {
+      await deleteProject(projectId);
+      if (currentProjectId === projectId) {
+        setCurrentProjectId(null);
+      }
+      await handleLoadProjects();
+      toast({ title: 'Project deleted', description: 'The project has been removed.' });
+    } catch (err) {
+      toast({ title: 'Delete failed', description: String(err), variant: 'destructive' });
+    }
+  }, [currentProjectId, toast, handleLoadProjects]);
+
+  // Load projects on mount
+  useEffect(() => {
+    void handleLoadProjects();
+  }, [handleLoadProjects]);
+
+  // Load credits on mount
+  useEffect(() => {
+    getCredits()
+      .then((res) => setCreditInfo(res.credits))
+      .catch(() => { /* credits unavailable in dev mode */ });
+  }, []);
 
   const handleAgentToolEvent = useCallback((tool: { name: string; args?: Record<string, unknown> }) => {
     const name = tool?.name;
@@ -1676,6 +1942,8 @@ const Index = () => {
               open={isChatOpen}
               onOpenChange={setIsChatOpen}
               onAddCredits={() => setShowPricingPage(true)}
+              creditsLeft={creditInfo ? creditInfo.limit - creditInfo.used : undefined}
+              creditsLimit={creditInfo?.limit}
               getSnapshot={agentGetSnapshot}
               onToolEvent={handleAgentToolEvent}
               className="h-full"
@@ -1693,6 +1961,8 @@ const Index = () => {
                   open={isChatOpen}
                   onOpenChange={setIsChatOpen}
                   onAddCredits={() => setShowPricingPage(true)}
+                  creditsLeft={creditInfo ? creditInfo.limit - creditInfo.used : undefined}
+                  creditsLimit={creditInfo?.limit}
                   getSnapshot={agentGetSnapshot}
                   onToolEvent={handleAgentToolEvent}
                   className="h-full"
@@ -1820,7 +2090,7 @@ const Index = () => {
   return (
     <div className="h-screen flex flex-col bg-background">
       <TopNav
-        onRunAnalysis={handleRunAnalysis}
+        onRunAnalysis={handleRunAnalysisStream}
         isAnalyzing={isAnalyzing}
         onNewCanvas={handleCreateNewCanvas}
         onSaveCanvas={handleSaveCanvas}
@@ -1836,6 +2106,12 @@ const Index = () => {
         currentPresetId={currentPresetId}
         nodes={nodes}
         connections={connections}
+        projects={savedProjects}
+        currentProjectId={currentProjectId}
+        onSaveProject={handleSaveProject}
+        onLoadProject={handleLoadProject}
+        onDeleteProject={handleDeleteProject}
+        isProjectsLoading={isProjectsLoading}
       />
 
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -1843,7 +2119,7 @@ const Index = () => {
           activeTab={activeWorkspaceTab}
           onTabChange={setActiveWorkspaceTab}
           architectureContent={architectureContent}
-          simulationContent={<SimulationWorkspace nodes={nodes} connections={connections} analysis={analysis} perLayer={perLayer} warnings={warnings} />}
+          simulationContent={<SimulationWorkspace nodes={nodes} connections={connections} analysis={analysis} perLayer={perLayer} warnings={warnings} topology={compiledTopology} />}
           productionContent={<ProductionWorkspace nodes={nodes} connections={connections} modelName="NeuraxModel" />}
           inferenceContent={<InferenceIntelligence architectureType={selectedArchitecture} />}
           timeMachineContent={<TimeMachineWorkspace nodes={nodes} connections={connections} analysis={analysis} />}

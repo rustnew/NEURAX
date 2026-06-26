@@ -53,7 +53,7 @@ pub fn paper_params(model: &str) -> u64 {
 /// Test de cohérence F01: flops_per_token × seq_len = forward_flops
 #[test]
 fn test_flops_per_token_coherence() {
-    let json = include_str!("../../../../Neurax-IR/models/gpt2_medium.json");
+    let json = include_str!("../../models/gpt2_medium.json");
     let result = analyze_json(json).expect("Analysis should succeed");
     
     let seq_len = 1024u64; // GPT-2 Medium default
@@ -78,7 +78,7 @@ fn test_flops_per_token_coherence() {
 /// NEURAX utilise des formules détaillées, donc les FLOPs sont ~9× plus élevés que Kaplan
 #[test]
 fn test_gpt2_small_flops_validation() {
-    let json = include_str!("../../../../Neurax-IR/models/gpt2_small.json");
+    let json = include_str!("../../models/gpt2_small.json");
     let result = analyze_json(json).expect("Analysis should succeed");
     
     let neurax_flops = result.compute.metrics.forward_flops;
@@ -102,7 +102,7 @@ fn test_gpt2_small_flops_validation() {
 /// NEURAX utilise des formules détaillées, donc les FLOPs sont ~5× plus élevés que Kaplan
 #[test]
 fn test_gpt2_medium_flops_validation() {
-    let json = include_str!("../../../../Neurax-IR/models/gpt2_medium.json");
+    let json = include_str!("../../models/gpt2_medium.json");
     let result = analyze_json(json).expect("Analysis should succeed");
     
     let neurax_flops = result.compute.metrics.forward_flops;
@@ -125,7 +125,7 @@ fn test_gpt2_medium_flops_validation() {
 /// NOTE: Les modèles JSON de test peuvent différer des specs officielles
 #[test]
 fn test_gpt2_small_params_validation() {
-    let json = include_str!("../../../../Neurax-IR/models/gpt2_small.json");
+    let json = include_str!("../../models/gpt2_small.json");
     let result = analyze_json(json).expect("Analysis should succeed");
     
     let neurax_params = result.arch.metrics.total_parameters;
@@ -147,7 +147,7 @@ fn test_gpt2_small_params_validation() {
 /// NOTE: Les modèles JSON de test peuvent différer des specs officielles
 #[test]
 fn test_gpt2_medium_params_validation() {
-    let json = include_str!("../../../../Neurax-IR/models/gpt2_medium.json");
+    let json = include_str!("../../models/gpt2_medium.json");
     let result = analyze_json(json).expect("Analysis should succeed");
     
     let neurax_params = result.arch.metrics.total_parameters;
@@ -169,8 +169,8 @@ fn test_gpt2_medium_params_validation() {
 #[test]
 fn test_backward_flops_ratio() {
     let models = [
-        include_str!("../../../../Neurax-IR/models/gpt2_small.json"),
-        include_str!("../../../../Neurax-IR/models/gpt2_medium.json"),
+        include_str!("../../models/gpt2_small.json"),
+        include_str!("../../models/gpt2_medium.json"),
         include_str!("../../examples/models/gpt3_175b.json"),
     ];
     
@@ -199,7 +199,7 @@ fn test_backward_flops_ratio() {
 /// Test MACs = forward_flops / 2
 #[test]
 fn test_macs_coherence() {
-    let json = include_str!("../../../../Neurax-IR/models/gpt2_medium.json");
+    let json = include_str!("../../models/gpt2_medium.json");
     let result = analyze_json(json).expect("Analysis should succeed");
     
     let forward_flops = result.compute.metrics.forward_flops;
@@ -220,7 +220,7 @@ fn test_macs_coherence() {
 /// Test incremental decode FLOPs
 #[test]
 fn test_incremental_decode_flops() {
-    let json = include_str!("../../../../Neurax-IR/models/gpt2_medium.json");
+    let json = include_str!("../../models/gpt2_medium.json");
     let result = analyze_json(json).expect("Analysis should succeed");
     
     let flops_per_token = result.compute.metrics.flops_per_token;

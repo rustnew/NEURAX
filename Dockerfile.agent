@@ -1,0 +1,24 @@
+# ─── NEURAX Agent — Docker Build ────────────────────────────────────
+# Build:  docker build -f Dockerfile.agent -t neurax-agent .
+# Run:    docker run -p 8099:8099 --env-file neurax-agent/.env neurax-agent
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY neurax-agent/requirements.txt .
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY neurax-agent/ .
+
+# Default env vars
+ENV NEURAX_AGENT_HOST=0.0.0.0
+ENV NEURAX_AGENT_PORT=8099
+
+EXPOSE 8099
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8099/health || exit 1
+
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8099"]

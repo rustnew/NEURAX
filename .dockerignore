@@ -1,0 +1,13 @@
+target/
+node_modules/
+.git/
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+dist/
+.lovable/
+__pycache__/
+*.pyc
+.DS_Store

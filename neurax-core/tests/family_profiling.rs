@@ -11,7 +11,7 @@ use neurax_core::analyze_json;
 /// Test ResNet-50 params: 25,557,032 (He et al. 2016)
 #[test]
 fn test_f02_resnet50_params() {
-    let json_result = std::fs::read_to_string("../../../../Neurax-IR/models/resnet50.json");
+    let json_result = std::fs::read_to_string("../../models/resnet50.json");
     if let Ok(json) = json_result {
         let result = analyze_json(&json).expect("Analysis should succeed");
         let expected_params = 25_557_032u64;
@@ -33,7 +33,7 @@ fn test_f02_resnet50_params() {
 /// Test ResNet-50 FLOPs: 4.09e9 (He et al. 2016)
 #[test]
 fn test_f02_resnet50_flops() {
-    let json_result = std::fs::read_to_string("../../../../Neurax-IR/models/resnet50.json");
+    let json_result = std::fs::read_to_string("../../models/resnet50.json");
     if let Ok(json) = json_result {
         let result = analyze_json(&json).expect("Analysis should succeed");
         let expected_flops = 4.09e9;
@@ -208,7 +208,7 @@ fn test_f02_spiking_resnet_flops() {
 /// Test: toutes les opérations ont backward_flops >= forward_flops
 #[test]
 fn test_f02_backward_gte_forward_all_ops() {
-    let json = include_str!("../../../../Neurax-IR/models/gpt2_medium.json");
+    let json = include_str!("../../models/gpt2_medium.json");
     let result = analyze_json(json).expect("Analysis should succeed");
     
     // Backward pass: gradients pour tous les params
@@ -230,7 +230,7 @@ fn test_f02_backward_gte_forward_all_ops() {
 /// Test: MACs = FLOPs / 2 (approximately)
 #[test]
 fn test_f02_macs_equals_flops_half() {
-    let json = include_str!("../../../../Neurax-IR/models/gpt2_medium.json");
+    let json = include_str!("../../models/gpt2_medium.json");
     let result = analyze_json(json).expect("Analysis should succeed");
     
     // MACs (Multiply-Accumulate) = FLOPs / 2

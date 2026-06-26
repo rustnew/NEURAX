@@ -299,9 +299,9 @@ export function deriveHardwareProjections(
 
   return hardwareList
     .map((hardware) => {
-      const peakTflops = hardware.peak_ops_per_s_fp16 / 1e12;
+      const peakTflops = hardware.tflops_fp16;
       const memoryRoof = analysis.arithmeticIntensity > 0
-        ? (analysis.arithmeticIntensity * hardware.mem_bw_gbps) / 1000
+        ? (analysis.arithmeticIntensity * hardware.memory_bandwidth_gbs) / 1000
         : peakTflops;
       const attainable = Math.max(0.05, Math.min(peakTflops, memoryRoof) * efficiency);
       const latencyMs = analysis.totalFlops > 0
@@ -310,7 +310,8 @@ export function deriveHardwareProjections(
       const throughput = baselineThroughput > 0 && (analysis.latencyMs ?? 0) > 0
         ? baselineThroughput * ((analysis.latencyMs ?? latencyMs) / Math.max(latencyMs, 0.001))
         : attainable * 100;
-      const fit = hardware.vram_bytes >= analysis.peakVramBytes;
+      const vramBytes = hardware.memory_gb * 1024 * 1024 * 1024;
+      const fit = vramBytes >= analysis.peakVramBytes;
       const costIndex = baselineCost * (latencyMs > 0 && (analysis.latencyMs ?? 0) > 0
         ? latencyMs / Math.max(analysis.latencyMs ?? latencyMs, 0.001)
         : 1);

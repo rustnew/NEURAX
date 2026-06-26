@@ -3,15 +3,86 @@ use actix_web::{
     http::{header, StatusCode},
     middleware, web, App, HttpRequest, HttpResponse, HttpServer, Responder,
 };
+use base64::Engine;
+use chrono::Datelike;
+use dashmap::DashMap;
 use hmac::{Hmac, Mac};
 use serde::Deserialize;
 use sha2::Sha256;
 use std::env;
+use std::sync::Arc;
 use std::time::Duration;
 use subtle::ConstantTimeEq;
+use tokio::sync::broadcast;
 use tracing_subscriber::EnvFilter;
 
 mod presets;
+
+// ─── Project Storage ─────────────────────────────────────────────────
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Hash, Eq, PartialEq)]
+pub struct ProjectKey {
+    user_id: String,
+    id: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct Project {
+    id: String,
+    user_id: String,
+    name: String,
+    description: Option<String>,
+    /// Architecture family (e.g. "transformer", "moe")
+    architecture: Option<String>,
+    /// Canvas state as JSON (nodes, connections, groups)
+    canvas: serde_json::Value,
+    /// Hardware config as JSON
+    hardware_config: Option<serde_json::Value>,
+    /// Last analysis result (optional, stored as JSON)
+    last_analysis: Option<serde_json::Value>,
+    created_at: String,
+    updated_at: String,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct CreateProjectRequest {
+    name: String,
+    #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
+    architecture: Option<String>,
+    canvas: serde_json::Value,
+    #[serde(default)]
+    hardware_config: Option<serde_json::Value>,
+    #[serde(default)]
+    last_analysis: Option<serde_json::Value>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct UpdateProjectRequest {
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
+    architecture: Option<String>,
+    #[serde(default)]
+    canvas: Option<serde_json::Value>,
+    #[serde(default)]
+    hardware_config: Option<serde_json::Value>,
+    #[serde(default)]
+    last_analysis: Option<serde_json::Value>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct ProjectListResponse {
+    projects: Vec<Project>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct ProjectResponse {
+    project: Project,
+}
 
 #[derive(Debug, serde::Deserialize)]
 struct AnalyzeRequest {
@@ -41,11 +112,48 @@ struct HealthResponse {
 }
 
 #[derive(Debug, serde::Serialize)]
-struct HardwareEntry {
+struct HardwareDetailEntry {
     name: String,
-    peak_ops_per_s_fp16: f64,
-    mem_bw_gbps: f64,
-    vram_bytes: u64,
+    manufacturer: String,
+    memory_gb: u64,
+    memory_bandwidth_gbs: f64,
+    tflops_fp64: f64,
+    tflops_fp32: f64,
+    tflops_fp16: f64,
+    tflops_bf16: f64,
+    tflops_int8: f64,
+    tflops_fp8: f64,
+    tensor_cores: bool,
+    nvlink: bool,
+    nvlink_bandwidth_gbs: f64,
+    tdp_watts: u64,
+    launch_year: u32,
+}
+
+async fn hardware_list() -> impl Responder {
+    let db = neurax_hardware_db::HardwareDatabase::new();
+    let gpus = db.list_gpus();
+    let out: Vec<HardwareDetailEntry> = gpus
+        .iter()
+        .map(|g| HardwareDetailEntry {
+            name: g.name.clone(),
+            manufacturer: g.manufacturer.clone(),
+            memory_gb: g.memory_gb,
+            memory_bandwidth_gbs: g.memory_bandwidth_gbs,
+            tflops_fp64: g.tflops_fp64,
+            tflops_fp32: g.tflops_fp32,
+            tflops_fp16: g.tflops_fp16,
+            tflops_bf16: g.tflops_bf16,
+            tflops_int8: g.tflops_int8,
+            tflops_fp8: g.tflops_fp8,
+            tensor_cores: g.tensor_cores,
+            nvlink: g.nvlink,
+            nvlink_bandwidth_gbs: g.nvlink_bandwidth_gbs,
+            tdp_watts: g.tdp_watts,
+            launch_year: g.launch_year,
+        })
+        .collect();
+    HttpResponse::Ok().json(out)
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -56,6 +164,17 @@ struct PluginValidateRequest {
 #[derive(Debug, serde::Serialize)]
 struct PluginValidateResponse {
     ok: bool,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct InferenceRequest {
+    #[serde(default)]
+    params: neurax_ir::inference::InferenceParams,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct InferenceResponse {
+    report: neurax_ir::inference::InferenceReport,
 }
 
 #[derive(Debug, Deserialize)]
@@ -105,6 +224,95 @@ struct StripeSubscriptionRow {
 }
 
 type HmacSha256 = Hmac<Sha256>;
+
+// ─── Streaming Analysis Job Store ──────────────────────────────────
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct JobInfo {
+    pub job_id: String,
+    pub status: String,
+    pub created_at_ms: u64,
+    pub completed_at_ms: Option<u64>,
+    pub error: Option<String>,
+}
+
+/// Shared state for streaming analysis jobs
+#[derive(Clone)]
+pub struct AppState {
+    /// Job metadata store
+    pub jobs: Arc<DashMap<String, JobInfo>>,
+    /// Broadcast channels for each job (for SSE streaming)
+    pub channels: Arc<DashMap<String, broadcast::Sender<String>>>,
+    /// Completed analysis results stored as JSON
+    pub results: Arc<DashMap<String, serde_json::Value>>,
+    /// Projects store (keyed by user_id + project_id)
+    pub projects: Arc<DashMap<ProjectKey, Project>>,
+    /// Credit tracking per user
+    pub credits: Arc<DashMap<String, CreditInfo>>,
+}
+
+impl AppState {
+    pub fn new() -> Self {
+        Self {
+            jobs: Arc::new(DashMap::new()),
+            channels: Arc::new(DashMap::new()),
+            results: Arc::new(DashMap::new()),
+            projects: Arc::new(DashMap::new()),
+            credits: Arc::new(DashMap::new()),
+        }
+    }
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct AnalyzeStreamRequest {
+    topology: serde_json::Value,
+}
+
+/// A single hardware configuration override for comparison
+#[derive(Debug, serde::Deserialize, Clone)]
+struct CompareHardwareConfig {
+    /// GPU name (e.g. "H100-SXM", "A100-PCIe", "RTX4090")
+    hardware: String,
+    /// Precision (e.g. "fp16", "fp32", "bf16", "int8", "fp8")
+    #[serde(default)]
+    precision: Option<String>,
+    /// Batch size
+    #[serde(default)]
+    batch_size: Option<u32>,
+    /// Number of GPUs
+    #[serde(default)]
+    gpu_count: Option<u32>,
+    /// GPU memory in GB (overrides spec default)
+    #[serde(default)]
+    gpu_memory_gb: Option<u64>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct CompareRequest {
+    topology: serde_json::Value,
+    configs: Vec<CompareHardwareConfig>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct CompareResultItem {
+    label: String,
+    hardware: String,
+    precision: String,
+    batch_size: u32,
+    gpu_count: u32,
+    report: Option<neurax_ir::report::ReportIR>,
+    error: Option<String>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct CompareResponse {
+    results: Vec<CompareResultItem>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct AnalyzeStreamResponse {
+    job_id: String,
+}
 
 fn bearer_token_from_req(req: &HttpRequest) -> Result<String, HttpResponse> {
     let auth = req
@@ -827,6 +1035,161 @@ async fn stripe_webhook(http_req: HttpRequest, body: web::Bytes) -> impl Respond
     HttpResponse::Ok().body("ok")
 }
 
+async fn inference_simulate(
+    http_req: HttpRequest,
+    req: web::Json<InferenceRequest>,
+) -> impl Responder {
+    let start = std::time::Instant::now();
+    tracing::info!("[INFERENCE] Request received");
+
+    if let Err(resp) = require_verified_email(&http_req).await {
+        tracing::warn!("[INFERENCE] Auth failed after {}ms", start.elapsed().as_millis());
+        return resp;
+    }
+
+    let params = req.params.clone();
+    let result = actix_web::rt::task::spawn_blocking(move || {
+        neurax_ir::inference::InferencePass::run(&params)
+    });
+
+    let timeout_result =
+        actix_web::rt::time::timeout(Duration::from_secs(30), result).await;
+
+    let elapsed = start.elapsed();
+    match timeout_result {
+        Ok(Ok(report)) => {
+            tracing::info!("[INFERENCE] Success in {}ms", elapsed.as_millis());
+            HttpResponse::Ok().json(InferenceResponse { report })
+        }
+        Ok(Err(_join_err)) => {
+            tracing::error!("[INFERENCE] Task join error after {}ms", elapsed.as_millis());
+            HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR)
+                .body("Inference task failed unexpectedly")
+        }
+        Err(_timeout) => {
+            tracing::error!("[INFERENCE] Timeout after {}ms", elapsed.as_millis());
+            HttpResponse::build(StatusCode::GATEWAY_TIMEOUT)
+                .body("Inference timed out after 30 seconds")
+        }
+    }
+}
+
+// ─── ONNX Export ────────────────────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+struct ExportOnnxRequest {
+    topology: serde_json::Value,
+    /// Optional model name override
+    model_name: Option<String>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct ExportOnnxResponse {
+    /// Base64-encoded ONNX protobuf binary
+    data: String,
+    /// Model name used
+    model_name: String,
+    /// Number of nodes in the ONNX graph
+    node_count: usize,
+    /// Number of initializers (weight tensors)
+    initializer_count: usize,
+    /// Size in bytes
+    size_bytes: usize,
+}
+
+async fn export_onnx(
+    http_req: HttpRequest,
+    req: web::Json<ExportOnnxRequest>,
+) -> impl Responder {
+    let start = std::time::Instant::now();
+    tracing::info!("[EXPORT ONNX] Request received");
+
+    if let Err(resp) = require_verified_email(&http_req).await {
+        tracing::warn!("[EXPORT ONNX] Auth failed after {}ms", start.elapsed().as_millis());
+        return resp;
+    }
+
+    let input = match serde_json::to_string(&req.topology) {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::error!("[EXPORT ONNX] Failed to serialize topology: {}", e);
+            return HttpResponse::build(StatusCode::BAD_REQUEST).body(e.to_string());
+        }
+    };
+
+    // Parse the topology JSON into ModelConfig
+    tracing::info!("[EXPORT ONNX] Parsing model config...");
+    let config = match neurax_parser::parse_model_config(&input) {
+        Ok(c) => {
+            tracing::info!(
+                "[EXPORT ONNX] Parse OK: model_type={:?}, layers={}",
+                c.model.model_type,
+                c.model.layers.len()
+            );
+            c
+        }
+        Err(e) => {
+            tracing::error!("[EXPORT ONNX] Parse failed: {}", e);
+            return HttpResponse::build(StatusCode::BAD_REQUEST).body(e.to_string());
+        }
+    };
+
+    let model_name = req.model_name.clone();
+    let result = actix_web::rt::task::spawn_blocking(move || {
+        // Run the analysis pipeline to get the ArchitectureIR
+        let analysis = neurax_core::run_analysis(config.clone())
+            .map_err(|e| e.to_string())?;
+
+        // Export to ONNX
+        neurax_core::export::export_onnx(
+            &analysis.arch,
+            &config.training,
+            &config.data,
+            model_name.as_deref(),
+        )
+    });
+
+    let timeout_result = actix_web::rt::time::timeout(Duration::from_secs(60), result).await;
+
+    let elapsed = start.elapsed();
+    match timeout_result {
+        Ok(Ok(Ok(onnx_result))) => {
+            tracing::info!(
+                "[EXPORT ONNX] Success in {}ms - {} nodes, {} initializers, {} bytes",
+                elapsed.as_millis(),
+                onnx_result.node_count,
+                onnx_result.initializer_count,
+                onnx_result.bytes.len()
+            );
+            let size_bytes = onnx_result.bytes.len();
+            let model_name = onnx_result.model_name.clone();
+            let node_count = onnx_result.node_count;
+            let initializer_count = onnx_result.initializer_count;
+            HttpResponse::Ok().json(ExportOnnxResponse {
+                data: base64::engine::general_purpose::STANDARD.encode(&onnx_result.bytes),
+                model_name,
+                node_count,
+                initializer_count,
+                size_bytes,
+            })
+        }
+        Ok(Ok(Err(e))) => {
+            tracing::error!("[EXPORT ONNX] Export error after {}ms: {}", elapsed.as_millis(), e);
+            HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).body(e.to_string())
+        }
+        Ok(Err(_join_err)) => {
+            tracing::error!("[EXPORT ONNX] Task join error after {}ms", elapsed.as_millis());
+            HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR)
+                .body("Export task failed unexpectedly")
+        }
+        Err(_timeout) => {
+            tracing::error!("[EXPORT ONNX] Timeout after {}ms", elapsed.as_millis());
+            HttpResponse::build(StatusCode::GATEWAY_TIMEOUT)
+                .body("Export timed out after 60 seconds")
+        }
+    }
+}
+
 async fn analyze(http_req: HttpRequest, req: web::Json<AnalyzeRequest>) -> impl Responder {
     let start = std::time::Instant::now();
     tracing::info!("[ANALYZE] Request received");
@@ -916,6 +1279,221 @@ async fn analyze(http_req: HttpRequest, req: web::Json<AnalyzeRequest>) -> impl 
     }
 }
 
+async fn analyze_compare(
+    http_req: HttpRequest,
+    req: web::Json<CompareRequest>,
+) -> impl Responder {
+    let start = std::time::Instant::now();
+    tracing::info!("[COMPARE] Request received with {} configs", req.configs.len());
+
+    if let Err(resp) = require_verified_email(&http_req).await {
+        return resp;
+    }
+
+    // Limit the number of configs to prevent abuse
+    if req.configs.len() > 8 {
+        return HttpResponse::build(StatusCode::BAD_REQUEST)
+            .body("Maximum 8 hardware configurations for comparison");
+    }
+
+    let db = neurax_hardware_db::HardwareDatabase::new();
+    let configs = req.configs.clone();
+    let topology = req.topology.clone();
+
+    // Run all analyses in a blocking task to avoid blocking the async runtime
+    let result = actix_web::rt::task::spawn_blocking(move || {
+        let mut results = Vec::with_capacity(configs.len());
+
+        for cfg in &configs {
+            let label = format!(
+                "{} × {} @ {}",
+                cfg.gpu_count.unwrap_or(1),
+                cfg.hardware,
+                cfg.precision.as_deref().unwrap_or("fp16")
+            );
+
+            // Look up GPU spec from hardware database
+            let gpu_spec = db.get_gpu_or_fallback(&cfg.hardware);
+
+            // Clone the topology and override hardware section
+            let mut topology = topology.clone();
+
+            // Override hardware in the topology JSON
+            if let Some(hw) = topology.get_mut("hardware") {
+                if let Some(hw_obj) = hw.as_object_mut() {
+                    hw_obj.insert("name".to_string(), serde_json::Value::String(cfg.hardware.clone()));
+                    hw_obj.insert(
+                        "count".to_string(),
+                        serde_json::Value::Number(
+                            serde_json::Number::from(cfg.gpu_count.unwrap_or(1)),
+                        ),
+                    );
+                    hw_obj.insert(
+                        "memory_gb".to_string(),
+                        serde_json::Value::Number(
+                            serde_json::Number::from(cfg.gpu_memory_gb.unwrap_or(gpu_spec.memory_gb)),
+                        ),
+                    );
+                    hw_obj.insert(
+                        "tflops_fp16".to_string(),
+                        serde_json::json!(gpu_spec.tflops_fp16),
+                    );
+                    hw_obj.insert(
+                        "tflops_fp32".to_string(),
+                        serde_json::json!(gpu_spec.tflops_fp32),
+                    );
+                    hw_obj.insert(
+                        "memory_bandwidth_gb_s".to_string(),
+                        serde_json::json!(gpu_spec.memory_bandwidth_gbs),
+                    );
+                    hw_obj.insert(
+                        "tensor_cores".to_string(),
+                        serde_json::Value::Bool(gpu_spec.tensor_cores),
+                    );
+                    hw_obj.insert(
+                        "nvlink".to_string(),
+                        serde_json::Value::Bool(gpu_spec.nvlink),
+                    );
+                }
+            } else {
+                // No hardware section in topology — create one
+                if let Some(obj) = topology.as_object_mut() {
+                    obj.insert(
+                        "hardware".to_string(),
+                        serde_json::json!({
+                            "name": cfg.hardware,
+                            "count": cfg.gpu_count.unwrap_or(1),
+                            "memory_gb": cfg.gpu_memory_gb.unwrap_or(gpu_spec.memory_gb),
+                            "tflops_fp16": gpu_spec.tflops_fp16,
+                            "tflops_fp32": gpu_spec.tflops_fp32,
+                            "memory_bandwidth_gb_s": gpu_spec.memory_bandwidth_gbs,
+                            "tensor_cores": gpu_spec.tensor_cores,
+                            "nvlink": gpu_spec.nvlink,
+                        }),
+                    );
+                }
+            }
+
+            // Override precision if specified
+            if let Some(ref precision) = cfg.precision {
+                if let Some(training) = topology.get_mut("training") {
+                    if let Some(training_obj) = training.as_object_mut() {
+                        training_obj.insert(
+                            "precision".to_string(),
+                            serde_json::Value::String(precision.clone()),
+                        );
+                    }
+                } else {
+                    if let Some(obj) = topology.as_object_mut() {
+                        obj.insert(
+                            "training".to_string(),
+                            serde_json::json!({ "precision": precision }),
+                        );
+                    }
+                }
+            }
+
+            // Override batch size if specified
+            if let Some(batch_size) = cfg.batch_size {
+                if let Some(training) = topology.get_mut("training") {
+                    if let Some(training_obj) = training.as_object_mut() {
+                        training_obj.insert(
+                            "batch_size".to_string(),
+                            serde_json::Value::Number(serde_json::Number::from(batch_size)),
+                        );
+                    }
+                } else {
+                    if let Some(obj) = topology.as_object_mut() {
+                        obj.insert(
+                            "training".to_string(),
+                            serde_json::json!({ "batch_size": batch_size }),
+                        );
+                    }
+                }
+            }
+
+            // Parse and run analysis
+            let input = match serde_json::to_string(&topology) {
+                Ok(v) => v,
+                Err(e) => {
+                    results.push(CompareResultItem {
+                        label,
+                        hardware: cfg.hardware.clone(),
+                        precision: cfg.precision.clone().unwrap_or_else(|| "fp16".to_string()),
+                        batch_size: cfg.batch_size.unwrap_or(1),
+                        gpu_count: cfg.gpu_count.unwrap_or(1),
+                        report: None,
+                        error: Some(format!("Failed to serialize topology: {}", e)),
+                    });
+                    continue;
+                }
+            };
+
+            let config = match neurax_parser::parse_model_config(&input) {
+                Ok(c) => c,
+                Err(e) => {
+                    results.push(CompareResultItem {
+                        label,
+                        hardware: cfg.hardware.clone(),
+                        precision: cfg.precision.clone().unwrap_or_else(|| "fp16".to_string()),
+                        batch_size: cfg.batch_size.unwrap_or(1),
+                        gpu_count: cfg.gpu_count.unwrap_or(1),
+                        report: None,
+                        error: Some(format!("Parse error: {}", e)),
+                    });
+                    continue;
+                }
+            };
+
+            let result = neurax_core::run_analysis(config);
+            match result {
+                Ok(analysis_result) => {
+                    results.push(CompareResultItem {
+                        label,
+                        hardware: cfg.hardware.clone(),
+                        precision: cfg.precision.clone().unwrap_or_else(|| "fp16".to_string()),
+                        batch_size: cfg.batch_size.unwrap_or(1),
+                        gpu_count: cfg.gpu_count.unwrap_or(1),
+                        report: Some(analysis_result.report),
+                        error: None,
+                    });
+                }
+                Err(e) => {
+                    results.push(CompareResultItem {
+                        label,
+                        hardware: cfg.hardware.clone(),
+                        precision: cfg.precision.clone().unwrap_or_else(|| "fp16".to_string()),
+                        batch_size: cfg.batch_size.unwrap_or(1),
+                        gpu_count: cfg.gpu_count.unwrap_or(1),
+                        report: None,
+                        error: Some(e.to_string()),
+                    });
+                }
+            }
+        }
+
+        results
+    })
+    .await;
+
+    let elapsed = start.elapsed();
+    match result {
+        Ok(results) => {
+            tracing::info!(
+                "[COMPARE] Completed {} configs in {}ms",
+                results.len(),
+                elapsed.as_millis()
+            );
+            HttpResponse::Ok().json(CompareResponse { results })
+        }
+        Err(e) => {
+            tracing::error!("[COMPARE] Task join error after {}ms: {}", elapsed.as_millis(), e);
+            HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR)
+                .body("Comparison task failed unexpectedly")
+        }
+    }
+}
+
 async fn time_machine(http_req: HttpRequest, req: web::Json<TimeMachineRequest>) -> impl Responder {
     let start = std::time::Instant::now();
     tracing::info!("[TIMEMACHINE] Request received");
@@ -969,24 +1547,6 @@ async fn health() -> impl Responder {
     HttpResponse::Ok().json(HealthResponse { status: "ok" })
 }
 
-async fn hardware_list() -> impl Responder {
-    let names = ["H100", "A100", "RTX4090", "RTX4080", "RTX3090"];
-    let out: Vec<HardwareEntry> = names
-        .iter()
-        .map(|n| {
-            let db = neurax_hardware_db::HardwareDatabase::new();
-            let hw = db.get_gpu_or_fallback(n);
-            HardwareEntry {
-                name: hw.name.clone(),
-                peak_ops_per_s_fp16: hw.tflops_fp16 * 1e12,
-                mem_bw_gbps: hw.memory_bandwidth_gbs,
-                vram_bytes: (hw.memory_gb as u64) * 1024 * 1024 * 1024,
-            }
-        })
-        .collect();
-    HttpResponse::Ok().json(out)
-}
-
 async fn plugin_validate(req: web::Json<PluginValidateRequest>) -> impl Responder {
     // Plugin validation is a stub for now - just validate it's valid JSON
     if serde_json::to_string(&req.plugin).is_err() {
@@ -1009,6 +1569,713 @@ async fn get_preset(path: web::Path<String>) -> impl Responder {
     }
 }
 
+// ─── Streaming Analysis Endpoints ──────────────────────────────────
+
+/// POST /analyze/stream — Start a streaming analysis job, returns job_id immediately
+async fn analyze_stream_start(
+    http_req: HttpRequest,
+    req: web::Json<AnalyzeStreamRequest>,
+    state: web::Data<AppState>,
+) -> impl Responder {
+    if let Err(resp) = require_verified_email(&http_req).await {
+        return resp;
+    }
+
+    let job_id = uuid::Uuid::new_v4().to_string();
+    let created_at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64;
+
+    // Create broadcast channel for SSE events
+    let (tx, _rx) = broadcast::channel::<String>(256);
+    state.channels.insert(job_id.clone(), tx);
+
+    // Insert job info
+    state.jobs.insert(job_id.clone(), JobInfo {
+        job_id: job_id.clone(),
+        status: "running".to_string(),
+        created_at_ms: created_at,
+        completed_at_ms: None,
+        error: None,
+    });
+
+    let job_id_clone = job_id.clone();
+    let topology = req.topology.clone();
+    let state_inner = state.into_inner();
+
+    // Spawn the analysis in a background task
+    actix_web::rt::spawn(async move {
+        let input = match serde_json::to_string(&topology) {
+            Ok(v) => v,
+            Err(e) => {
+                // Send error event
+                if let Some(tx) = state_inner.channels.get(&job_id_clone) {
+                    let event = serde_json::json!({
+                        "type": "Failed",
+                        "data": { "job_id": job_id_clone, "error": e.to_string(), "phase": "parse" }
+                    });
+                    let _ = tx.send(event.to_string());
+                }
+                // Update job status
+                if let Some(mut job) = state_inner.jobs.get_mut(&job_id_clone) {
+                    job.status = "failed".to_string();
+                    job.error = Some(e.to_string());
+                }
+                return;
+            }
+        };
+
+        let config = match neurax_parser::parse_model_config(&input) {
+            Ok(c) => c,
+            Err(e) => {
+                if let Some(tx) = state_inner.channels.get(&job_id_clone) {
+                    let event = serde_json::json!({
+                        "type": "Failed",
+                        "data": { "job_id": job_id_clone, "error": e.to_string(), "phase": "parse" }
+                    });
+                    let _ = tx.send(event.to_string());
+                }
+                if let Some(mut job) = state_inner.jobs.get_mut(&job_id_clone) {
+                    job.status = "failed".to_string();
+                    job.error = Some(e.to_string());
+                }
+                return;
+            }
+        };
+
+        // Create emitter that broadcasts events
+        let (event_sender, event_receiver) = tokio::sync::broadcast::channel::<neurax_core::streaming::AnalysisEvent>(256);
+        // Spawn a task that forwards AnalysisEvents to the SSE string channel
+        {
+            let channels_clone = state_inner.channels.clone();
+            let job_id_forward = job_id_clone.clone();
+            actix_web::rt::spawn(async move {
+                let mut rx = event_receiver;
+                loop {
+                    match rx.recv().await {
+                        Ok(event) => {
+                            let event_json = serde_json::to_string(&event).unwrap_or_default();
+                            if let Some(tx) = channels_clone.get(&job_id_forward) {
+                                let _ = tx.send(event_json);
+                            }
+                        }
+                        Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                        Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                    }
+                }
+            });
+        }
+        let emitter = neurax_core::streaming::SharedEmitter::new(
+            neurax_core::streaming::BroadcastEmitter::from_sender(event_sender)
+        );
+
+        // Clone job_id for use after spawn_blocking
+        let job_id_result = job_id_clone.clone();
+        // Run analysis in blocking context
+        let result = actix_web::rt::task::spawn_blocking(move || {
+            neurax_core::streaming::run_analysis_streaming_fallible(
+                config,
+                emitter,
+                &job_id_clone,
+            )
+        })
+        .await;
+
+        match result {
+            Ok(Ok(analysis_result)) => {
+                // Store the result
+                let report_value = match analysis_result.to_json() {
+                    Ok(json_str) => serde_json::from_str::<serde_json::Value>(&json_str)
+                        .unwrap_or_else(|_| serde_json::json!({"error": "parse failed"})),
+                    Err(e) => serde_json::json!({"error": e.to_string()}),
+                };
+
+                state_inner.results.insert(job_id_result.clone(), report_value);
+
+                // Update job status
+                if let Some(mut job) = state_inner.jobs.get_mut(&job_id_result) {
+                    job.status = "completed".to_string();
+                    job.completed_at_ms = Some(std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_millis() as u64);
+                }
+            }
+            Ok(Err(e)) => {
+                if let Some(mut job) = state_inner.jobs.get_mut(&job_id_result) {
+                    job.status = "failed".to_string();
+                    job.error = Some(e.to_string());
+                }
+            }
+            Err(e) => {
+                if let Some(mut job) = state_inner.jobs.get_mut(&job_id_result) {
+                    job.status = "failed".to_string();
+                    job.error = Some(format!("Task join error: {}", e));
+                }
+            }
+        }
+
+        // Clean up channel after a delay (allow clients to drain events)
+        let channels = state_inner.channels.clone();
+        let job_id_cleanup = job_id_result.clone();
+        actix_web::rt::spawn(async move {
+            actix_web::rt::time::sleep(Duration::from_secs(30)).await;
+            channels.remove(&job_id_cleanup);
+        });
+    });
+
+    HttpResponse::Accepted().json(AnalyzeStreamResponse { job_id })
+}
+
+/// GET /analyze/stream/{job_id} — SSE endpoint for streaming analysis events
+async fn analyze_stream_events(
+    path: web::Path<String>,
+    state: web::Data<AppState>,
+) -> HttpResponse {
+    let job_id = path.into_inner();
+
+    // Check if job exists
+    if !state.jobs.contains_key(&job_id) {
+        return HttpResponse::NotFound().body("Job not found");
+    }
+
+    // Get or create a receiver
+    let rx = match state.channels.get(&job_id) {
+        Some(tx) => tx.subscribe(),
+        None => {
+            // Job already completed, check for result
+            if state.results.contains_key(&job_id) {
+                // Return completion event directly
+                let event = serde_json::json!({
+                    "type": "Completed",
+                    "data": { "job_id": job_id, "total_ms": 0 }
+                });
+                let sse_data = format!("data: {}\n\n", event);
+                return HttpResponse::Ok()
+                    .content_type("text/event-stream")
+                    .insert_header(("Cache-Control", "no-cache"))
+                    .insert_header(("Connection", "keep-alive"))
+                    .body(sse_data);
+            }
+            return HttpResponse::NotFound().body("Job stream expired");
+        }
+    };
+
+    // Stream events via SSE
+    let state_inner = state.into_inner();
+    let stream = async_stream::stream! {
+        let mut rx = rx;
+        loop {
+            match rx.recv().await {
+                Ok(event_json) => {
+                    // Parse the event to check for terminal states
+                    let event: serde_json::Value = match serde_json::from_str(&event_json) {
+                        Ok(v) => v,
+                        Err(_) => continue,
+                    };
+
+                    yield Ok::<_, actix_web::Error>(actix_web::web::Bytes::from(format!("data: {}\n\n", event_json)));
+
+                    // Check if this is a terminal event
+                    let event_type = event.get("type").and_then(|v| v.as_str()).unwrap_or("");
+                    if event_type == "Completed" || event_type == "Failed" {
+                        // Send final result if completed
+                        if event_type == "Completed" {
+                            if let Some(result) = state_inner.results.get(&job_id) {
+                                let result_json = serde_json::json!({
+                                    "type": "Result",
+                                    "data": result.value()
+                                });
+                                yield Ok(actix_web::web::Bytes::from(format!("data: {}\n\n", result_json)));
+                            }
+                        }
+                        break;
+                    }
+                }
+                Err(broadcast::error::RecvError::Lagged(n)) => {
+                    // Client is behind, send a lag notice
+                    yield Ok(actix_web::web::Bytes::from(format!("data: {{\"type\":\"Lagged\",\"data\":{{\"count\":{}}}}}\n\n", n)));
+                }
+                Err(broadcast::error::RecvError::Closed) => {
+                    // Channel closed, check for result
+                    if let Some(result) = state_inner.results.get(&job_id) {
+                        let result_json = serde_json::json!({
+                            "type": "Result",
+                            "data": result.value()
+                        });
+                        yield Ok(actix_web::web::Bytes::from(format!("data: {}\n\n", result_json)));
+                    }
+                    break;
+                }
+            }
+        }
+    };
+
+    HttpResponse::Ok()
+        .content_type("text/event-stream")
+        .insert_header(("Cache-Control", "no-cache"))
+        .insert_header(("Connection", "keep-alive"))
+        .streaming(stream)
+}
+
+/// GET /analyze/result/{job_id} — Get the final result of a streaming analysis
+async fn analyze_result(
+    path: web::Path<String>,
+    state: web::Data<AppState>,
+) -> impl Responder {
+    let job_id = path.into_inner();
+
+    match state.jobs.get(&job_id) {
+        Some(job) => {
+            if job.status == "running" {
+                return HttpResponse::Accepted().json(serde_json::json!({
+                    "status": "running",
+                    "job_id": job_id,
+                }));
+            }
+            if job.status == "failed" {
+                return HttpResponse::build(StatusCode::BAD_REQUEST).json(serde_json::json!({
+                    "status": "failed",
+                    "job_id": job_id,
+                    "error": job.error,
+                }));
+            }
+            // Completed — return result
+            match state.results.get(&job_id) {
+                Some(result) => HttpResponse::Ok().json(serde_json::json!({
+                    "status": "completed",
+                    "job_id": job_id,
+                    "report": result.value(),
+                })),
+                None => HttpResponse::NotFound().body("Result not found"),
+            }
+        }
+        None => HttpResponse::NotFound().body("Job not found"),
+    }
+}
+
+/// GET /analyze/status/{job_id} — Get the status of a streaming analysis job
+async fn analyze_status(
+    path: web::Path<String>,
+    state: web::Data<AppState>,
+) -> impl Responder {
+    let job_id = path.into_inner();
+
+    match state.jobs.get(&job_id) {
+        Some(job) => HttpResponse::Ok().json(serde_json::json!({
+            "job_id": job.job_id,
+            "status": job.status,
+            "created_at_ms": job.created_at_ms,
+            "completed_at_ms": job.completed_at_ms,
+            "error": job.error,
+        })),
+        None => HttpResponse::NotFound().body("Job not found"),
+    }
+}
+
+// ─── Project CRUD Handlers ──────────────────────────────────────────
+
+async fn projects_list(
+    http_req: HttpRequest,
+    state: web::Data<AppState>,
+) -> impl Responder {
+    let user = match require_verified_email(&http_req).await {
+        Ok(u) => u,
+        Err(resp) => return resp,
+    };
+
+    let projects: Vec<Project> = state
+        .projects
+        .iter()
+        .filter(|entry| entry.key().user_id == user.id)
+        .map(|entry| entry.value().clone())
+        .collect();
+
+    HttpResponse::Ok().json(ProjectListResponse { projects })
+}
+
+async fn projects_create(
+    http_req: HttpRequest,
+    state: web::Data<AppState>,
+    req: web::Json<CreateProjectRequest>,
+) -> impl Responder {
+    let user = match require_verified_email(&http_req).await {
+        Ok(u) => u,
+        Err(resp) => return resp,
+    };
+
+    // Limit projects per user (max 50 on free tier)
+    let user_count = state
+        .projects
+        .iter()
+        .filter(|entry| entry.key().user_id == user.id)
+        .count();
+
+    if user_count >= 50 {
+        return HttpResponse::build(StatusCode::FORBIDDEN)
+            .body("Project limit reached (max 50). Upgrade your plan for more.");
+    }
+
+    let now = chrono::Utc::now().to_rfc3339();
+    let project = Project {
+        id: uuid::Uuid::new_v4().to_string(),
+        user_id: user.id.clone(),
+        name: req.name.clone(),
+        description: req.description.clone(),
+        architecture: req.architecture.clone(),
+        canvas: req.canvas.clone(),
+        hardware_config: req.hardware_config.clone(),
+        last_analysis: req.last_analysis.clone(),
+        created_at: now.clone(),
+        updated_at: now,
+    };
+
+    let key = ProjectKey {
+        user_id: user.id,
+        id: project.id.clone(),
+    };
+
+    state.projects.insert(key, project.clone());
+
+    HttpResponse::Created().json(ProjectResponse { project })
+}
+
+async fn projects_get(
+    http_req: HttpRequest,
+    state: web::Data<AppState>,
+    path: web::Path<String>,
+) -> impl Responder {
+    let user = match require_verified_email(&http_req).await {
+        Ok(u) => u,
+        Err(resp) => return resp,
+    };
+
+    let project_id = path.into_inner();
+    let key = ProjectKey {
+        user_id: user.id,
+        id: project_id,
+    };
+
+    match state.projects.get(&key) {
+        Some(entry) => HttpResponse::Ok().json(ProjectResponse {
+            project: entry.value().clone(),
+        }),
+        None => HttpResponse::NotFound().body("Project not found"),
+    }
+}
+
+async fn projects_update(
+    http_req: HttpRequest,
+    state: web::Data<AppState>,
+    path: web::Path<String>,
+    req: web::Json<UpdateProjectRequest>,
+) -> impl Responder {
+    let user = match require_verified_email(&http_req).await {
+        Ok(u) => u,
+        Err(resp) => return resp,
+    };
+
+    let project_id = path.into_inner();
+    let key = ProjectKey {
+        user_id: user.id.clone(),
+        id: project_id,
+    };
+
+    let mut entry = match state.projects.get_mut(&key) {
+        Some(e) => e,
+        None => return HttpResponse::NotFound().body("Project not found"),
+    };
+
+    if let Some(name) = &req.name {
+        entry.value_mut().name = name.clone();
+    }
+    if let Some(desc) = &req.description {
+        entry.value_mut().description = Some(desc.clone());
+    }
+    if let Some(arch) = &req.architecture {
+        entry.value_mut().architecture = Some(arch.clone());
+    }
+    if let Some(canvas) = &req.canvas {
+        entry.value_mut().canvas = canvas.clone();
+    }
+    if let Some(hw) = &req.hardware_config {
+        entry.value_mut().hardware_config = Some(hw.clone());
+    }
+    if let Some(analysis) = &req.last_analysis {
+        entry.value_mut().last_analysis = Some(analysis.clone());
+    }
+    entry.value_mut().updated_at = chrono::Utc::now().to_rfc3339();
+
+    let updated = entry.value().clone();
+    drop(entry);
+
+    HttpResponse::Ok().json(ProjectResponse { project: updated })
+}
+
+async fn projects_delete(
+    http_req: HttpRequest,
+    state: web::Data<AppState>,
+    path: web::Path<String>,
+) -> impl Responder {
+    let user = match require_verified_email(&http_req).await {
+        Ok(u) => u,
+        Err(resp) => return resp,
+    };
+
+    let project_id = path.into_inner();
+    let key = ProjectKey {
+        user_id: user.id,
+        id: project_id,
+    };
+
+    match state.projects.remove(&key) {
+        Some(_) => HttpResponse::Ok().json(serde_json::json!({"deleted": true})),
+        None => HttpResponse::NotFound().body("Project not found"),
+    }
+}
+
+// ─── Credits ────────────────────────────────────────────────────────
+
+/// Per-user credit tracking stored in AppState
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CreditInfo {
+    pub user_id: String,
+    /// Credits used this billing period
+    pub used: u32,
+    /// Credits limit for this billing period (based on plan)
+    pub limit: u32,
+    /// Plan tier
+    pub plan: String,
+    /// Billing period start (ISO 8601)
+    pub period_start: String,
+    /// Billing period end (ISO 8601)
+    pub period_end: String,
+}
+
+/// Plan credit limits
+fn plan_credit_limit(plan: &str) -> u32 {
+    match plan {
+        "free" => 10,
+        "essential" => 100,
+        "architect" => 1000,
+        "elite" => u32::MAX, // unlimited
+        _ => 10,
+    }
+}
+
+#[derive(Debug, serde::Serialize)]
+struct CreditsResponse {
+    credits: CreditInfo,
+}
+
+async fn credits_get(http_req: HttpRequest, state: web::Data<AppState>) -> impl Responder {
+    let user = match get_supabase_user(&http_req).await {
+        Ok(u) => u,
+        Err(resp) => return resp,
+    };
+
+    // Determine plan
+    let plan = if noauth_enabled() {
+        env::var("NEURAX_MOCK_PLAN")
+            .ok()
+            .and_then(|p| normalize_plan_tier(&p))
+            .unwrap_or_else(|| "elite".to_string())
+    } else {
+        // Try to get plan from profile
+        match fetch_user_profile(&user.id).await {
+            Ok(profile) => {
+                if let Some(override_plan) = profile
+                    .plan_override
+                    .as_deref()
+                    .and_then(normalize_plan_tier)
+                {
+                    override_plan
+                } else {
+                    fetch_active_subscription_plan(&user.id)
+                        .await
+                        .ok()
+                        .flatten()
+                        .unwrap_or_else(|| "free".to_string())
+                }
+            }
+            Err(_) => "free".to_string(),
+        }
+    };
+
+    let limit = plan_credit_limit(&plan);
+
+    // Get or create credit tracking entry
+    let now = chrono::Utc::now();
+    let period_start = now.with_day0(0).unwrap_or(now).to_rfc3339();
+    let period_end = {
+        let next_month = (now.month() % 12) + 1;
+        now.with_month(next_month).unwrap_or(now).to_rfc3339()
+    };
+
+    state
+        .credits
+        .entry(user.id.clone())
+        .or_insert_with(|| CreditInfo {
+            user_id: user.id.clone(),
+            used: 0,
+            limit,
+            plan: plan.clone(),
+            period_start: period_start.clone(),
+            period_end: period_end.clone(),
+        });
+
+    // Update limit and plan in case they changed
+    {
+        let mut entry = state.credits.get_mut(&user.id).unwrap();
+        entry.value_mut().limit = limit;
+        entry.value_mut().plan = plan.clone();
+    }
+
+    let credit_info = state.credits.get(&user.id).unwrap().value().clone();
+
+    HttpResponse::Ok().json(CreditsResponse { credits: credit_info })
+}
+
+/// Increment credit usage for a user. Returns false if limit exceeded.
+#[allow(dead_code)]
+fn increment_credits(state: &AppState, user_id: &str, plan: &str) -> bool {
+    let limit = plan_credit_limit(plan);
+    state
+        .credits
+        .entry(user_id.to_string())
+        .or_insert_with(|| {
+            let now = chrono::Utc::now();
+            CreditInfo {
+                user_id: user_id.to_string(),
+                used: 0,
+                limit,
+                plan: plan.to_string(),
+                period_start: now.to_rfc3339(),
+                period_end: now.to_rfc3339(),
+            }
+        });
+
+    let mut entry = state.credits.get_mut(user_id).unwrap();
+    if entry.value().used >= entry.value().limit && entry.value().limit != u32::MAX {
+        return false;
+    }
+    entry.value_mut().used += 1;
+    true
+}
+
+// ─── Compliance Config ──────────────────────────────────────────────
+
+#[derive(Debug, serde::Serialize)]
+struct ComplianceRegulation {
+    name: String,
+    year: u32,
+    limit: Option<f64>,
+    unit: Option<String>,
+    status: String,
+    description: String,
+    region: String,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct ComplianceConfig {
+    regulations: Vec<ComplianceRegulation>,
+    thresholds: ComplianceThresholds,
+    recommendations: Vec<String>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct ComplianceThresholds {
+    /// GFLOPs threshold for "high risk" classification (EU AI Act)
+    high_risk_gflops: f64,
+    /// CO₂e threshold in tonnes/year for mandatory reporting (CSRD)
+    carbon_report_tonnes: f64,
+    /// Training compute threshold in FLOPs for disclosure (DSA)
+    dsa_disclosure_flops: f64,
+    /// Recommended max training cost before review
+    cost_review_usd: f64,
+}
+
+async fn compliance_config() -> impl Responder {
+    let regulations = vec![
+        ComplianceRegulation {
+            name: "EU AI Act Phase 1".to_string(),
+            year: 2027,
+            limit: Some(300.0),
+            unit: Some("GFLOPs/request".to_string()),
+            status: "upcoming".to_string(),
+            description: "General-purpose AI models trained with >10²⁵ FLOPs must comply with transparency and safety obligations.".to_string(),
+            region: "EU".to_string(),
+        },
+        ComplianceRegulation {
+            name: "EU AI Act Phase 2".to_string(),
+            year: 2028,
+            limit: Some(150.0),
+            unit: Some("GFLOPs/request".to_string()),
+            status: "upcoming".to_string(),
+            description: "Stricter limits for high-risk AI applications in critical infrastructure, law enforcement, and biometrics.".to_string(),
+            region: "EU".to_string(),
+        },
+        ComplianceRegulation {
+            name: "Carbon Reporting (CSRD)".to_string(),
+            year: 2026,
+            limit: None,
+            unit: None,
+            status: "active".to_string(),
+            description: "Corporate Sustainability Reporting Directive requires disclosure of energy consumption and CO₂ emissions for large companies.".to_string(),
+            region: "EU".to_string(),
+        },
+        ComplianceRegulation {
+            name: "Digital Services Act".to_string(),
+            year: 2026,
+            limit: None,
+            unit: None,
+            status: "active".to_string(),
+            description: "Requires transparency reporting for very large online platforms using AI, including compute disclosure.".to_string(),
+            region: "EU".to_string(),
+        },
+        ComplianceRegulation {
+            name: "US AI Executive Order".to_string(),
+            year: 2024,
+            limit: Some(1e26),
+            unit: Some("FLOPs (training)".to_string()),
+            status: "active".to_string(),
+            description: "Companies must report AI models trained with compute exceeding 10²⁶ FLOPs or biological sequence models above defined thresholds.".to_string(),
+            region: "US".to_string(),
+        },
+        ComplianceRegulation {
+            name: "Canada AIDA".to_string(),
+            year: 2027,
+            limit: None,
+            unit: None,
+            status: "proposed".to_string(),
+            description: "Artificial Intelligence and Data Act — high-impact AI systems must meet safety, transparency, and monitoring requirements.".to_string(),
+            region: "Canada".to_string(),
+        },
+    ];
+
+    let thresholds = ComplianceThresholds {
+        high_risk_gflops: 300.0,
+        carbon_report_tonnes: 50.0,
+        dsa_disclosure_flops: 1e25,
+        cost_review_usd: 100_000.0,
+    };
+
+    let recommendations = vec![
+        "Monitor EU AI Act Phase 1 compliance for models exceeding 300 GFLOPs/request".to_string(),
+        "Prepare CSRD carbon reporting for training runs exceeding 50 tonnes CO₂e/year".to_string(),
+        "Consider FP8 or INT8 quantization to reduce inference compute below regulatory thresholds".to_string(),
+        "Document all training compute for models above 10²⁵ FLOPs (US EO requirement)".to_string(),
+        "Implement energy monitoring for GPU clusters to track real-time carbon footprint".to_string(),
+    ];
+
+    HttpResponse::Ok().json(ComplianceConfig {
+        regulations,
+        thresholds,
+        recommendations,
+    })
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     if dotenvy::dotenv().is_err() {
@@ -1027,7 +2294,9 @@ async fn main() -> std::io::Result<()> {
             .unwrap_or_else(|_| "0.0.0.0:9098".to_string())
     });
 
-    HttpServer::new(|| {
+    let app_state = AppState::new();
+
+    HttpServer::new(move || {
         let cors = Cors::default()
             .allowed_origin("http://localhost:8082")
             .allowed_origin("https://localhost:8082")
@@ -1039,7 +2308,7 @@ async fn main() -> std::io::Result<()> {
             .allowed_origin("https://127.0.0.1:8081")
             .allowed_origin("http://127.0.0.1:8080")
             .allowed_origin("https://127.0.0.1:8080")
-            .allowed_methods(vec!["GET", "POST", "OPTIONS"])
+            .allowed_methods(vec!["GET", "POST", "PUT", "DELETE", "OPTIONS"])
             .allowed_headers(vec![header::CONTENT_TYPE, header::AUTHORIZATION])
             .max_age(3600);
 
@@ -1059,6 +2328,7 @@ async fn main() -> std::io::Result<()> {
                         .into()
                     }),
             )
+            .app_data(web::Data::new(app_state.clone()))
             .route("/me", web::get().to(me))
             .route("/billing/checkout", web::post().to(billing_checkout))
             .route("/billing/portal", web::post().to(billing_portal))
@@ -1069,7 +2339,21 @@ async fn main() -> std::io::Result<()> {
             .route("/presets", web::get().to(get_presets))
             .route("/presets/{id}", web::get().to(get_preset))
             .route("/analyze", web::post().to(analyze))
+            .route("/analyze/compare", web::post().to(analyze_compare))
+            .route("/analyze/stream", web::post().to(analyze_stream_start))
+            .route("/analyze/stream/{job_id}", web::get().to(analyze_stream_events))
+            .route("/analyze/result/{job_id}", web::get().to(analyze_result))
+            .route("/analyze/status/{job_id}", web::get().to(analyze_status))
             .route("/timemachine", web::post().to(time_machine))
+            .route("/inference/simulate", web::post().to(inference_simulate))
+            .route("/export/onnx", web::post().to(export_onnx))
+            .route("/projects", web::get().to(projects_list))
+            .route("/projects", web::post().to(projects_create))
+            .route("/projects/{id}", web::get().to(projects_get))
+            .route("/projects/{id}", web::put().to(projects_update))
+            .route("/projects/{id}", web::delete().to(projects_delete))
+            .route("/credits", web::get().to(credits_get))
+            .route("/compliance/config", web::get().to(compliance_config))
     })
     .bind(bind_addr)?
     .run()

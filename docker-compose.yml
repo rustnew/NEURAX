@@ -1,0 +1,78 @@
+# ─── NEURAX — Docker Compose ────────────────────────────────────────
+#
+# Usage:
+#   docker compose up              # Start all services
+#   docker compose up service ui   # Start backend + frontend only
+#   docker compose logs -f service # Follow backend logs
+#
+# Environment:
+#   Copy .env.example files and fill in real values:
+#     cp neurax-service/.env.example neurax-service/.env
+#     cp neurax-ui/.env.example neurax-ui/.env
+#     cp neurax-agent/.env neurax-agent/.env  (already exists)
+#
+# Ports:
+#   9098 — neurax-service (Rust backend)
+#   8081 — neurax-ui (React frontend)
+#   8099 — neurax-agent (Python AI agent)
+
+version: "3.9"
+
+services:
+  # ── Backend Service ──────────────────────────────────────────────
+  service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: neurax-service
+    ports:
+      - "9098:9098"
+    env_file:
+      - neurax-service/.env
+    environment:
+      - NEURAX_BIND=0.0.0.0:9098
+      - RUST_LOG=info
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9098/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  # ── Frontend ──────────────────────────────────────────────────────
+  ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.ui
+      args:
+        VITE_NEURAX_API_URL: http://localhost:9098
+        VITE_AGENT_BASE_URL: http://localhost:8099
+    container_name: neurax-ui
+    ports:
+      - "8081:80"
+    depends_on:
+      service:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── AI Agent ──────────────────────────────────────────────────────
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+    container_name: neurax-agent
+    ports:
+      - "8099:8099"
+    env_file:
+      - neurax-agent/.env
+    environment:
+      - NEURAX_AGENT_HOST=0.0.0.0
+      - NEURAX_AGENT_PORT=8099
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8099/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped

@@ -15,6 +15,7 @@ pub mod cost;
 pub mod report;
 pub mod ir_injector;
 pub mod dynamic;
+pub mod inference;
 
 pub use traits::IrPass;
 pub use error::*;

@@ -13,7 +13,8 @@ import {
   Zap,
   Server,
   Network,
-  Github
+  Github,
+  Loader2
 } from 'lucide-react';
 import { usePlan } from '@/contexts/PlanContext.tsx';
 import { EXPORT_OPTIONS, ExportOption, canAccessExport } from '@/types/plans.ts';
@@ -39,6 +40,7 @@ import { ArchitectureFamily } from '@/types/plugins.ts';
 import { generateCode } from '@/utils/codeGenerators.ts';
 import { compileToNeuraxIR } from '@/utils/neuraxCompiler.ts';
 import { useHardware } from '@/contexts/HardwareContext.tsx';
+import { exportOnnx } from '@/services/neuraxApi.ts';
 import { GitHubExportPanel } from './GitHubExportPanel.tsx';
 import { ExportAssistant } from './ExportAssistant.tsx';
 
@@ -174,6 +176,7 @@ export function ExportPanel({
   const [copied, setCopied] = useState(false);
   const [showGitHubExport, setShowGitHubExport] = useState(false);
   const [showAssistant, setShowAssistant] = useState<string | null>(null);
+  const [isExportingOnnx, setIsExportingOnnx] = useState(false);
   const { toast } = useToast();
   const { currentPlan } = usePlan();
   const { config: hwConfig } = useHardware();
@@ -206,13 +209,63 @@ export function ExportPanel({
   });
   const neuraxJson = JSON.stringify(neuraxIR, null, 2);
 
-  const handleExport = (format: ExportOption) => {
+  const handleExport = async (format: ExportOption) => {
     if (!canAccessExport(currentPlan, format)) {
       toast({
         title: "Upgrade Required",
         description: `${format.name} export requires ${format.minPlan.toUpperCase()} plan`,
         variant: "destructive",
       });
+      return;
+    }
+
+    // ONNX binary export — call the backend API
+    if (format.id === 'onnx') {
+      if (nodes.length === 0) {
+        toast({
+          title: "No Architecture",
+          description: "Add layers to the canvas before exporting",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setIsExportingOnnx(true);
+      try {
+        const result = await exportOnnx({
+          topology: neuraxIR,
+          model_name: architectureName,
+        });
+
+        // Decode base64 and trigger download
+        const binaryData = atob(result.data);
+        const bytes = new Uint8Array(binaryData.length);
+        for (let i = 0; i < binaryData.length; i++) {
+          bytes[i] = binaryData.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${architectureName}.onnx`;
+        a.click();
+        URL.revokeObjectURL(url);
+
+        toast({
+          title: "ONNX Export Complete",
+          description: `${result.model_name} — ${result.node_count} nodes, ${result.initializer_count} parameters, ${(result.size_bytes / 1024).toFixed(1)} KB`,
+        });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        toast({
+          title: "ONNX Export Failed",
+          description: message,
+          variant: "destructive",
+        });
+      } finally {
+        setIsExportingOnnx(false);
+      }
+      onClose();
       return;
     }
 
@@ -382,9 +435,14 @@ export function ExportPanel({
                     const format = EXPORT_OPTIONS.find(f => f.id === selectedFormat);
                     if (format) handleExport(format);
                   }}
+                  disabled={isExportingOnnx}
                 >
-                  <Download className="w-4 h-4 mr-2" />
-                  Export {EXPORT_OPTIONS.find(f => f.id === selectedFormat)?.name}
+                  {isExportingOnnx ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4 mr-2" />
+                  )}
+                  {isExportingOnnx ? 'Exporting...' : `Export ${EXPORT_OPTIONS.find(f => f.id === selectedFormat)?.name}`}
                 </Button>
               </div>
             </TabsContent>

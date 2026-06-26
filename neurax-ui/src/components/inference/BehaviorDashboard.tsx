@@ -16,8 +16,13 @@ import { ArchitectureFamily } from '@/types/plugins.ts';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip.tsx';
 import { Progress } from '@/components/ui/progress.tsx';
 
+import { InferenceReport } from '@/services/neuraxApi.ts';
+
 interface BehaviorDashboardProps {
   architectureType: ArchitectureFamily;
+  report: InferenceReport | null;
+  loading: boolean;
+  error: string | null;
 }
 
 type StabilityLevel = 'stable' | 'drift' | 'unstable' | 'chaotic';
@@ -433,37 +438,85 @@ function InferenceRiskOverview({ risks }: { risks: Record<string, RiskLevel> }) 
   );
 }
 
-export function BehaviorDashboard({ architectureType }: BehaviorDashboardProps) {
+export function BehaviorDashboard({ architectureType, report, loading, error }: BehaviorDashboardProps) {
   return (
     <div className="flex-1 h-full overflow-y-auto scrollbar-thin bg-background p-3 sm:p-4 lg:p-6">
       <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
         {/* Header */}
         <div className="flex items-center gap-2 sm:gap-3 pb-3 sm:pb-4 border-b border-border">
           <Brain className="w-5 h-5 sm:w-6 sm:h-6 text-primary shrink-0" />
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <h2 className="text-sm sm:text-lg font-semibold truncate">Behavior Prediction Dashboard</h2>
             <p className="text-[10px] sm:text-xs text-muted-foreground">
               Inference behavior analysis for {architectureType.charAt(0).toUpperCase() + architectureType.slice(1)} architecture
             </p>
           </div>
+          {loading && (
+            <span className="text-[10px] text-muted-foreground animate-pulse shrink-0">Simulating…</span>
+          )}
         </div>
 
-        <div className="p-4 rounded-lg border border-border bg-secondary/20">
-          <div className="text-xs text-muted-foreground">
-            Behavior prediction metrics are not available yet (mock data removed).
+        {/* Error state */}
+        {error && (
+          <div className="p-3 rounded-lg border border-destructive/40 bg-destructive/10 text-xs text-destructive">
+            {error}
           </div>
-          <div className="text-[10px] text-muted-foreground/80 mt-1">
-            Once the backend exposes inference/behavior signals for {architectureType} models, this dashboard will render them.
+        )}
+
+        {/* Skeleton / not yet loaded */}
+        {!report && !error && (
+          <div className="p-4 rounded-lg border border-border bg-secondary/20">
+            <div className="text-xs text-muted-foreground">
+              {loading ? 'Running inference simulation…' : 'Adjust controls to simulate inference behavior.'}
+            </div>
           </div>
-        </div>
-        
-        {/* Footer Note */}
-        <div className="text-center py-4 border-t border-border">
-          <p className="text-xs text-muted-foreground">
-            Dashboard displays predicted behavior based on model configuration. 
-            Connect to backend for real-time simulation data.
-          </p>
-        </div>
+        )}
+
+        {/* ── Real data ── */}
+        {report && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+            {/* Widget 1 — Generation Stability Index */}
+            <StabilityGauge level={report.stability_index.level} />
+
+            {/* Widget 2 — Entropy Evolution */}
+            <EntropyChart data={report.entropy_evolution} />
+
+            {/* Widget 3 — Noise Schedule (diffusion only) */}
+            {report.noise_schedule && <NoiseScheduleChart data={report.noise_schedule} />}
+
+            {/* Widget 4 — Hallucination Risk */}
+            <HallucinationRiskCard
+              risk={report.hallucination_risk.risk}
+              confidence={report.hallucination_risk.confidence}
+            />
+
+            {/* Widget 5 — Attention Focus */}
+            <AttentionFocusStrip attention={report.attention_focus} />
+
+            {/* Widget 6 — State Stability */}
+            <StateStabilityPanel stability={report.state_stability} />
+
+            {/* Widget 7 — Context Degradation */}
+            <ContextDegradationMeter percentage={report.context_degradation} />
+
+            {/* Widget 8 — Sampling Volatility */}
+            <SamplingVolatilityCard
+              diversity={report.sampling_volatility.diversity}
+              determinism={report.sampling_volatility.determinism}
+            />
+
+            {/* Widget 9 — Router Stability (MoE only) */}
+            {report.router_stability && (
+              <RouterStabilityCard
+                stability={report.router_stability.stability}
+                distribution={report.router_stability.distribution}
+              />
+            )}
+
+            {/* Widget 10 — Inference Risk Overview */}
+            <InferenceRiskOverview risks={report.risk_overview as Record<string, RiskLevel>} />
+          </div>
+        )}
       </div>
     </div>
   );

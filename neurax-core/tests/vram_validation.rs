@@ -7,7 +7,7 @@ use neurax_core::analyze_json;
 /// Test de cohérence VRAM: params + activations + gradients + optimizer <= peak_vram
 #[test]
 fn test_vram_components_sum() {
-    let json = include_str!("../../../../Neurax-IR/models/gpt2_medium.json");
+    let json = include_str!("../../models/gpt2_medium.json");
     let result = analyze_json(json).expect("Analysis should succeed");
     
     let peak_vram = result.memory.metrics.peak_vram_bytes;
@@ -39,7 +39,7 @@ fn test_vram_components_sum() {
 /// NOTE: La précision peut varier (fp32=4 bytes, fp16/bf16=2 bytes)
 #[test]
 fn test_param_memory_consistency() {
-    let json = include_str!("../../../../Neurax-IR/models/gpt2_medium.json");
+    let json = include_str!("../../models/gpt2_medium.json");
     let result = analyze_json(json).expect("Analysis should succeed");
     
     let param_memory = result.memory.metrics.parameter_memory_bytes;
@@ -61,7 +61,7 @@ fn test_param_memory_consistency() {
 /// Test de cohérence gradients = params (pour training)
 #[test]
 fn test_gradient_memory_equals_params() {
-    let json = include_str!("../../../../Neurax-IR/models/gpt2_medium.json");
+    let json = include_str!("../../models/gpt2_medium.json");
     let result = analyze_json(json).expect("Analysis should succeed");
     
     let gradient_memory = result.memory.metrics.gradient_memory_bytes;
@@ -83,7 +83,7 @@ fn test_gradient_memory_equals_params() {
 /// Test de cohérence optimizer state (AdamW = 2× params)
 #[test]
 fn test_optimizer_state_adamw() {
-    let json = include_str!("../../../../Neurax-IR/models/gpt2_medium.json");
+    let json = include_str!("../../models/gpt2_medium.json");
     let result = analyze_json(json).expect("Analysis should succeed");
     
     let optimizer_memory = result.memory.metrics.optimizer_state_bytes;
@@ -107,7 +107,7 @@ fn test_optimizer_state_adamw() {
 /// Test que max_batch_size_fit est cohérent avec VRAM GPU
 #[test]
 fn test_max_batch_size_fits_vram() {
-    let json = include_str!("../../../../Neurax-IR/models/gpt2_medium.json");
+    let json = include_str!("../../models/gpt2_medium.json");
     let result = analyze_json(json).expect("Analysis should succeed");
     
     let max_batch = result.memory.metrics.max_batch_size_fit;
@@ -130,7 +130,7 @@ fn test_max_batch_size_fits_vram() {
 /// Test de non-régression: VRAM ne doit pas être 0 pour un modèle valide
 #[test]
 fn test_vram_nonzero() {
-    let json = include_str!("../../../../Neurax-IR/models/gpt2_small.json");
+    let json = include_str!("../../models/gpt2_small.json");
     let result = analyze_json(json).expect("Analysis should succeed");
     
     assert!(
@@ -148,7 +148,7 @@ fn test_vram_nonzero() {
 /// Test de fragmentation raisonnable (5-20%)
 #[test]
 fn test_fragmentation_reasonable() {
-    let json = include_str!("../../../../Neurax-IR/models/gpt2_medium.json");
+    let json = include_str!("../../models/gpt2_medium.json");
     let result = analyze_json(json).expect("Analysis should succeed");
     
     let frag = result.memory.metrics.fragmentation_estimate;
@@ -167,7 +167,7 @@ fn test_fragmentation_reasonable() {
 /// NOTE: Le ratio peut varier considérablement selon l'architecture
 #[test]
 fn test_activation_memory_scale() {
-    let json = include_str!("../../../../Neurax-IR/models/gpt2_medium.json");
+    let json = include_str!("../../models/gpt2_medium.json");
     let result = analyze_json(json).expect("Analysis should succeed");
     
     let activation_memory = result.memory.metrics.activation_memory_bytes;

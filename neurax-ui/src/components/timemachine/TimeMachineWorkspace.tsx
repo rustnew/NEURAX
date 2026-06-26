@@ -22,6 +22,10 @@ import {
   TmCarbonPoint,
   TmCostBreakdownPoint,
   TmRecommendation,
+  getComplianceConfig,
+  type ComplianceConfig,
+  type ComplianceRegulation,
+  type ComplianceThresholds,
 } from '@/services/neuraxApi.ts';
 import { compileToNeuraxIR } from '@/utils/neuraxCompiler.ts';
 
@@ -430,18 +434,50 @@ function CarbonView({ data }: { data: CarbonPoint[] }) {
 }
 
 function ComplianceView({ horizon }: { horizon: number }) {
-  const regulations = [
-    { name: 'EU AI Act Phase 1', year: 2027, limit: 300, unit: 'GFLOPs/req', status: 'upcoming' },
-    { name: 'EU AI Act Phase 2', year: 2028, limit: 150, unit: 'GFLOPs/req', status: 'upcoming' },
-    { name: 'Carbon Reporting (CSRD)', year: 2026, limit: null, unit: null, status: 'active' },
-    { name: 'Digital Services Act', year: 2026, limit: null, unit: null, status: 'active' },
+  const [config, setConfig] = useState<ComplianceConfig | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    getComplianceConfig()
+      .then((data) => setConfig(data))
+      .catch(() => setConfig(null))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+        <span className="ml-2 text-sm text-muted-foreground">Loading compliance data…</span>
+      </div>
+    );
+  }
+
+  const regulations = config?.regulations ?? [
+    { name: 'EU AI Act Phase 1', year: 2027, limit: 300, unit: 'GFLOPs/req', status: 'upcoming', description: 'General-purpose AI models trained with >10²⁵ FLOPs must comply with transparency and safety obligations.', region: 'EU' },
+    { name: 'EU AI Act Phase 2', year: 2028, limit: 150, unit: 'GFLOPs/req', status: 'upcoming', description: 'Stricter limits for high-risk AI applications in critical infrastructure, law enforcement, and biometrics.', region: 'EU' },
+    { name: 'Carbon Reporting (CSRD)', year: 2026, limit: null, unit: null, status: 'active', description: 'Corporate Sustainability Reporting Directive requires disclosure of energy consumption and CO₂ emissions for large companies.', region: 'EU' },
+    { name: 'Digital Services Act', year: 2026, limit: null, unit: null, status: 'active', description: 'Requires transparency reporting for very large online platforms using AI, including compute disclosure.', region: 'EU' },
+  ];
+
+  const thresholds = config?.thresholds ?? {
+    high_risk_gflops: 300,
+    carbon_report_tonnes: 50,
+    dsa_disclosure_flops: 1e25,
+    cost_review_usd: 100000,
+  };
+
+  const recommendations = config?.recommendations ?? [
+    'Monitor EU AI Act Phase 1 compliance for models exceeding 300 GFLOPs/request',
+    'Prepare CSRD carbon reporting for training runs exceeding 50 tonnes CO₂e/year',
   ];
 
   return (
     <div className="space-y-4">
       <h3 className="text-sm font-semibold text-foreground">Regulatory Compliance Timeline</h3>
       <div className="space-y-3">
-        {regulations.map((reg, i) => {
+        {regulations.map((reg: ComplianceRegulation, i: number) => {
           const inScope = reg.year <= 2026 + horizon;
           return (
             <Card key={i} className={`bg-card ${!inScope ? 'opacity-50' : ''}`}>
@@ -452,17 +488,64 @@ function ComplianceView({ horizon }: { horizon: number }) {
                     <p className="text-sm font-medium text-foreground">{reg.name}</p>
                     <p className="text-xs text-muted-foreground">
                       Effective: {reg.year} {reg.limit ? `· Limit: ${reg.limit} ${reg.unit}` : '· Disclosure required'}
+                      {reg.region && ` · ${reg.region}`}
                     </p>
+                    {reg.description && (
+                      <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2">{reg.description}</p>
+                    )}
                   </div>
                 </div>
                 <Badge variant={reg.status === 'active' ? 'default' : 'secondary'} className="text-[10px]">
-                  {reg.status === 'active' ? 'Active' : `${reg.year - 2026} yr away`}
+                  {reg.status === 'active' ? 'Active' : reg.status === 'proposed' ? 'Proposed' : `${reg.year - 2026} yr away`}
                 </Badge>
               </CardContent>
             </Card>
           );
         })}
       </div>
+
+      {/* Thresholds */}
+      <Card className="bg-secondary/30">
+        <CardContent className="p-4">
+          <h4 className="text-xs font-semibold text-foreground mb-2">Compliance Thresholds</h4>
+          <div className="grid grid-cols-2 gap-2 text-[11px]">
+            <div>
+              <span className="text-muted-foreground">High-risk threshold:</span>{' '}
+              <span className="font-mono font-bold text-primary">{thresholds.high_risk_gflops} GFLOPs</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Carbon report:</span>{' '}
+              <span className="font-mono font-bold text-primary">{thresholds.carbon_report_tonnes}t CO₂e/yr</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">DSA disclosure:</span>{' '}
+              <span className="font-mono font-bold text-primary">{thresholds.dsa_disclosure_flops.toExponential(0)} FLOPs</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Cost review:</span>{' '}
+              <span className="font-mono font-bold text-primary">${(thresholds.cost_review_usd / 1000).toFixed(0)}k</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Recommendations */}
+      {recommendations.length > 0 && (
+        <Card className="bg-secondary/30 border-primary/20">
+          <CardContent className="p-4">
+            <h4 className="text-xs font-semibold text-foreground mb-2">Recommendations</h4>
+            <ul className="space-y-1">
+              {recommendations.map((rec: string, i: number) => (
+                <li key={i} className="text-[11px] text-muted-foreground flex items-start gap-1.5">
+                  <span className="text-primary mt-0.5">•</span>
+                  {rec}
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
       <Card className="bg-secondary/30 border-primary/20">
         <CardContent className="p-4">
           <div className="flex items-start gap-3">

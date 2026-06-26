@@ -97,7 +97,7 @@ fn test_f04_tied_embeddings_not_doubled() {
 /// Test: vérification que GPT-2 a des embeddings partagés
 #[test]
 fn test_f04_gpt2_has_tied_embeddings() {
-    let json = include_str!("../../../../Neurax-IR/models/gpt2_small.json");
+    let json = include_str!("../../models/gpt2_small.json");
     let result = analyze_json(json).expect("Analysis should succeed");
     
     // GPT-2 Small officiel: 124M params avec tied embeddings
@@ -136,7 +136,7 @@ fn test_f05_kernel_overhead_included() {
 /// Test: latence totale = compute + overhead
 #[test]
 fn test_f05_latency_includes_overhead() {
-    let json = include_str!("../../../../Neurax-IR/models/gpt2_medium.json");
+    let json = include_str!("../../models/gpt2_medium.json");
     let result = analyze_json(json).expect("Analysis should succeed");
     
     let latency_ms = result.hardware.metrics.latency_ms;
@@ -251,7 +251,7 @@ fn test_f07_symbolic_dimensions_propagated() {
     // Exemple: si batch_size est défini dans env, toutes les ops
     // doivent avoir des dimensions concrètes
     
-    let json = include_str!("../../../../Neurax-IR/models/gpt2_medium.json");
+    let json = include_str!("../../models/gpt2_medium.json");
     let result = analyze_json(json).expect("Analysis should succeed");
     
     // Vérifier que les métriques sont calculées (pas 0)
@@ -268,7 +268,7 @@ fn test_f07_dimensions_resolved_before_calculation() {
     // Toutes les dimensions doivent être résolues avant le calcul des métriques
     // Si une dimension est inconnue, le calcul doit échouer ou utiliser un défaut
     
-    let json = include_str!("../../../../Neurax-IR/models/gpt2_medium.json");
+    let json = include_str!("../../models/gpt2_medium.json");
     let _result = analyze_json(json).expect("Analysis should succeed");
     
     // Le rapport doit avoir des métriques valides
@@ -314,7 +314,7 @@ fn test_f07_env_params_deduced() {
 /// Test: toutes les corrections F03-F07 sont implémentées
 #[test]
 fn test_f03_f07_all_implemented() {
-    let json = include_str!("../../../../Neurax-IR/models/gpt2_medium.json");
+    let json = include_str!("../../models/gpt2_medium.json");
     let result = analyze_json(json).expect("Analysis should succeed");
     
     // Vérifier que toutes les métriques sont présentes
