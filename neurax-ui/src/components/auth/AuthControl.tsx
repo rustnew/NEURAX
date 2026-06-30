@@ -197,7 +197,7 @@ export function AuthControl({
       const systemOptions = getSystemAvatarOptions();
       const finalAvatarUrl = avatarUrl || (systemOptions.length > 0 ? randPick(systemOptions) : defaultAvatarUrl(finalUsername));
 
-      const { data, error } = await supabase.auth.signUp({
+      const { error } = await supabase.auth.signUp({
         email,
         password,
         options: {

@@ -25,7 +25,6 @@ import {
   getComplianceConfig,
   type ComplianceConfig,
   type ComplianceRegulation,
-  type ComplianceThresholds,
 } from '@/services/neuraxApi.ts';
 import { compileToNeuraxIR } from '@/utils/neuraxCompiler.ts';
 

@@ -1,4 +1,3 @@
-import { LucideIcon } from 'lucide-react';
 import { LayerConfig } from './architecture.ts';
 
 export type ArchitectureFamily = 

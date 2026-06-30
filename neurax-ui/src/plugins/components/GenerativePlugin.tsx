@@ -114,7 +114,7 @@ export function GenerativePlugin({ className }: GenerativePluginProps) {
             </CardHeader>
             <CardContent>
               <div className="space-y-3 mb-4">
-                {noiseSchedule.map((point, i) => (
+                {noiseSchedule.map((point) => (
                   <div key={point.step} className="space-y-1">
                     <div className="flex justify-between text-xs">
                       <span className="text-muted-foreground">Step {point.step}</span>

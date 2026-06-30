@@ -1,5 +1,5 @@
 import { ArchitectureFamily } from './plugins.ts';
-import { CanvasNode, Connection, LayerConfig } from './architecture.ts';
+import { CanvasNode, Connection } from './architecture.ts';
 
 /**
  * A variant preset is a predefined architecture template that users can load

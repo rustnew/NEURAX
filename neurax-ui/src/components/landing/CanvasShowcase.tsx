@@ -5,11 +5,6 @@ import {
     Focus,
     AlignJustify,
     SquareArrowOutUpRight,
-    Cpu,
-    BarChart2,
-    Zap,
-    GitBranch,
-    Shield
 } from 'lucide-react';
 
 const NODE_DATA = [
@@ -21,7 +16,7 @@ const NODE_DATA = [
         initialX: 100,
         initialY: 40,
         rows: [
-            { label: 'shape', val: '[B, seq_len]' },
+            { label: 'shape', val: '[B, seq_len]', isOutput: false, isGreen: false },
             { label: 'in', val: '[B, seq_len]', isOutput: true, isGreen: true },
         ]
     },
@@ -33,9 +28,9 @@ const NODE_DATA = [
         initialX: 620,
         initialY: 40,
         rows: [
-            { label: 'vocab', val: '32000' },
-            { label: 'dim', val: '768' },
-            { label: 'out', val: '[B, S, 768]', isOutput: true },
+            { label: 'vocab', val: '32000', isOutput: false, isGreen: false },
+            { label: 'dim', val: '768', isOutput: false, isGreen: false },
+            { label: 'out', val: '[B, S, 768]', isOutput: true, isGreen: false },
         ]
     },
     {
@@ -46,8 +41,8 @@ const NODE_DATA = [
         initialX: 100,
         initialY: 230,
         rows: [
-            { label: 'heads', val: '12' },
-            { label: 'type', val: 'sdpa' },
+            { label: 'heads', val: '12', isOutput: false, isGreen: false },
+            { label: 'type', val: 'sdpa', isOutput: false, isGreen: false },
             { label: 'out', val: '[B, S, 768]', isOutput: true, isGreen: true },
         ]
     },
@@ -59,8 +54,8 @@ const NODE_DATA = [
         initialX: 620,
         initialY: 230,
         rows: [
-            { label: 'eps', val: '1e-6' },
-            { label: 'out', val: '[B, S, 768]', isOutput: true },
+            { label: 'eps', val: '1e-6', isOutput: false, isGreen: false },
+            { label: 'out', val: '[B, S, 768]', isOutput: true, isGreen: false },
         ]
     },
     {
@@ -71,7 +66,7 @@ const NODE_DATA = [
         initialX: 100,
         initialY: 420,
         rows: [
-            { label: 'dim', val: '3072' },
+            { label: 'dim', val: '3072', isOutput: false, isGreen: false },
             { label: 'out', val: '[B, S, 3072]', isOutput: true, isGreen: true },
         ]
     },
@@ -83,8 +78,8 @@ const NODE_DATA = [
         initialX: 620,
         initialY: 420,
         rows: [
-            { label: 'vocab', val: '32k' },
-            { label: 'out', val: '[B, S, V]', isOutput: true },
+            { label: 'vocab', val: '32k', isOutput: false, isGreen: false },
+            { label: 'out', val: '[B, S, V]', isOutput: true, isGreen: false },
         ]
     },
 ];

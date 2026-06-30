@@ -1,7 +1,6 @@
 import { Target, Info } from 'lucide-react';
 import { AnalysisResult, CanvasNode, Connection, PerLayerBreakdownRow } from '@/types/architecture.ts';
 import {
-  BarChart,
   Bar,
   CartesianGrid,
   Cell,

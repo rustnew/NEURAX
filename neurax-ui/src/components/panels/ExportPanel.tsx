@@ -438,9 +438,9 @@ export function ExportPanel({
                   disabled={isExportingOnnx}
                 >
                   {isExportingOnnx ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    <Loader2 key="loader" className="w-4 h-4 mr-2 animate-spin" />
                   ) : (
-                    <Download className="w-4 h-4 mr-2" />
+                    <Download key="download" className="w-4 h-4 mr-2" />
                   )}
                   {isExportingOnnx ? 'Exporting...' : `Export ${EXPORT_OPTIONS.find(f => f.id === selectedFormat)?.name}`}
                 </Button>

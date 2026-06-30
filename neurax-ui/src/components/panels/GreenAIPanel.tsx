@@ -1,10 +1,8 @@
 import { useState, useMemo } from 'react';
 import { 
   Leaf, 
-  Zap, 
   Clock, 
   Database, 
-  TrendingUp,
   Download,
   Info,
   Check,

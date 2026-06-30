@@ -306,6 +306,10 @@ export type LayerType =
   | 'graph_readout'
   // RNN
   | 'rnn_cell'
+  | 'lstm'
+  | 'gru'
+  | 'bilstm'
+  | 'bigru'
   | 'lstm_cell'
   | 'gru_cell'
   // RNN/LSTM/GRU — Fundamental Cells
@@ -598,7 +602,7 @@ export type ActivationFunction =
   | 'solu'
   | 'solu_ln';
 
-export type ParameterValue = number | string | boolean | object | any[];
+export type ParameterValue = number | string | boolean | object | any[] | null | undefined;
 
 export interface LayerConfig {
   id: string;
@@ -606,7 +610,7 @@ export interface LayerConfig {
   name: string;
   icon: string;
   description: string;
-  defaultParams: Record<string, ParameterValue>;
+  defaultParams: Record<string, unknown>;
   /** Which params support activation dropdowns */
   hasActivation?: boolean;
   /** Tooltip for the block */
@@ -615,6 +619,11 @@ export interface LayerConfig {
   category?: string;
   /** Custom color for the block (e.g. hsl, hex) */
   color?: string;
+}
+
+// Helper to create LayerConfig with proper type inference
+export function asLayerConfig(cfg: Omit<LayerConfig, 'defaultParams'> & { defaultParams: Record<string, unknown> }): LayerConfig {
+  return cfg as LayerConfig;
 }
 
 export interface CanvasNode {

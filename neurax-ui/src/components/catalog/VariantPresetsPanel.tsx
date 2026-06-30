@@ -38,7 +38,7 @@ import {
 } from '@/components/ui/dialog.tsx';
 import { usePlan } from '@/contexts/PlanContext.tsx';
 import { LockedFeature } from '@/components/ui/locked-feature.tsx';
-import { CanvasNode, Connection } from '@/types/architecture.ts';
+import { CanvasNode, Connection, ParameterValue } from '@/types/architecture.ts';
 import { getPluginLayers } from '@/plugins/registry.ts';
 
 interface VariantPresetsPanelProps {
@@ -122,7 +122,7 @@ export function VariantPresetsPanel({
 
       return {
         ...node,
-        params,
+        params: params as Record<string, ParameterValue>,
       };
     });
   }, [family]);
@@ -312,9 +312,9 @@ export function VariantPresetsPanel({
                 }}
               >
                 {isLoading ? (
-                  <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                  <Loader2 key="loader" className="w-3 h-3 mr-1 animate-spin" />
                 ) : (
-                  <Sparkles className="w-3 h-3 mr-1" />
+                  <Sparkles key="sparkles" className="w-3 h-3 mr-1" />
                 )}
                 {isActive ? 'Reload' : 'Load Template'}
               </Button>

@@ -96,7 +96,7 @@ describe('neuraxApi', () => {
       const fetchSpy = mockFetch({ report: mockReport });
 
       const topology = { model: { name: 'test', type: 'transformer' } };
-      const result = await analyze({ topology });
+      await analyze({ topology });
 
       expect(fetchSpy).toHaveBeenCalledTimes(1);
       const [url, options] = fetchSpy.mock.calls[0] as [string, RequestInit];
@@ -113,9 +113,8 @@ describe('neuraxApi', () => {
       const mockReport = { latency_ms: 12.5, throughput_tokens_per_s: 80000 };
       const fetchSpy = mockFetch({ report: mockReport });
 
-      const result = await simulateInference({
-        topology: { model: { name: 'test' } },
-        params: { batch_size: 1, seq_len: 128, precision: 'fp16', hardware: 'A100-SXM', gpu_count: 1 },
+      await simulateInference({
+        params: { temperature: 1.0, top_k: 50, top_p: 0.9, beam_width: 1, repetition_penalty: 1.0, presence_penalty: 0.0, frequency_penalty: 0.0, prompt_length: 128, max_output_tokens: 256, sliding_window: false, kv_cache_reuse: true, architecture_family: 'transformer', attention_type: 'mha', quantization_level: 'fp16', long_context_simulation: false, adversarial_prompt: false, high_temperature_mode: false, low_temperature_mode: false },
       });
 
       expect(fetchSpy).toHaveBeenCalledTimes(1);
@@ -136,7 +135,7 @@ describe('neuraxApi', () => {
       };
       const fetchSpy = mockFetch(mockResults);
 
-      const result = await compareAnalyses({
+      await compareAnalyses({
         topology: { model: { name: 'test' } },
         configs: [{ hardware: 'A100-SXM', precision: 'fp16', batch_size: 64 }],
       });
@@ -177,7 +176,7 @@ describe('neuraxApi', () => {
     it('should call GET /projects', async () => {
       const fetchSpy = mockFetch({ projects: [] });
 
-      const result = await listProjects();
+      await listProjects();
 
       expect(fetchSpy).toHaveBeenCalledTimes(1);
       expect((fetchSpy.mock.calls[0][0] as string)).toContain('/projects');
@@ -189,7 +188,7 @@ describe('neuraxApi', () => {
       const mockProject = { id: 'uuid', name: 'Test Project' };
       const fetchSpy = mockFetch({ project: mockProject });
 
-      await createProject({ name: 'Test Project', architecture: 'transformer' });
+      await createProject({ name: 'Test Project', architecture: 'transformer', canvas: {} });
 
       expect(fetchSpy).toHaveBeenCalledTimes(1);
       const [url, options] = fetchSpy.mock.calls[0] as [string, RequestInit];
@@ -237,7 +236,7 @@ describe('neuraxApi', () => {
       };
       const fetchSpy = mockFetch(mockCompliance);
 
-      const result = await getComplianceConfig();
+      await getComplianceConfig();
 
       expect(fetchSpy).toHaveBeenCalledTimes(1);
       expect((fetchSpy.mock.calls[0][0] as string)).toContain('/compliance/config');

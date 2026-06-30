@@ -104,7 +104,7 @@ export function TopNav({
           onChange={onArchitectureChange}
         />
 
-        <Popover>
+        <Popover modal={false}>
           <PopoverTrigger asChild>
             <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
               <BookOpen className="w-4 h-4 mr-1.5" />
@@ -112,8 +112,9 @@ export function TopNav({
               <ChevronDown className="w-3.5 h-3.5 ml-1" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-80 p-0 max-h-[500px]" align="start">
+          <PopoverContent className="w-80 p-0 max-h-[500px]" align="start" onOpenAutoFocus={(e) => e.preventDefault()}>
             <VariantPresetsPanel
+              key={selectedArchitecture}
               family={selectedArchitecture}
               onLoadPreset={(preset) => onLoadPreset?.(preset)}
               onClonePreset={(preset) => {

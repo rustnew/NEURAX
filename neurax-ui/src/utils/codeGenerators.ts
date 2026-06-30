@@ -184,8 +184,8 @@ class ${modelName}(nn.Module):
 
 // ==================== ONNX Generator ====================
 export function generateONNXExportCode(
-  nodes: CanvasNode[],
-  connections: Connection[],
+  _nodes: CanvasNode[],
+  _connections: Connection[],
   options: CodeGeneratorOptions = {}
 ): GeneratedCode {
   const { modelName = 'GeneratedModel' } = options;
@@ -367,7 +367,7 @@ ${forwardBody}    }
 // ==================== Triton Kernels Generator ====================
 export function generateTritonCode(
   nodes: CanvasNode[],
-  connections: Connection[],
+  _connections: Connection[],
   options: CodeGeneratorOptions = {}
 ): GeneratedCode {
   const { modelName = 'GeneratedModel' } = options;

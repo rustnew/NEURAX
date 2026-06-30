@@ -81,7 +81,7 @@ export function useMultiSelect(): UseMultiSelectReturn {
     });
   }, []);
 
-  const endBoxSelection = useCallback((nodes: CanvasNode[], offset: { x: number; y: number }, zoom: number) => {
+  const endBoxSelection = useCallback((nodes: CanvasNode[], _offset: { x: number; y: number }, _zoom: number) => {
     if (!selectionBox) {
       setIsSelecting(false);
       selectionStartRef.current = null;

@@ -1,5 +1,4 @@
 import { CanvasNode as CanvasNodeType, Connection } from '@/types/architecture.ts';
-import { cn } from '@/lib/utils.ts';
 
 interface CanvasMinimapProps {
   nodes: CanvasNodeType[];

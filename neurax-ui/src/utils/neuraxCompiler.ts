@@ -955,7 +955,7 @@ function makeTensorName(node: CanvasNode): string {
 
 const SKIP_KEYS = new Set(['shape']);
 
-function extractParams(node: CanvasNode, blockType: string): Record<string, unknown> {
+function extractParams(node: CanvasNode, _blockType: string): Record<string, unknown> {
   const raw: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(node.params)) {

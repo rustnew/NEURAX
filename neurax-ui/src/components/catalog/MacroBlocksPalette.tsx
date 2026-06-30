@@ -19,7 +19,6 @@ import { ArchitectureFamily } from '@/types/plugins.ts';
 import { MacroBlock } from '@/types/catalog.ts';
 import { getMacroBlocksForFamily } from '@/data/architectureCatalog.ts';
 import { Badge } from '@/components/ui/badge.tsx';
-import { cn } from '@/lib/utils.ts';
 
 const iconMap: Record<string, LucideIcon> = {
   Box, Layers, Network, GitBranch, Wand2, Workflow, MessageSquare, Repeat, Route, Shield, Zap,

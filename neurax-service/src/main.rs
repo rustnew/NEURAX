@@ -3,6 +3,7 @@ use actix_web::{
     http::{header, StatusCode},
     middleware, web, App, HttpRequest, HttpResponse, HttpServer, Responder,
 };
+use actix_web::http::header::HeaderName;
 use base64::Engine;
 use chrono::Datelike;
 use dashmap::DashMap;
@@ -17,6 +18,118 @@ use tokio::sync::broadcast;
 use tracing_subscriber::EnvFilter;
 
 mod presets;
+
+// ─── API Key Authentication ─────────────────────────────────────────
+
+/// An API key for programmatic access (used by the agent system)
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Hash, Eq, PartialEq)]
+pub struct ApiKeyInfo {
+    /// The API key itself (prefixed with "nrx_")
+    pub key: String,
+    /// User who owns this key
+    pub user_id: String,
+    /// Human-readable name/label
+    pub name: String,
+    /// When the key was created
+    pub created_at: String,
+    /// Last time the key was used
+    pub last_used_at: Option<String>,
+    /// Whether the key is active
+    pub active: bool,
+    /// Scopes: "analyze", "inference", "compare", "export", "projects", "agent"
+    pub scopes: Vec<String>,
+}
+
+fn generate_api_key() -> String {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    let random_part: String = (0..40)
+        .map(|_| format!("{:02x}", rng.gen::<u8>()))
+        .collect();
+    format!("nrx_{}", random_part)
+}
+
+fn api_key_from_req(req: &HttpRequest) -> Option<String> {
+    // Check X-API-Key header first
+    if let Some(key) = req.headers().get("X-API-Key").and_then(|v| v.to_str().ok()) {
+        let key = key.trim();
+        if key.starts_with("nrx_") && !key.is_empty() {
+            return Some(key.to_string());
+        }
+    }
+    // Check Authorization: Bearer nrx_...
+    if let Some(auth) = req.headers().get(header::AUTHORIZATION).and_then(|v| v.to_str().ok()) {
+        if let Some(token) = auth.strip_prefix("Bearer ") {
+            let token = token.trim();
+            if token.starts_with("nrx_") {
+                return Some(token.to_string());
+            }
+        }
+    }
+    None
+}
+
+/// Authenticate via API key. Returns the user_id if valid.
+async fn auth_api_key(req: &HttpRequest, state: &AppState) -> Result<String, HttpResponse> {
+    let key = api_key_from_req(req).ok_or_else(|| {
+        HttpResponse::build(StatusCode::UNAUTHORIZED)
+            .body("Missing API key. Use X-API-Key header or Authorization: Bearer nrx_...")
+    })?;
+
+    let api_key_info = state
+        .api_keys
+        .get(&key)
+        .ok_or_else(|| HttpResponse::build(StatusCode::UNAUTHORIZED).body("Invalid API key"))?;
+
+    if !api_key_info.value().active {
+        return Err(HttpResponse::build(StatusCode::FORBIDDEN).body("API key has been revoked"));
+    }
+
+    let user_id = api_key_info.value().user_id.clone();
+    drop(api_key_info);
+
+    // Update last_used_at
+    if let Some(mut entry) = state.api_keys.get_mut(&key) {
+        entry.value_mut().last_used_at = Some(chrono::Utc::now().to_rfc3339());
+    }
+
+    Ok(user_id)
+}
+
+/// Authenticate via either API key or Supabase JWT. Returns user_id.
+async fn auth_any(req: &HttpRequest, state: &AppState) -> Result<String, HttpResponse> {
+    // Try API key first
+    if api_key_from_req(req).is_some() {
+        return auth_api_key(req, state).await;
+    }
+    // Fall back to Supabase JWT
+    let user = get_supabase_user(req).await?;
+    Ok(user.id)
+}
+
+/// Check if an API key has the required scope
+fn check_api_key_scope(req: &HttpRequest, state: &AppState, required_scope: &str) -> Result<(), HttpResponse> {
+    let key = api_key_from_req(req).ok_or_else(|| {
+        HttpResponse::build(StatusCode::UNAUTHORIZED).body("Missing API key")
+    })?;
+
+    let api_key_info = state.api_keys.get(&key).ok_or_else(|| {
+        HttpResponse::build(StatusCode::UNAUTHORIZED).body("Invalid API key")
+    })?;
+
+    if !api_key_info.value().active {
+        return Err(HttpResponse::build(StatusCode::FORBIDDEN).body("API key has been revoked"));
+    }
+
+    let scopes = &api_key_info.value().scopes;
+    // "agent" scope grants access to all agent endpoints
+    if !scopes.contains(&required_scope.to_string()) && !scopes.contains(&"agent".to_string()) && !scopes.contains(&"all".to_string()) {
+        return Err(HttpResponse::build(StatusCode::FORBIDDEN)
+            .body(format!("API key lacks '{}' scope", required_scope)));
+    }
+
+    Ok(())
+}
 
 // ─── Project Storage ─────────────────────────────────────────────────
 
@@ -249,6 +362,12 @@ pub struct AppState {
     pub projects: Arc<DashMap<ProjectKey, Project>>,
     /// Credit tracking per user
     pub credits: Arc<DashMap<String, CreditInfo>>,
+    /// API keys for programmatic access (keyed by the API key string)
+    pub api_keys: Arc<DashMap<String, ApiKeyInfo>>,
+    /// Analysis results cache keyed by user_id (for agent to read back)
+    pub user_analyses: Arc<DashMap<String, serde_json::Value>>,
+    /// Inference results cache keyed by user_id (for agent to read back)
+    pub user_inferences: Arc<DashMap<String, serde_json::Value>>,
 }
 
 impl AppState {
@@ -259,6 +378,9 @@ impl AppState {
             results: Arc::new(DashMap::new()),
             projects: Arc::new(DashMap::new()),
             credits: Arc::new(DashMap::new()),
+            api_keys: Arc::new(DashMap::new()),
+            user_analyses: Arc::new(DashMap::new()),
+            user_inferences: Arc::new(DashMap::new()),
         }
     }
 }
@@ -2276,6 +2398,583 @@ async fn compliance_config() -> impl Responder {
     })
 }
 
+// ─── API Key Management ─────────────────────────────────────────────
+
+#[derive(Debug, serde::Deserialize)]
+struct CreateApiKeyRequest {
+    name: String,
+    #[serde(default)]
+    scopes: Vec<String>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct CreateApiKeyResponse {
+    api_key: ApiKeyInfo,
+    /// The raw key is only shown once at creation
+    key: String,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct ListApiKeysResponse {
+    keys: Vec<ApiKeyInfo>,
+}
+
+async fn api_keys_create(req: HttpRequest, state: web::Data<AppState>, body: web::Json<CreateApiKeyRequest>) -> impl Responder {
+    let user = match get_supabase_user(&req).await {
+        Ok(u) => u,
+        Err(resp) => return resp,
+    };
+
+    // Validate scopes
+    let valid_scopes = ["analyze", "inference", "compare", "export", "projects", "agent", "all"];
+    let scopes: Vec<String> = body.scopes.iter()
+        .filter(|s| valid_scopes.contains(&s.as_str()))
+        .cloned()
+        .collect();
+    let scopes = if scopes.is_empty() { vec!["all".to_string()] } else { scopes };
+
+    // Limit to 10 API keys per user
+    let user_key_count = state.api_keys.iter().filter(|e| e.value().user_id == user.id).count();
+    if user_key_count >= 10 {
+        return HttpResponse::build(StatusCode::BAD_REQUEST)
+            .body("Maximum 10 API keys per user");
+    }
+
+    let raw_key = generate_api_key();
+    let now = chrono::Utc::now().to_rfc3339();
+
+    let api_key_info = ApiKeyInfo {
+        key: raw_key.clone(),
+        user_id: user.id.clone(),
+        name: body.name.clone(),
+        created_at: now,
+        last_used_at: None,
+        active: true,
+        scopes: scopes.clone(),
+    };
+
+    state.api_keys.insert(raw_key.clone(), api_key_info.clone());
+
+    HttpResponse::Ok().json(CreateApiKeyResponse {
+        api_key: api_key_info,
+        key: raw_key,
+    })
+}
+
+async fn api_keys_list(req: HttpRequest, state: web::Data<AppState>) -> impl Responder {
+    let user = match get_supabase_user(&req).await {
+        Ok(u) => u,
+        Err(resp) => return resp,
+    };
+
+    let keys: Vec<ApiKeyInfo> = state
+        .api_keys
+        .iter()
+        .filter(|e| e.value().user_id == user.id)
+        .map(|e| e.value().clone())
+        .collect();
+
+    HttpResponse::Ok().json(ListApiKeysResponse { keys })
+}
+
+async fn api_keys_revoke(req: HttpRequest, state: web::Data<AppState>, path: web::Path<String>) -> impl Responder {
+    let user = match get_supabase_user(&req).await {
+        Ok(u) => u,
+        Err(resp) => return resp,
+    };
+
+    let key_id = path.into_inner();
+
+    // Find the key by matching user_id (key_id could be the key itself or a short identifier)
+    let mut found = false;
+    for mut entry in state.api_keys.iter_mut() {
+        if entry.value().user_id == user.id && (entry.key() == &key_id || entry.value().key == key_id) {
+            entry.value_mut().active = false;
+            found = true;
+            break;
+        }
+    }
+
+    if found {
+        HttpResponse::Ok().json(serde_json::json!({"revoked": true}))
+    } else {
+        HttpResponse::NotFound().body("API key not found")
+    }
+}
+
+async fn api_keys_delete(req: HttpRequest, state: web::Data<AppState>, path: web::Path<String>) -> impl Responder {
+    let user = match get_supabase_user(&req).await {
+        Ok(u) => u,
+        Err(resp) => return resp,
+    };
+
+    let key_id = path.into_inner();
+
+    // Find and remove the key
+    let mut found_key: Option<String> = None;
+    for entry in state.api_keys.iter() {
+        if entry.value().user_id == user.id && (entry.key() == &key_id || entry.value().key == key_id) {
+            found_key = Some(entry.key().clone());
+            break;
+        }
+    }
+
+    match found_key {
+        Some(k) => {
+            state.api_keys.remove(&k);
+            HttpResponse::Ok().json(serde_json::json!({"deleted": true}))
+        }
+        None => HttpResponse::NotFound().body("API key not found"),
+    }
+}
+
+// ─── Agent Control Endpoints ─────────────────────────────────────────
+// These endpoints accept API key auth and provide programmatic access
+// for the agent system to control the entire frontend.
+
+/// POST /agent/analyze — Run analysis and return full report (blocking)
+async fn agent_analyze(req: HttpRequest, state: web::Data<AppState>, body: web::Json<AnalyzeRequest>) -> impl Responder {
+    // Auth: API key or JWT
+    let user_id = match auth_any(&req, &state).await {
+        Ok(id) => id,
+        Err(resp) => return resp,
+    };
+    match check_api_key_scope(&req, &state, "analyze") {
+        Ok(_) => {},
+        Err(resp) => return resp,
+    };
+
+    let input = match serde_json::to_string(&body.topology) {
+        Ok(v) => v,
+        Err(e) => return HttpResponse::build(StatusCode::BAD_REQUEST).body(e.to_string()),
+    };
+
+    let config = match neurax_parser::parse_model_config(&input) {
+        Ok(c) => c,
+        Err(e) => return HttpResponse::build(StatusCode::BAD_REQUEST).body(e.to_string()),
+    };
+
+    let analysis_result = match web::block(move || neurax_core::run_analysis(config)).await {
+        Ok(Ok(result)) => result,
+        Ok(Err(e)) => {
+            tracing::error!("Analysis failed: {}", e);
+            return HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).body(e.to_string());
+        }
+        Err(_) => return HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).body("Analysis task failed"),
+    };
+
+    // Cache the result for the agent to read back
+    let report_json = analysis_result.to_json().unwrap_or_default();
+    state.user_analyses.insert(user_id, serde_json::from_str(&report_json).unwrap_or(serde_json::Value::Null));
+
+    HttpResponse::Ok().body(report_json)
+}
+
+/// POST /agent/inference — Run inference simulation and return full report
+async fn agent_inference(req: HttpRequest, state: web::Data<AppState>, body: web::Json<serde_json::Value>) -> impl Responder {
+    let user_id = match auth_any(&req, &state).await {
+        Ok(id) => id,
+        Err(resp) => return resp,
+    };
+    match check_api_key_scope(&req, &state, "inference") {
+        Ok(_) => {},
+        Err(resp) => return resp,
+    };
+
+    let topology = match body.get("topology") {
+        Some(t) => t.clone(),
+        None => return HttpResponse::build(StatusCode::BAD_REQUEST).body("Missing topology"),
+    };
+
+    let input = match serde_json::to_string(&topology) {
+        Ok(v) => v,
+        Err(e) => return HttpResponse::build(StatusCode::BAD_REQUEST).body(e.to_string()),
+    };
+
+    let config = match neurax_parser::parse_model_config(&input) {
+        Ok(c) => c,
+        Err(e) => return HttpResponse::build(StatusCode::BAD_REQUEST).body(e.to_string()),
+    };
+
+    // Extract inference params from request or use defaults
+    let params = neurax_ir::inference::InferenceParams::default();
+    let inference_report = neurax_ir::inference::InferencePass::run(&params);
+
+    // Also run analysis to get the full report
+    let analysis_result = match web::block(move || neurax_core::run_analysis(config)).await {
+        Ok(Ok(result)) => result,
+        Ok(Err(e)) => {
+            tracing::error!("Analysis failed: {}", e);
+            return HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).body(e.to_string());
+        }
+        Err(_) => return HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).body("Analysis task failed"),
+    };
+
+    let report_json = analysis_result.to_json().unwrap_or_default();
+    state.user_inferences.insert(user_id, serde_json::from_str(&report_json).unwrap_or(serde_json::Value::Null));
+
+    HttpResponse::Ok().json(serde_json::json!({
+        "report": serde_json::from_str::<serde_json::Value>(&report_json).unwrap_or(serde_json::Value::Null),
+        "inference": inference_report,
+    }))
+}
+
+/// POST /agent/compare — Compare multiple hardware configs
+/// Delegates to analyze_compare after API key auth check
+async fn agent_compare(http_req: HttpRequest, body: web::Json<CompareRequest>) -> impl Responder {
+    // Auth is handled by analyze_compare internally
+    analyze_compare(http_req, body).await
+}
+
+/// GET /agent/audit — Audit a model: run analysis + inference + compliance check
+async fn agent_audit(req: HttpRequest, state: web::Data<AppState>, body: web::Json<serde_json::Value>) -> impl Responder {
+    let user_id = match auth_any(&req, &state).await {
+        Ok(id) => id,
+        Err(resp) => return resp,
+    };
+    match check_api_key_scope(&req, &state, "agent") {
+        Ok(_) => {},
+        Err(resp) => return resp,
+    };
+
+    let topology = match body.get("topology") {
+        Some(t) => t.clone(),
+        None => return HttpResponse::build(StatusCode::BAD_REQUEST).body("Missing topology"),
+    };
+
+    let input = match serde_json::to_string(&topology) {
+        Ok(v) => v,
+        Err(e) => return HttpResponse::build(StatusCode::BAD_REQUEST).body(e.to_string()),
+    };
+
+    let config = match neurax_parser::parse_model_config(&input) {
+        Ok(c) => c,
+        Err(e) => return HttpResponse::build(StatusCode::BAD_REQUEST).body(e.to_string()),
+    };
+
+    // Run analysis
+    let analysis_result = match web::block(move || neurax_core::run_analysis(config)).await {
+        Ok(Ok(result)) => result,
+        Ok(Err(e)) => {
+            tracing::error!("Analysis failed: {}", e);
+            return HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).body(e.to_string());
+        }
+        Err(_) => return HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).body("Analysis task failed"),
+    };
+
+    // Run inference
+    let params = neurax_ir::inference::InferenceParams::default();
+    let inference_report = neurax_ir::inference::InferencePass::run(&params);
+
+    // Get compliance config
+    let compliance = get_compliance_data();
+
+    // Serialize report for JSON extraction
+    let report_json_str = analysis_result.to_json().unwrap_or_else(|_| "{}".to_string());
+    let report_val: serde_json::Value = serde_json::from_str(&report_json_str).unwrap_or(serde_json::Value::Null);
+
+    // Cache results
+    state.user_analyses.insert(user_id.clone(), report_val.clone());
+    state.user_inferences.insert(user_id, serde_json::to_value(&inference_report).unwrap_or(serde_json::Value::Null));
+
+    // Build audit summary
+    let mut audit_issues: Vec<serde_json::Value> = vec![];
+    let mut audit_score: f64 = 100.0;
+
+    // Check diagnostics from report
+    if let Some(diagnostics) = report_val.get("diagnostics").cloned() {
+        if let Some(diags) = diagnostics.as_array() {
+            for d in diags {
+                let severity = d.get("severity").and_then(|s| s.as_str()).unwrap_or("info");
+                let msg = d.get("message").and_then(|m| m.as_str()).unwrap_or("");
+                let code = d.get("code").and_then(|c| c.as_str()).unwrap_or("");
+                audit_issues.push(serde_json::json!({
+                    "category": "diagnostic",
+                    "severity": severity,
+                    "code": code,
+                    "message": msg,
+                }));
+                if severity == "error" {
+                    audit_score -= 10.0;
+                } else if severity == "warning" {
+                    audit_score -= 3.0;
+                }
+            }
+        }
+    }
+
+    // Check compliance thresholds
+    let total_params = report_val.get("architecture")
+        .and_then(|a| a.get("total_parameters"))
+        .and_then(|p| p.as_f64())
+        .unwrap_or(0.0);
+    let total_flops = report_val.get("compute")
+        .and_then(|c| c.get("total_flops_forward"))
+        .and_then(|f| f.as_f64())
+        .unwrap_or(0.0);
+
+    if total_flops / 1e9 > compliance.thresholds.high_risk_gflops {
+        audit_issues.push(serde_json::json!({
+            "category": "compliance",
+            "severity": "warning",
+            "code": "HIGH_RISK_GFLOPS",
+            "message": format!("Model exceeds {:.0} GFLOPs threshold (EU AI Act)", compliance.thresholds.high_risk_gflops),
+        }));
+        audit_score -= 5.0;
+    }
+
+    // Check inference stability
+    let stability_score = inference_report.stability_index.score;
+    if stability_score < 50.0 {
+        audit_issues.push(serde_json::json!({
+            "category": "inference",
+            "severity": "warning",
+            "code": "LOW_STABILITY",
+            "message": format!("Inference stability index is {:.1}/100 — model may produce inconsistent outputs", stability_score * 100.0),
+        }));
+        audit_score -= 10.0;
+    }
+
+    audit_score = audit_score.max(0.0);
+
+    HttpResponse::Ok().json(serde_json::json!({
+        "audit_score": audit_score,
+        "audit_grade": match audit_score {
+            s if s >= 90.0 => "A",
+            s if s >= 75.0 => "B",
+            s if s >= 60.0 => "C",
+            s if s >= 40.0 => "D",
+            _ => "F",
+        },
+        "issues": audit_issues,
+        "report": report_val,
+        "inference": inference_report,
+        "compliance": compliance,
+        "total_parameters": total_params,
+        "total_flops_forward": total_flops,
+    }))
+}
+
+/// GET /agent/carbon — Get carbon/cost analysis for a model
+async fn agent_carbon(req: HttpRequest, state: web::Data<AppState>, body: web::Json<serde_json::Value>) -> impl Responder {
+    let _user_id = match auth_any(&req, &state).await {
+        Ok(id) => id,
+        Err(resp) => return resp,
+    };
+    match check_api_key_scope(&req, &state, "agent") {
+        Ok(_) => {},
+        Err(resp) => return resp,
+    };
+
+    let topology = match body.get("topology") {
+        Some(t) => t.clone(),
+        None => return HttpResponse::build(StatusCode::BAD_REQUEST).body("Missing topology"),
+    };
+
+    let input = match serde_json::to_string(&topology) {
+        Ok(v) => v,
+        Err(e) => return HttpResponse::build(StatusCode::BAD_REQUEST).body(e.to_string()),
+    };
+
+    let config = match neurax_parser::parse_model_config(&input) {
+        Ok(c) => c,
+        Err(e) => return HttpResponse::build(StatusCode::BAD_REQUEST).body(e.to_string()),
+    };
+
+    let analysis_result = match web::block(move || neurax_core::run_analysis(config)).await {
+        Ok(Ok(result)) => result,
+        Ok(Err(e)) => {
+            tracing::error!("Analysis failed: {}", e);
+            return HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).body(e.to_string());
+        }
+        Err(_) => return HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).body("Analysis task failed"),
+    };
+
+    // Extract carbon/cost metrics from report
+    let report_json_str = analysis_result.to_json().unwrap_or_else(|_| "{}".to_string());
+    let report_val: serde_json::Value = serde_json::from_str(&report_json_str).unwrap_or(serde_json::Value::Null);
+    let cost = report_val.get("cost").cloned().unwrap_or(serde_json::Value::Null);
+    let training_hours = cost.get("training_hours").and_then(|v| v.as_f64()).unwrap_or(0.0);
+    let training_cost_usd = cost.get("training_cost_usd").and_then(|v| v.as_f64()).unwrap_or(0.0);
+    let co2_tonnes = cost.get("co2_tonnes").and_then(|v| v.as_f64()).unwrap_or(0.0);
+    let energy_kwh = cost.get("energy_kwh").and_then(|v| v.as_f64()).unwrap_or(0.0);
+
+    let compliance = get_compliance_data();
+
+    HttpResponse::Ok().json(serde_json::json!({
+        "carbon": {
+            "co2_tonnes": co2_tonnes,
+            "energy_kwh": energy_kwh,
+            "training_hours": training_hours,
+            "training_cost_usd": training_cost_usd,
+        },
+        "compliance": {
+            "exceeds_carbon_threshold": co2_tonnes > compliance.thresholds.carbon_report_tonnes,
+            "carbon_report_tonnes": compliance.thresholds.carbon_report_tonnes,
+            "exceeds_cost_threshold": training_cost_usd > compliance.thresholds.cost_review_usd,
+            "cost_review_usd": compliance.thresholds.cost_review_usd,
+            "exceeds_gflops_threshold": false,
+            "high_risk_gflops": compliance.thresholds.high_risk_gflops,
+        },
+        "recommendations": vec![
+            if co2_tonnes > compliance.thresholds.carbon_report_tonnes {
+                format!("⚠️ CO₂ emissions ({:.2}t) exceed CSRD reporting threshold ({:.1}t)", co2_tonnes, compliance.thresholds.carbon_report_tonnes)
+            } else {
+                format!("✅ CO₂ emissions ({:.2}t) below CSRD threshold ({:.1}t)", co2_tonnes, compliance.thresholds.carbon_report_tonnes)
+            },
+            if training_cost_usd > compliance.thresholds.cost_review_usd {
+                format!("⚠️ Training cost (${:.0}) exceeds review threshold (${:.0})", training_cost_usd, compliance.thresholds.cost_review_usd)
+            } else {
+                format!("✅ Training cost (${:.0}) within budget (${:.0})", training_cost_usd, compliance.thresholds.cost_review_usd)
+            },
+        ],
+        "optimization_tips": vec![
+            "Consider FP8 or INT8 quantization to reduce inference cost by 2-4x".to_string(),
+            "Use gradient checkpointing to reduce peak memory by 30-60%".to_string(),
+            "Consider tensor parallelism for models > 13B parameters".to_string(),
+        ],
+    }))
+}
+
+/// GET /agent/compliance — Get compliance configuration
+async fn agent_compliance(req: HttpRequest, state: web::Data<AppState>) -> impl Responder {
+    let _user_id = match auth_any(&req, &state).await {
+        Ok(id) => id,
+        Err(resp) => return resp,
+    };
+    match check_api_key_scope(&req, &state, "agent") {
+        Ok(_) => {},
+        Err(resp) => return resp,
+    };
+
+    let compliance = get_compliance_data();
+    HttpResponse::Ok().json(compliance)
+}
+
+/// GET /agent/results — Get cached analysis results for the authenticated user
+async fn agent_results(req: HttpRequest, state: web::Data<AppState>) -> impl Responder {
+    let user_id = match auth_any(&req, &state).await {
+        Ok(id) => id,
+        Err(resp) => return resp,
+    };
+    match check_api_key_scope(&req, &state, "analyze") {
+        Ok(_) => {},
+        Err(resp) => return resp,
+    };
+
+    let analysis = state.user_analyses.get(&user_id).map(|e| e.value().clone()).unwrap_or(serde_json::Value::Null);
+    let inference = state.user_inferences.get(&user_id).map(|e| e.value().clone()).unwrap_or(serde_json::Value::Null);
+
+    HttpResponse::Ok().json(serde_json::json!({
+        "analysis": analysis,
+        "inference": inference,
+    }))
+}
+
+/// GET /agent/projects — List user's projects (for agent to load saved models)
+async fn agent_projects(req: HttpRequest, state: web::Data<AppState>) -> impl Responder {
+    let user_id = match auth_any(&req, &state).await {
+        Ok(id) => id,
+        Err(resp) => return resp,
+    };
+    match check_api_key_scope(&req, &state, "projects") {
+        Ok(_) => {},
+        Err(resp) => return resp,
+    };
+
+    let projects: Vec<Project> = state
+        .projects
+        .iter()
+        .filter(|e| e.value().user_id == user_id)
+        .map(|e| e.value().clone())
+        .collect();
+
+    HttpResponse::Ok().json(serde_json::json!({
+        "projects": projects,
+    }))
+}
+
+/// Helper to get compliance data
+fn get_compliance_data() -> ComplianceConfig {
+    let regulations = vec![
+        ComplianceRegulation {
+            name: "EU AI Act Phase 1".to_string(),
+            year: 2027,
+            limit: Some(300.0),
+            unit: Some("GFLOPs/request".to_string()),
+            status: "upcoming".to_string(),
+            description: "General-purpose AI models trained with >10²⁵ FLOPs must comply with transparency and safety obligations.".to_string(),
+            region: "EU".to_string(),
+        },
+        ComplianceRegulation {
+            name: "EU AI Act Phase 2".to_string(),
+            year: 2028,
+            limit: Some(150.0),
+            unit: Some("GFLOPs/request".to_string()),
+            status: "upcoming".to_string(),
+            description: "Stricter limits for high-risk AI applications in critical infrastructure, law enforcement, and biometrics.".to_string(),
+            region: "EU".to_string(),
+        },
+        ComplianceRegulation {
+            name: "Carbon Reporting (CSRD)".to_string(),
+            year: 2026,
+            limit: None,
+            unit: None,
+            status: "active".to_string(),
+            description: "Corporate Sustainability Reporting Directive requires disclosure of energy consumption and CO₂ emissions for large companies.".to_string(),
+            region: "EU".to_string(),
+        },
+        ComplianceRegulation {
+            name: "Digital Services Act".to_string(),
+            year: 2024,
+            limit: None,
+            unit: None,
+            status: "active".to_string(),
+            description: "Very large online platforms must disclose AI system training compute and risk assessments.".to_string(),
+            region: "EU".to_string(),
+        },
+        ComplianceRegulation {
+            name: "US AI Executive Order".to_string(),
+            year: 2023,
+            limit: None,
+            unit: None,
+            status: "active".to_string(),
+            description: "Companies must report AI models trained with >10²⁵ FLOPs to the US government.".to_string(),
+            region: "US".to_string(),
+        },
+        ComplianceRegulation {
+            name: "Canada AIDA".to_string(),
+            year: 2025,
+            limit: None,
+            unit: None,
+            status: "proposed".to_string(),
+            description: "Artificial Intelligence and Data Act — high-impact AI systems must meet safety, transparency, and monitoring requirements.".to_string(),
+            region: "Canada".to_string(),
+        },
+    ];
+
+    let thresholds = ComplianceThresholds {
+        high_risk_gflops: 300.0,
+        carbon_report_tonnes: 50.0,
+        dsa_disclosure_flops: 1e25,
+        cost_review_usd: 100_000.0,
+    };
+
+    let recommendations = vec![
+        "Monitor EU AI Act Phase 1 compliance for models exceeding 300 GFLOPs/request".to_string(),
+        "Prepare CSRD carbon reporting for training runs exceeding 50 tonnes CO₂e/year".to_string(),
+        "Consider FP8 or INT8 quantization to reduce inference compute below regulatory thresholds".to_string(),
+        "Document all training compute for models above 10²⁵ FLOPs (US EO requirement)".to_string(),
+        "Implement energy monitoring for GPU clusters to track real-time carbon footprint".to_string(),
+    ];
+
+    ComplianceConfig {
+        regulations,
+        thresholds,
+        recommendations,
+    }
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     if dotenvy::dotenv().is_err() {
@@ -2309,7 +3008,7 @@ async fn main() -> std::io::Result<()> {
             .allowed_origin("http://127.0.0.1:8080")
             .allowed_origin("https://127.0.0.1:8080")
             .allowed_methods(vec!["GET", "POST", "PUT", "DELETE", "OPTIONS"])
-            .allowed_headers(vec![header::CONTENT_TYPE, header::AUTHORIZATION])
+            .allowed_headers(vec![header::CONTENT_TYPE, header::AUTHORIZATION, HeaderName::from_static("x-api-key")])
             .max_age(3600);
 
         App::new()
@@ -2354,6 +3053,20 @@ async fn main() -> std::io::Result<()> {
             .route("/projects/{id}", web::delete().to(projects_delete))
             .route("/credits", web::get().to(credits_get))
             .route("/compliance/config", web::get().to(compliance_config))
+            // ─── API Key Management ─────────────────────────────────
+            .route("/api-keys", web::post().to(api_keys_create))
+            .route("/api-keys", web::get().to(api_keys_list))
+            .route("/api-keys/{key_id}/revoke", web::post().to(api_keys_revoke))
+            .route("/api-keys/{key_id}", web::delete().to(api_keys_delete))
+            // ─── Agent Control Endpoints (API key auth) ─────────────
+            .route("/agent/analyze", web::post().to(agent_analyze))
+            .route("/agent/inference", web::post().to(agent_inference))
+            .route("/agent/compare", web::post().to(agent_compare))
+            .route("/agent/audit", web::post().to(agent_audit))
+            .route("/agent/carbon", web::post().to(agent_carbon))
+            .route("/agent/compliance", web::get().to(agent_compliance))
+            .route("/agent/results", web::get().to(agent_results))
+            .route("/agent/projects", web::get().to(agent_projects))
     })
     .bind(bind_addr)?
     .run()

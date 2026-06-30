@@ -165,7 +165,6 @@ function calculateFans(node: CanvasNode): { fanIn: number; fanOut: number } {
       break;
     case 'attention':
       const dim = Number(node.params.dim) || 512;
-      const heads = Number(node.params.heads) || 8;
       fanIn = dim;
       fanOut = dim;
       break;
@@ -553,7 +552,7 @@ function generateModelInit(layers: LayerWeights[]): string {
 }
 
 function generateForwardPass(layers: LayerWeights[]): string {
-  return layers.map((layer, idx) => {
+  return layers.map((layer) => {
     const varName = layer.layerName.toLowerCase().replace(/[^a-z0-9]/gi, '_');
     return `x = self.${varName}(x)`;
   }).join('\n            ');
@@ -571,7 +570,7 @@ export interface HyperparameterConfig {
 
 export function getRecommendedHyperparams(
   nodes: CanvasNode[],
-  connections: Connection[],
+  _connections: Connection[],
 ): HyperparameterConfig {
   const hasAttention = nodes.some(n => n.type === 'attention' || n.type === 'transformer');
   const hasConv = nodes.some(n => n.type === 'conv2d');

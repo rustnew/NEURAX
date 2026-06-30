@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUp, ChevronRight, Mic, MessageSquareText, Plus, Send, Sparkles, Wallet, X } from 'lucide-react';
+import { ArrowUp, ChevronRight, Mic, MessageSquareText, Plus, Sparkles, Wallet, X } from 'lucide-react';
 import { Button } from '@/components/ui/button.tsx';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover.tsx';
 import { Progress } from '@/components/ui/progress.tsx';
@@ -798,7 +798,7 @@ export default function AIChatDrawer({
                         { label: 'Balanced', value: 0.4, hint: 'Standard architectural patterns', desc: 'Adapts standard patterns for specific constraints.' },
                         { label: 'Creative', value: 0.7, hint: 'Novel & hybrid arrangements', desc: 'Proposes novel combinations and hybrid layer counts.' },
                         { label: 'Research', value: 1.0, hint: 'Experimental research grade', desc: 'Generates experimental, state-of-the-art architectures.' },
-                      ].map(({ label, value, hint, desc }) => (
+                      ].map(({ label, value, desc }) => (
                         <button
                           key={label}
                           onClick={() => setCreativity(value)}

@@ -1,4 +1,4 @@
-import { Users, MousePointer2, Eye, Lock } from 'lucide-react';
+import { Users, Eye, Lock } from 'lucide-react';
 import { usePlan } from '@/contexts/PlanContext.tsx';
 import { cn } from '@/lib/utils.ts';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar.tsx';

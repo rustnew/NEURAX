@@ -123,7 +123,7 @@ export function ExportAssistant({
   onClose,
   format,
   nodes,
-  connections,
+  connections: _connections,
   architectureName,
   selectedArchitecture,
 }: ExportAssistantProps) {

@@ -21,7 +21,7 @@ interface PricingPageProps {
   onSelectPlan?: (plan: PlanTier) => void;
 }
 
-const planIcons = {
+const planIcons: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
   essential: Zap,
   architect: Sparkles,
   elite: Crown,
@@ -29,7 +29,7 @@ const planIcons = {
 
 const PAID_PLANS: PlanTier[] = ['essential', 'architect', 'elite'];
 
-const PLAN_DETAILS: Record<Exclude<PlanTier, 'free'>, string[]> = {
+const PLAN_DETAILS: Record<string, string[]> = {
   essential: [
     'Transformer & CNN architectures',
     'Shape validation & VRAM estimation',
@@ -189,7 +189,7 @@ export function PricingPage({ isOpen, onClose, onSelectPlan }: PricingPageProps)
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-6 pt-2">
           {PAID_PLANS.map((planId) => {
             const plan = PLAN_CONFIGS[planId];
-            const Icon = planIcons[plan.id];
+            const Icon = planIcons[plan.id] || Zap;
             const price = isAnnual 
               ? Math.round(plan.price.annual / 12) 
               : plan.price.monthly;

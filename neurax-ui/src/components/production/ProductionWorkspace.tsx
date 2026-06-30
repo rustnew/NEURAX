@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import {
-  Leaf, Zap, Clock, Database, Cpu, Activity, Info,
+  Leaf, Clock, Database, Cpu, Activity, Info,
   Check, Copy, Download, Sparkles, ChevronDown, ChevronRight,
   Settings2, GraduationCap
 } from 'lucide-react';

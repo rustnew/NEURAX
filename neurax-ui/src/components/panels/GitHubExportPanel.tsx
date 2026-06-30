@@ -77,7 +77,7 @@ export function GitHubExportPanel({
   
   // GitHub connection state
   const [isConnected, setIsConnected] = useState(false);
-  const [isConnecting, setIsConnecting] = useState(false);
+  const [isConnecting] = useState(false);
   
   // Export configuration
   const [selectedRepo, setSelectedRepo] = useState<string>('');
@@ -91,7 +91,7 @@ export function GitHubExportPanel({
   const [selectedFormats, setSelectedFormats] = useState<ExportFormat[]>(['pytorch', 'json']);
   
   // Export state
-  const [isExporting, setIsExporting] = useState(false);
+  const [isExporting] = useState(false);
   const [exportResult, setExportResult] = useState<{ success: boolean; url?: string } | null>(null);
   
   // Preview state
@@ -155,33 +155,6 @@ export function GitHubExportPanel({
       variant: "destructive",
     });
     return;
-
-    setIsExporting(true);
-    
-    try {
-      // Generate all selected formats
-      const files: GeneratedCode[] = selectedFormats.map(format => 
-        generateCode(format, nodes, connections, { modelName })
-      );
-      
-      const repoName = repos.find(r => r.id === selectedRepo)?.fullName;
-      void repoName;
-      
-      toast({
-        title: "Export Not Available",
-        description: "GitHub export is disabled until GitHub integration is implemented.",
-        variant: "destructive",
-      });
-    } catch (error) {
-      setExportResult({ success: false });
-      toast({
-        title: "Export Failed",
-        description: "Failed to push files to GitHub. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsExporting(false);
-    }
   };
 
   const handleClose = () => {
@@ -242,12 +215,12 @@ export function GitHubExportPanel({
                 >
                   {isConnecting ? (
                     <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      <Loader2 key="loader" className="w-4 h-4 mr-2 animate-spin" />
                       Connecting...
                     </>
                   ) : (
                     <>
-                      <Github className="w-4 h-4 mr-2" />
+                      <Github key="github" className="w-4 h-4 mr-2" />
                       Connect
                     </>
                   )}
@@ -484,12 +457,12 @@ export function GitHubExportPanel({
           >
             {isExporting ? (
               <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                <Loader2 key="loader" className="w-4 h-4 mr-2 animate-spin" />
                 Exporting...
               </>
             ) : (
               <>
-                <Github className="w-4 h-4 mr-2" />
+                <Github key="github" className="w-4 h-4 mr-2" />
                 Push to GitHub
               </>
             )}

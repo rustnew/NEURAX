@@ -42,13 +42,6 @@ const riskColors: Record<RiskLevel, string> = {
 };
 
 function StabilityGauge({ level }: { level: StabilityLevel }) {
-  const angles: Record<StabilityLevel, number> = {
-    stable: -60,
-    drift: -20,
-    unstable: 20,
-    chaotic: 60,
-  };
-  
   return (
     <div className="inference-card flex flex-col items-center gap-4">
       <h3 className="text-sm font-semibold flex items-center gap-2">

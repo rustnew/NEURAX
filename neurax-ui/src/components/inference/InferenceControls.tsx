@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Thermometer, Filter, Repeat, MessageSquare, Settings2, AlertTriangle } from 'lucide-react';
+import { ChevronDown, ChevronRight, Thermometer, MessageSquare, Settings2, AlertTriangle } from 'lucide-react';
 import { Slider } from '@/components/ui/slider.tsx';
 import { Switch } from '@/components/ui/switch.tsx';
 import { Label } from '@/components/ui/label.tsx';

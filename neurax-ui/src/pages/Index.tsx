@@ -28,7 +28,7 @@ import { TimeMachineWorkspace } from '@/components/timemachine/TimeMachineWorksp
 
 import { ArchitectureFamily } from '@/types/plugins.ts';
 import { VariantPreset } from '@/types/catalog.ts';
-import { AnalysisResult, CanvasNode, Connection, LayerConfig, NodeGroup, PerLayerBreakdownRow, Warning } from '@/types/architecture.ts';
+import { AnalysisResult, CanvasNode, Connection, LayerConfig, NodeGroup, PerLayerBreakdownRow, Warning, ParameterValue } from '@/types/architecture.ts';
 import { ImportResult } from '@/utils/architectureImporter.ts';
 import { compileToNeuraxIR } from '@/utils/neuraxCompiler.ts';
 import { getBlockDefaults } from '@/utils/blockDefaults.ts';
@@ -960,7 +960,7 @@ const Index = () => {
         name: config.name,
         x,
         y,
-        params,
+params: params as Record<string, ParameterValue>,
         inputShape: 'auto',
         outputShape: 'auto',
       };

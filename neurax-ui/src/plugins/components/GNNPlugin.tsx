@@ -10,7 +10,6 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card.tsx';
 import { Badge } from '@/components/ui/badge.tsx';
-import { Progress } from '@/components/ui/progress.tsx';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs.tsx';
 import { cn } from '@/lib/utils.ts';
 

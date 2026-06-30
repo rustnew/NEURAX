@@ -68,11 +68,11 @@ export function AgentRunModal({
               <div className="mt-1 text-[11px] text-muted-foreground flex items-center gap-2">
                 <span className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-secondary/20 px-2 py-0.5">
                   {status === 'running' || status === 'planning' ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <Loader2 key="running" className="w-3.5 h-3.5 animate-spin" />
                   ) : status === 'done' ? (
-                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <CheckCircle2 key="done" className="w-3.5 h-3.5" />
                   ) : (
-                    <Circle className="w-3.5 h-3.5" />
+                    <Circle key="idle" className="w-3.5 h-3.5" />
                   )}
                   <span>{statusLabel}</span>
                 </span>
@@ -105,11 +105,11 @@ export function AgentRunModal({
                     plan.map((p) => (
                       <div key={p.id} className="flex items-start gap-2">
                         {p.status === 'done' ? (
-                          <CheckCircle2 className="w-4 h-4 mt-0.5 text-primary" />
+                          <CheckCircle2 key="done" className="w-4 h-4 mt-0.5 text-primary" />
                         ) : p.status === 'in_progress' ? (
-                          <Loader2 className="w-4 h-4 mt-0.5 animate-spin text-muted-foreground" />
+                          <Loader2 key="progress" className="w-4 h-4 mt-0.5 animate-spin text-muted-foreground" />
                         ) : (
-                          <Circle className="w-4 h-4 mt-0.5 text-muted-foreground/60" />
+                          <Circle key="pending" className="w-4 h-4 mt-0.5 text-muted-foreground/60" />
                         )}
                         <div className="text-[12px] leading-relaxed whitespace-pre-wrap break-words">{p.text}</div>
                       </div>
