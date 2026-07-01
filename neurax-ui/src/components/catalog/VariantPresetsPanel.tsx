@@ -311,11 +311,13 @@ export function VariantPresetsPanel({
                   handleAction(preset.id, 'load', custom ? (preset as VariantPreset) : undefined);
                 }}
               >
-                {isLoading ? (
-                  <Loader2 key="loader" className="w-3 h-3 mr-1 animate-spin" />
-                ) : (
-                  <Sparkles key="sparkles" className="w-3 h-3 mr-1" />
-                )}
+                <span className="inline-flex items-center justify-center w-3 h-3 mr-1 shrink-0">
+                  {isLoading ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-3 h-3" />
+                  )}
+                </span>
                 {isActive ? 'Reload' : 'Load Template'}
               </Button>
               <Button
