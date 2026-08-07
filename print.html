@@ -1,0 +1,1937 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>NEURAX Documentation</title>
+        <meta name="robots" content="noindex">
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="NEURAX — The Analytical Compiler for Neural Architectures">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon-de23e50b.svg">
+        <link rel="shortcut icon" href="favicon-8114d1fc.png">
+        <link rel="stylesheet" href="css/variables-8adf115d.css">
+        <link rel="stylesheet" href="css/general-e96d0476.css">
+        <link rel="stylesheet" href="css/chrome-d279d366.css">
+        <link rel="stylesheet" href="css/print-9e4910d8.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="fonts/fonts-9644e21d.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="mdbook-highlight-css" href="highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="ayu-highlight-3fdfc3ac.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "searchindex-57637942.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc-3bdd1015.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="mdbook-body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="mdbook-sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("mdbook-sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="mdbook-sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="mdbook-page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="mdbook-menu-bar-hover-placeholder"></div>
+                <div id="mdbook-menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="mdbook-sidebar-toggle" class="icon-button" for="mdbook-sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="mdbook-sidebar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z"/></svg></span>
+                        </label>
+                        <button id="mdbook-theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="mdbook-theme-list">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M371.3 367.1c27.3-3.9 51.9-19.4 67.2-42.9L600.2 74.1c12.6-19.5 9.4-45.3-7.6-61.2S549.7-4.4 531.1 9.6L294.4 187.2c-24 18-38.2 46.1-38.4 76.1L371.3 367.1zm-19.6 25.4l-116-104.4C175.9 290.3 128 339.6 128 400c0 3.9 .2 7.8 .6 11.6c1.8 17.5-10.2 36.4-27.8 36.4H96c-17.7 0-32 14.3-32 32s14.3 32 32 32H240c61.9 0 112-50.1 112-112c0-2.5-.1-5-.2-7.5z"/></svg></span>
+                        </button>
+                        <ul id="mdbook-theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-ayu">Ayu</button></li>
+                        </ul>
+                        <button id="mdbook-search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="mdbook-searchbar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352c79.5 0 144-64.5 144-144s-64.5-144-144-144S64 128.5 64 208s64.5 144 144 144z"/></svg></span>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">NEURAX Documentation</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
+                        </a>
+                        <a href="https://github.com/rustnew/NEURAX" title="Git repository" aria-label="Git repository">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6zm-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3zm44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9zM244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8zM97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1zm-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7zm32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1zm-11.4-14.7c-1.6 1-1.6 3.6 0 5.9 1.6 2.3 4.3 3.3 5.6 2.3 1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2z"/></svg></span>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="mdbook-search-wrapper" class="hidden">
+                    <form id="mdbook-searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="mdbook-searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="mdbook-searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <span class=fa-svg id="fa-spin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M304 48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zm0 416c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM48 304c26.5 0 48-21.5 48-48s-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48zm464-48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM142.9 437c18.7-18.7 18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zm0-294.2c18.7-18.7 18.7-49.1 0-67.9S93.7 56.2 75 75s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zM369.1 437c18.7 18.7 49.1 18.7 67.9 0s18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9z"/></svg></span>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="mdbook-searchresults-outer" class="searchresults-outer hidden">
+                        <div id="mdbook-searchresults-header" class="searchresults-header"></div>
+                        <ul id="mdbook-searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('mdbook-sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('mdbook-sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#mdbook-sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="mdbook-content" class="content">
+                    <main>
+                        <h1 id="neurax"><a class="header" href="#neurax">NEURAX</a></h1>
+<p><strong>The Analytical Compiler for Neural Architectures</strong></p>
+<p>NEURAX predicts the <strong>cost, memory, and performance</strong> of neural network architectures <strong>before training</strong> — in under 50 ms, with zero GPU, and fully deterministically.</p>
+<ul>
+<li><a href="https://rustnew.github.io/NEURAX/">Live Demo</a></li>
+<li><a href="https://github.com/rustnew/NEURAX">GitHub Repository</a></li>
+<li><a href="https://github.com/rustnew/NEURAX/releases">Releases</a></li>
+</ul>
+<h2 id="about"><a class="header" href="#about">About</a></h2>
+<p>NEURAX is an analytical compiler for neural network architectures. Whereas training frameworks (PyTorch, TensorFlow) execute models and runtime compilers (IREE, OpenXLA) lower them for execution, NEURAX operates at <strong>design time</strong>: it answers the questions you need resolved before committing GPU resources.</p>
+<ul>
+<li>Will this architecture fit in VRAM?</li>
+<li>What is the training cost on 8x H100?</li>
+<li>Where are the memory bottlenecks?</li>
+<li>Is inference stable? What is the hallucination risk?</li>
+<li>Which parallelism strategy is optimal?</li>
+</ul>
+<p>All in under 50 ms. Zero GPU required. Fully deterministic.</p>
+<h2 id="key-capabilities"><a class="header" href="#key-capabilities">Key capabilities</a></h2>
+<ul>
+<li><strong>11 architecture families</strong> — Transformer, CNN, MoE, SSM, Diffusion, GNN, GAN, RL, SNN, RNN, Experimental.</li>
+<li><strong>680+ configurable blocks</strong> and <strong>88 reference templates</strong>.</li>
+<li><strong>10-pass analytical IR pipeline</strong> producing 55+ metrics.</li>
+<li><strong>MLIR / LLVM 18</strong> compiler backend with 13 custom dialects.</li>
+<li><strong>Visual design canvas</strong>, <strong>AI copilot agent</strong>, <strong>Inference Intelligence</strong> and <strong>Time Machine</strong>.</li>
+<li><strong>Export</strong> to PyTorch, ONNX, Triton, MLIR, Rust/Burn, JSON and Network Graph.</li>
+</ul>
+<h2 id="documentation"><a class="header" href="#documentation">Documentation</a></h2>
+<p>Use the sidebar to navigate the full documentation set. Start with the <a href="#neurax-architecture-design">Architecture &amp; Design</a> chapter to understand how NEURAX works internally, then the <a href="#neurax-api-reference">API Reference</a> and <a href="#deployment-guide">Deployment Guide</a> to run it yourself.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="neurax-architecture-design"><a class="header" href="#neurax-architecture-design">NEURAX Architecture Design</a></h1>
+<p>This document describes the architecture, design principles, and data flow of the NEURAX compiler system.</p>
+<hr>
+<h2 id="table-of-contents"><a class="header" href="#table-of-contents">Table of Contents</a></h2>
+<ol>
+<li><a href="#overview">Overview</a></li>
+<li><a href="#system-architecture">System Architecture</a></li>
+<li><a href="#data-flow">Data Flow</a></li>
+<li><a href="#component-deep-dive">Component Deep Dive</a></li>
+<li><a href="#design-principles">Design Principles</a></li>
+<li><a href="#adding-a-new-model-family">Adding a New Model Family</a></li>
+</ol>
+<hr>
+<h2 id="overview"><a class="header" href="#overview">Overview</a></h2>
+<p>NEURAX is an <strong>analytical compiler</strong> for neural network architectures. Unlike traditional compilers that emit machine code, NEURAX emits a complete <strong>engineering report</strong> of a model’s behaviour on target hardware — cost, memory, speed, safety, and feasibility — <strong>in milliseconds</strong>, before a single GPU spins up.</p>
+<p>The system is composed of:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Component</th><th>Language</th><th>Port</th><th>Purpose</th></tr>
+</thead>
+<tbody>
+<tr><td><code>neurax-service</code></td><td>Rust (actix-web)</td><td>9098</td><td>HTTP API: analysis, export, billing, projects</td></tr>
+<tr><td><code>neurax-ui</code></td><td>TypeScript (React 18)</td><td>8081</td><td>Visual web frontend</td></tr>
+<tr><td><code>neurax-agent</code></td><td>Python (FastAPI)</td><td>8099</td><td>AI copilot for architecture design</td></tr>
+<tr><td><code>neurax-mcp</code></td><td>Python</td><td>stdio</td><td>Model Context Protocol server</td></tr>
+<tr><td><code>neurax-cli</code></td><td>Rust</td><td>—</td><td>Command-line interface</td></tr>
+<tr><td><code>neurax-tui</code></td><td>Rust (Ratatui)</td><td>—</td><td>Terminal user interface</td></tr>
+</tbody>
+</table>
+</div>
+<hr>
+<h2 id="system-architecture"><a class="header" href="#system-architecture">System Architecture</a></h2>
+<pre><code class="language-mermaid">graph TB
+    subgraph "Frontend"
+        UI[neurax-ui&lt;br/&gt;React 18 + TypeScript]
+        TUI[neurax-tui&lt;br/&gt;Ratatui]
+        CLI[neurax-cli&lt;br/&gt;Rust CLI]
+    end
+
+    subgraph "Service Layer"
+        HTTP_API[neurax-service&lt;br/&gt;actix-web HTTP API&lt;br/&gt;38 REST routes]
+        AI_AGENT[neurax-agent&lt;br/&gt;FastAPI + LangChain&lt;br/&gt;Natural language → architecture]
+        MCP[neurax-mcp&lt;br/&gt;MCP server]
+    end
+
+    subgraph "Core Engine"
+        CORE[neurax-core&lt;br/&gt;Pipeline orchestrator&lt;br/&gt;+ ONNX export + streaming]
+        PARSER[neurax-parser&lt;br/&gt;JSON → ModelConfig]
+        IR[neurax-ir&lt;br/&gt;10 IR dialects&lt;br/&gt;+ inference + dynamic passes]
+        FORMULAS[neurax-formulas&lt;br/&gt;FLOPs / params / memory]
+        HWDB[neurax-hardware-db&lt;br/&gt;20 GPUs • CPUs • interconnects]
+        MLIR[neurax-mlir&lt;br/&gt;13 MLIR dialects&lt;br/&gt;LLVM 18 • IREE]
+    end
+
+    subgraph "External Services"
+        SUPABASE[Supabase&lt;br/&gt;Auth • Database • Storage]
+        STRIPE[Stripe&lt;br/&gt;Billing • Subscriptions]
+        OPENAI[OpenAI / Anthropic&lt;br/&gt;LLM API]
+        GITHUB[GitHub&lt;br/&gt;Repository • Pull Requests]
+    end
+
+    UI -- HTTP --&gt; HTTP_API
+    TUI -- direct --&gt; CORE
+    CLI -- direct --&gt; CORE
+    MCP -- HTTP --&gt; HTTP_API
+
+    AI_AGENT -- HTTP --&gt; HTTP_API
+    AI_AGENT -- LLM --&gt; OPENAI
+
+    HTTP_API --&gt; CORE
+    CORE --&gt; PARSER
+    CORE --&gt; IR
+    CORE --&gt; FORMULAS
+    CORE --&gt; HWDB
+    CORE --&gt; MLIR
+
+    HTTP_API -- JWT --&gt; SUPABASE
+    HTTP_API -- Billing --&gt; STRIPE
+    HTTP_API -- GitHub push --&gt; GITHUB
+
+    style CORE fill:#2ecc71,color:#fff
+    style IR fill:#3498db,color:#fff
+    style MLIR fill:#e74c3c,color:#fff
+    style UI fill:#9b59b6,color:#fff
+    style AI_AGENT fill:#f39c12,color:#fff
+</code></pre>
+<hr>
+<h2 id="data-flow"><a class="header" href="#data-flow">Data Flow</a></h2>
+<p>The primary data flow for architecture analysis:</p>
+<pre><code class="language-mermaid">flowchart LR
+    INPUT["User Request&lt;br/&gt;(JSON model config)"] --&gt; PARSER["Parser&lt;br/&gt;neurax-parser"]
+    PARSER --&gt; AST["ModelConfig&lt;br/&gt;Typed AST"]
+    AST --&gt; PIPELINE["Analytical IR Pipeline&lt;br/&gt;10 passes"]
+
+    subgraph PIPELINE_CONTENT [" "]
+        direction LR
+        A["Arch.&lt;br/&gt;IR"] --&gt; G["Graph&lt;br/&gt;IR"] --&gt; T["Tensor&lt;br/&gt;IR"] --&gt; O["Op&lt;br/&gt;IR"] --&gt; C["Compute&lt;br/&gt;IR"]
+        C --&gt; M["Memory&lt;br/&gt;IR"] --&gt; P["Parall.&lt;br/&gt;IR"] --&gt; H["Hardware&lt;br/&gt;IR"] --&gt; CO["Cost&lt;br/&gt;IR"] --&gt; R["Report&lt;br/&gt;IR"]
+    end
+
+    PIPELINE --&gt; REPORT["Report&lt;br/&gt;40+ metrics&lt;br/&gt;JSON / Markdown"]
+    PIPELINE --&gt; MLIR_OUT["NEURAX-MLIR&lt;br/&gt;model.mlir"]
+    MLIR_OUT --&gt; LLVM["LLVM 18 / IREE&lt;br/&gt;CPU • CUDA • ROCm&lt;br/&gt;Metal • Vulkan"]
+
+    style INPUT fill:#4a90d9,color:#fff
+    style REPORT fill:#2ecc71,color:#fff
+    style MLIR_OUT fill:#e74c3c,color:#fff
+</code></pre>
+<h3 id="the-10-pass-ir-pipeline"><a class="header" href="#the-10-pass-ir-pipeline">The 10-Pass IR Pipeline</a></h3>
+<p>Each pass transforms the representation and computes metrics:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Pass</th><th>IR Dialect</th><th>Input</th><th>Output</th><th>Key Metrics</th></tr>
+</thead>
+<tbody>
+<tr><td>1</td><td>ArchitectureIR</td><td>ModelConfig</td><td>ArchitectureIR</td><td>Layer count, model type, global params</td></tr>
+<tr><td>2</td><td>GraphIR</td><td>ArchitectureIR</td><td>GraphIR</td><td>Graph topology, DAG validation, fan-in/fan-out</td></tr>
+<tr><td>3</td><td>TensorIR</td><td>GraphIR</td><td>TensorIR</td><td>Tensor shapes, dimension resolution, memory layout</td></tr>
+<tr><td>4</td><td>OperatorIR</td><td>TensorIR</td><td>OperatorIR</td><td>Operator types, FLOPs per operator, param count</td></tr>
+<tr><td>5</td><td>ComputeIR</td><td>OperatorIR</td><td>ComputeIR</td><td>Total FLOPs, FLOPs breakdown, backward/optimizer overhead</td></tr>
+<tr><td>6</td><td>MemoryIR</td><td>ComputeIR</td><td>MemoryIR</td><td>Peak VRAM, activation memory, gradient memory, fragmentation</td></tr>
+<tr><td>7</td><td>ParallelismIR</td><td>MemoryIR</td><td>ParallelismIR</td><td>Tensor/pipeline/expert parallelism, efficiency</td></tr>
+<tr><td>8</td><td>HardwareIR</td><td>ComputeIR+MemoryIR+ParallelismIR</td><td>HardwareIR</td><td>GPU utilization, bandwidth, ridge point, latency</td></tr>
+<tr><td>9</td><td>CostIR</td><td>HardwareIR+ParallelismIR</td><td>CostIR</td><td>Training cost USD, time hours, energy kWh, CO2 kg</td></tr>
+<tr><td>10</td><td>ReportIR</td><td>All above</td><td>ReportIR</td><td>Consolidated report with 40+ metrics, diagnostics, recommendations</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="dynamic-analysis-parallel-post-pipeline"><a class="header" href="#dynamic-analysis-parallel-post-pipeline">Dynamic Analysis (Parallel, Post-Pipeline)</a></h3>
+<p>Three dynamic passes run in parallel after the static pipeline:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Pass</th><th>Focus</th><th>Output</th></tr>
+</thead>
+<tbody>
+<tr><td>VirtualMemoryPass</td><td>Memory fragmentation, virtualization savings</td><td>Allocation strategy, savings estimate</td></tr>
+<tr><td>StabilityAnalysisPass</td><td>Training stability via Lyapunov exponents</td><td>Stability index, risk level</td></tr>
+<tr><td>BehavioralSynthesisPass</td><td>Runtime behavior inference (MoE imbalance, cache locality)</td><td>Behavioral metrics</td></tr>
+</tbody>
+</table>
+</div>
+<hr>
+<h2 id="component-deep-dive"><a class="header" href="#component-deep-dive">Component Deep Dive</a></h2>
+<h3 id="neurax-parser"><a class="header" href="#neurax-parser">neurax-parser</a></h3>
+<p>The parser ingests JSON model configurations conforming to the NEURAX universal schema (v1.0) and produces a strongly-typed <code>ModelConfig</code>.</p>
+<p><strong>Key types</strong>:</p>
+<ul>
+<li><code>ModelConfig</code> — top-level configuration (model, training, hardware, parallelism)</li>
+<li><code>ModelType</code> enum — Transformer, CNN, MoE, SSM, Diffusion, GNN, GAN, RL, SNN, RNN, Multimodal, Custom</li>
+<li><code>LayerType</code> enum — Attention, Mlp, Embedding, Conv2d, etc.</li>
+<li>Schema validation via <code>ModelValidator</code></li>
+</ul>
+<p><strong>Supported model types</strong>: transformer, cnn, moe, ssm, diffusion, gnn, gan, rl, snn, rnn, multimodal, custom</p>
+<h3 id="neurax-ir"><a class="header" href="#neurax-ir">neurax-ir</a></h3>
+<p>The IR crate implements 10 dialect-like modules, each with its own <code>Pass</code> struct implementing the <code>IrPass</code> trait:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub trait IrPass {
+    type Input;
+    type Output;
+    type Metrics;
+
+    fn build(&amp;self, input: &amp;Self::Input, ctx: &amp;NeuraxContext) -&gt; Result&lt;Self::Output, NeuraxError&gt;;
+    fn compute_metrics(&amp;self, output: &amp;mut Self::Output, ctx: &amp;NeuraxContext) -&gt; Result&lt;Self::Metrics, NeuraxError&gt;;
+    fn validate(&amp;self, output: &amp;Self::Output, metrics: &amp;Self::Metrics) -&gt; Result&lt;(), NeuraxError&gt;;
+}
+<span class="boring">}</span></code></pre>
+<p><strong>Diagnostic system</strong>: Standardized diagnostic codes (E001-E005 errors, W001-W006 warnings, I001-I003 info, H001-H005 hints) with severity levels and precision impact scoring.</p>
+<h3 id="neurax-core"><a class="header" href="#neurax-core">neurax-core</a></h3>
+<p>The orchestrator that wires together the 10-pass pipeline, dynamic analysis, and export. Also provides:</p>
+<ul>
+<li><code>run_analysis()</code> — full pipeline entry point</li>
+<li><code>analyze_json()</code> — JSON string → AnalysisResult</li>
+<li><code>validate_json()</code> — JSON validation</li>
+<li><code>get_model_summary()</code> — quick model summary</li>
+<li>ONNX export via <code>neurax-core/src/export/</code></li>
+</ul>
+<h3 id="neurax-mlir"><a class="header" href="#neurax-mlir">neurax-mlir</a></h3>
+<p>MLIR compiler backend with 13 custom dialects:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Dialect</th><th>Purpose</th></tr>
+</thead>
+<tbody>
+<tr><td>Architecture</td><td>Model structure (model, layers, global params)</td></tr>
+<tr><td>Graph</td><td>Computation graph topology</td></tr>
+<tr><td>Tensor</td><td>Tensor shapes and memory layout</td></tr>
+<tr><td>Operator</td><td>Operator-level operations (attention, MLP, conv)</td></tr>
+<tr><td>Compute</td><td>Compute characteristics (FLOPs, throughput)</td></tr>
+<tr><td>Memory</td><td>Memory operations (allocations, copies)</td></tr>
+<tr><td>Parallelism</td><td>Parallelism strategies (TP, PP, DP, EP)</td></tr>
+<tr><td>Hardware</td><td>Hardware specifications and constraints</td></tr>
+<tr><td>Cost</td><td>Cost model operations</td></tr>
+<tr><td>Report</td><td>Report generation operations</td></tr>
+<tr><td>Training</td><td>Training-specific operations</td></tr>
+<tr><td>Data</td><td>Data pipeline operations</td></tr>
+<tr><td>Optimization</td><td>Optimization pass operations</td></tr>
+</tbody>
+</table>
+</div>
+<p><strong>Lowering pipeline</strong>: Architecture → Graph → Tensor → Operator → Compute → Memory → Hardware → Cost → Report → LLVM IR → Assembly → Object file.</p>
+<p><strong>Target backends</strong>: CPU, CUDA, Vulkan, Metal, ROCm — plus IREE integration for cross-platform deployment.</p>
+<h3 id="neurax-formulas"><a class="header" href="#neurax-formulas">neurax-formulas</a></h3>
+<p>Pure analytical formulas for ML operations. Hot path — maximum optimization.</p>
+<p><strong>Modules</strong>: attention, conv, mlp, embedding, normalization, moe, ssm, rnn, diffusion, gnn, custom, cnn_blocks.</p>
+<h3 id="neurax-hardware-db"><a class="header" href="#neurax-hardware-db">neurax-hardware-db</a></h3>
+<p>Built-in database with 20 GPUs, 2 CPUs, and 5 interconnect specifications.</p>
+<p><strong>GPU specs include</strong>: H200, GH200, H100-SXM, H100-PCIe, A100-SXM, A100-PCIe, L40S, L40, V100, RTX 4090, RTX 4080, RTX 3090, RTX 6000 Ada, RTX A5000, A10G, A30, T4, K80.</p>
+<p><strong>Key metrics per GPU</strong>: TFLOPS (FP64/FP32/FP16/BF16/INT8/FP8), memory bandwidth, NVLink, TDP, L2 cache, SM count.</p>
+<h3 id="neurax-service"><a class="header" href="#neurax-service">neurax-service</a></h3>
+<p>Production actix-web HTTP server with:</p>
+<ul>
+<li>38 REST routes (analysis, inference, export, projects, billing, credits, compliance, API keys, agent control, presets, hardware, plugin)</li>
+<li>Supabase JWT authentication + API key authentication with scope-based authorization</li>
+<li>Stripe billing integration</li>
+<li>SSE streaming for real-time analysis</li>
+<li>CORS, gzip compression</li>
+<li>Health checks</li>
+</ul>
+<h3 id="neurax-agent"><a class="header" href="#neurax-agent">neurax-agent</a></h3>
+<p>Python/FastAPI/LangChain AI copilot with a 3-phase declarative pipeline:</p>
+<ol>
+<li><strong>Planning</strong> — LLM generates a complete ArchSpec (nodes + edges) using structured output</li>
+<li><strong>Validation</strong> — Pure Python topology validator checks DAG, fan-in, connectivity</li>
+<li><strong>Materialization</strong> — Stream tool calls to the canvas with auto-correction (up to 3 retries)</li>
+</ol>
+<p>Supports 11 model families with catalogues containing 400+ blocks.</p>
+<h3 id="neurax-ui"><a class="header" href="#neurax-ui">neurax-ui</a></h3>
+<p>React 18 + TypeScript + Vite single-page application with:</p>
+<ul>
+<li>Visual canvas (React Flow) with drag-and-drop, parameter editing, minimap</li>
+<li>88 reference templates across 11 families</li>
+<li>Metrics dashboard with 40+ metrics and charts</li>
+<li>AI Chat Drawer with SSE streaming</li>
+<li>Hyperparameter Optimization panel</li>
+<li>Time Machine cost/carbon projection</li>
+<li>Inference Intelligence panel</li>
+<li>Project management (cloud CRUD)</li>
+<li>Credits system with plan-based limits</li>
+<li>Export panel (ONNX, JSON, Network Graph)</li>
+<li>GitHub export with PR creation</li>
+</ul>
+<h3 id="neurax-mcp"><a class="header" href="#neurax-mcp">neurax-mcp</a></h3>
+<p>Model Context Protocol server that exposes NEURAX capabilities to MCP-compatible clients (e.g., Claude Desktop). Provides 9 tools: analyze_architecture, list_templates, get_template, list_hardware, estimate_training_cost, get_compliance_config, get_credits, get_user_info, health_check.</p>
+<hr>
+<h2 id="design-principles"><a class="header" href="#design-principles">Design Principles</a></h2>
+<ol>
+<li>
+<p><strong>Analytical, not empirical</strong> — All metrics are computed via pure analytical formulas. No GPU is needed, no simulation is run. Results are deterministic and available in milliseconds.</p>
+</li>
+<li>
+<p><strong>Compiler-inspired pipeline</strong> — The system follows the traditional compiler architecture: parse → IR → optimize → generate. Each pass is independent and composable.</p>
+</li>
+<li>
+<p><strong>Multi-language ecosystem</strong> — Rust for performance-critical analysis, Python for the AI agent, TypeScript for the web UI. Each language is chosen for its strengths.</p>
+</li>
+<li>
+<p><strong>Schema-first design</strong> — The JSON model config schema (v1.0) is the universal interchange format. All components read from and write to this schema.</p>
+</li>
+<li>
+<p><strong>Deterministic by default</strong> — The core analysis pipeline is fully deterministic. The AI agent uses LLMs but validates every output before materialization.</p>
+</li>
+<li>
+<p><strong>Extensible catalogues</strong> — Model families, blocks, and constraints are defined in JSON catalogues that can be extended without code changes.</p>
+</li>
+<li>
+<p><strong>Observability-first</strong> — Every analysis includes phase timing, diagnostics, and recommendations. The system explains not just what the metrics are, but why.</p>
+</li>
+</ol>
+<hr>
+<h2 id="adding-a-new-model-family"><a class="header" href="#adding-a-new-model-family">Adding a New Model Family</a></h2>
+<p>To add a new model family to NEURAX:</p>
+<h3 id="1-add-to-the-rust-parser"><a class="header" href="#1-add-to-the-rust-parser">1. Add to the Rust parser</a></h3>
+<p>In <code>neurax-parser/src/model_config.rs</code>, add the new family to <code>ModelType::from_str()</code>:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>"my_family" =&gt; Ok(Self::MyFamily),
+<span class="boring">}</span></code></pre>
+<p>Add the corresponding serialization:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>Self::MyFamily =&gt; "my_family",
+<span class="boring">}</span></code></pre>
+<h3 id="2-add-formulas"><a class="header" href="#2-add-formulas">2. Add formulas</a></h3>
+<p>In <code>neurax-formulas/src/</code>, create a new module (e.g., <code>my_family.rs</code>) with FLOPs, parameter, and memory formulas. Register it in <code>lib.rs</code>.</p>
+<h3 id="3-add-catalogue-entries"><a class="header" href="#3-add-catalogue-entries">3. Add catalogue entries</a></h3>
+<p>In <code>neurax-agent/catalogue.json</code>, add blocks for the new family. Each block should include <code>type</code>, <code>name</code>, <code>family</code>, <code>params</code>, <code>description</code>, and <code>max_inputs</code>.</p>
+<h3 id="4-add-template"><a class="header" href="#4-add-template">4. Add template</a></h3>
+<p>In <code>templates.ts</code>, add reference templates for the new family.</p>
+<h3 id="5-add-constraints"><a class="header" href="#5-add-constraints">5. Add constraints</a></h3>
+<p>In <code>neurax-agent/block_constraints.json</code>, add fan-in limits for the new family’s blocks.</p>
+<h3 id="6-add-to-arch_planner"><a class="header" href="#6-add-to-arch_planner">6. Add to arch_planner</a></h3>
+<p>In <code>neurax-agent/arch_planner.py</code>, add a family template in <code>FAMILY_TEMPLATES</code> describing the typical flow for the new family.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="neurax-api-reference"><a class="header" href="#neurax-api-reference">NEURAX API Reference</a></h1>
+<p><code>neurax-service</code> is a production <strong>actix‑web</strong> HTTP server (default <code>0.0.0.0:9098</code>) exposing <strong>38 REST routes</strong> with CORS, gzip compression, and authentication via Supabase JWT or API keys.</p>
+<h2 id="base-url"><a class="header" href="#base-url">Base URL</a></h2>
+<pre><code>http://localhost:9098
+</code></pre>
+<h2 id="authentication"><a class="header" href="#authentication">Authentication</a></h2>
+<p>Two authentication methods are supported:</p>
+<h3 id="1-supabase-jwt-web-ui-users"><a class="header" href="#1-supabase-jwt-web-ui-users">1. Supabase JWT (Web UI Users)</a></h3>
+<p>Pass a valid Supabase access token in the <code>Authorization</code> header:</p>
+<pre><code class="language-http">Authorization: Bearer &lt;supabase-jwt&gt;
+</code></pre>
+<h3 id="2-api-keys-programmatic-access"><a class="header" href="#2-api-keys-programmatic-access">2. API Keys (Programmatic Access)</a></h3>
+<p>Pass an API key (prefixed with <code>nrx_</code>) in either the <code>X-API-Key</code> header or the <code>Authorization: Bearer</code> header:</p>
+<pre><code class="language-http">X-API-Key: nrx_&lt;64-hex-chars&gt;
+</code></pre>
+<h3 id="api-key-scopes"><a class="header" href="#api-key-scopes">API Key Scopes</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Scope</th><th>Access</th></tr>
+</thead>
+<tbody>
+<tr><td><code>analyze</code></td><td>Analysis, comparison, streaming, presets, hardware, time machine</td></tr>
+<tr><td><code>inference</code></td><td>Inference simulation</td></tr>
+<tr><td><code>compare</code></td><td>Multi‑hardware comparison</td></tr>
+<tr><td><code>export</code></td><td>ONNX and GitHub export</td></tr>
+<tr><td><code>projects</code></td><td>Project CRUD operations</td></tr>
+<tr><td><code>agent</code></td><td>Agent control endpoints (grants access to all agent endpoints)</td></tr>
+<tr><td><code>all</code></td><td>Full access to all endpoints</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="error-codes"><a class="header" href="#error-codes">Error Codes</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Code</th><th>Meaning</th></tr>
+</thead>
+<tbody>
+<tr><td><code>401 Unauthorized</code></td><td>Missing or invalid API key / JWT</td></tr>
+<tr><td><code>403 Forbidden</code></td><td>API key lacks required scope</td></tr>
+<tr><td><code>400 Bad Request</code></td><td>Invalid request body or parameters</td></tr>
+<tr><td><code>404 Not Found</code></td><td>Resource not found</td></tr>
+<tr><td><code>408 Request Timeout</code></td><td>Analysis timed out (60s)</td></tr>
+<tr><td><code>500 Internal Server Error</code></td><td>Unexpected server error</td></tr>
+<tr><td><code>502 Bad Gateway</code></td><td>Downstream service (Supabase/Stripe) unavailable</td></tr>
+<tr><td><code>504 Gateway Timeout</code></td><td>Downstream service timed out</td></tr>
+</tbody>
+</table>
+</div>
+<hr>
+<h2 id="endpoint-summary"><a class="header" href="#endpoint-summary">Endpoint Summary</a></h2>
+<h3 id="system"><a class="header" href="#system">System</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Method</th><th>Path</th><th>Auth</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>GET</code></td><td><code>/health</code></td><td>None</td><td>Health check</td></tr>
+<tr><td><code>GET</code></td><td><code>/me</code></td><td>JWT</td><td>Get current user profile and subscription plan</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="analysis"><a class="header" href="#analysis">Analysis</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Method</th><th>Path</th><th>Auth</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>POST</code></td><td><code>/analyze</code></td><td>JWT/API Key</td><td>Run full 10‑pass analytical pipeline synchronously</td></tr>
+<tr><td><code>POST</code></td><td><code>/analyze/stream</code></td><td>JWT/API Key</td><td>Start streaming analysis (SSE)</td></tr>
+<tr><td><code>GET</code></td><td><code>/analyze/stream/{job_id}</code></td><td>JWT/API Key</td><td>Stream SSE events for a running job</td></tr>
+<tr><td><code>GET</code></td><td><code>/analyze/result/{job_id}</code></td><td>JWT/API Key</td><td>Retrieve completed analysis result</td></tr>
+<tr><td><code>GET</code></td><td><code>/analyze/status/{job_id}</code></td><td>JWT/API Key</td><td>Check job status</td></tr>
+<tr><td><code>POST</code></td><td><code>/analyze/compare</code></td><td>JWT/API Key</td><td>Compare up to 8 hardware configurations</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="inference"><a class="header" href="#inference">Inference</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Method</th><th>Path</th><th>Auth</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>POST</code></td><td><code>/inference/simulate</code></td><td>JWT/API Key</td><td>Predict inference stability, hallucination risk, sampling volatility</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="time-machine"><a class="header" href="#time-machine">Time Machine</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Method</th><th>Path</th><th>Auth</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>POST</code></td><td><code>/timemachine</code></td><td>JWT/API Key</td><td>Multi‑year cost/carbon projection</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="export"><a class="header" href="#export">Export</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Method</th><th>Path</th><th>Auth</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>POST</code></td><td><code>/export/onnx</code></td><td>JWT/API Key</td><td>Binary ONNX protobuf export</td></tr>
+<tr><td><code>POST</code></td><td><code>/export/github</code></td><td>JWT/API Key</td><td>Push model files to GitHub, optionally create PR</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="presets"><a class="header" href="#presets">Presets</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Method</th><th>Path</th><th>Auth</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>GET</code></td><td><code>/presets</code></td><td>None</td><td>List all reference architecture presets</td></tr>
+<tr><td><code>GET</code></td><td><code>/presets/{id}</code></td><td>None</td><td>Get a specific preset by ID</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="hardware"><a class="header" href="#hardware">Hardware</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Method</th><th>Path</th><th>Auth</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>GET</code></td><td><code>/hardware</code></td><td>None</td><td>List all hardware specifications (20 GPUs, CPUs, interconnects)</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="projects"><a class="header" href="#projects">Projects</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Method</th><th>Path</th><th>Auth</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>GET</code></td><td><code>/projects</code></td><td>JWT</td><td>List user projects</td></tr>
+<tr><td><code>POST</code></td><td><code>/projects</code></td><td>JWT</td><td>Create a new project</td></tr>
+<tr><td><code>GET</code></td><td><code>/projects/{id}</code></td><td>JWT</td><td>Get a specific project</td></tr>
+<tr><td><code>PUT</code></td><td><code>/projects/{id}</code></td><td>JWT</td><td>Update a project</td></tr>
+<tr><td><code>DELETE</code></td><td><code>/projects/{id}</code></td><td>JWT</td><td>Delete a project</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="credits--billing"><a class="header" href="#credits--billing">Credits &amp; Billing</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Method</th><th>Path</th><th>Auth</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>GET</code></td><td><code>/credits</code></td><td>JWT</td><td>Get usage balance and plan limits</td></tr>
+<tr><td><code>POST</code></td><td><code>/billing/checkout</code></td><td>JWT</td><td>Create Stripe checkout session</td></tr>
+<tr><td><code>POST</code></td><td><code>/billing/portal</code></td><td>JWT</td><td>Create Stripe customer portal session</td></tr>
+<tr><td><code>POST</code></td><td><code>/stripe/webhook</code></td><td>None</td><td>Stripe webhook endpoint</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="compliance"><a class="header" href="#compliance">Compliance</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Method</th><th>Path</th><th>Auth</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>GET</code></td><td><code>/compliance/config</code></td><td>JWT</td><td>Get regulatory compliance configuration (EU AI Act, CSRD, DSA)</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="api-keys"><a class="header" href="#api-keys">API Keys</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Method</th><th>Path</th><th>Auth</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>GET</code></td><td><code>/api-keys</code></td><td>JWT</td><td>List all API keys</td></tr>
+<tr><td><code>POST</code></td><td><code>/api-keys</code></td><td>JWT</td><td>Create a new API key</td></tr>
+<tr><td><code>POST</code></td><td><code>/api-keys/{key_id}/revoke</code></td><td>JWT</td><td>Revoke an API key</td></tr>
+<tr><td><code>DELETE</code></td><td><code>/api-keys/{key_id}</code></td><td>JWT</td><td>Delete an API key</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="agent-control-api-key-auth"><a class="header" href="#agent-control-api-key-auth">Agent Control (API Key Auth)</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Method</th><th>Path</th><th>Auth</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>POST</code></td><td><code>/agent/analyze</code></td><td>API Key</td><td>Agent‑initiated analysis</td></tr>
+<tr><td><code>POST</code></td><td><code>/agent/inference</code></td><td>API Key</td><td>Agent‑initiated inference simulation</td></tr>
+<tr><td><code>POST</code></td><td><code>/agent/compare</code></td><td>API Key</td><td>Agent‑initiated comparison</td></tr>
+<tr><td><code>POST</code></td><td><code>/agent/audit</code></td><td>API Key</td><td>Agent‑initiated audit</td></tr>
+<tr><td><code>POST</code></td><td><code>/agent/carbon</code></td><td>API Key</td><td>Agent‑initiated carbon calculation</td></tr>
+<tr><td><code>GET</code></td><td><code>/agent/compliance</code></td><td>API Key</td><td>Agent‑initiated compliance check</td></tr>
+<tr><td><code>GET</code></td><td><code>/agent/results</code></td><td>API Key</td><td>Agent‑initiated results retrieval</td></tr>
+<tr><td><code>GET</code></td><td><code>/agent/projects</code></td><td>API Key</td><td>Agent‑initiated project listing</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="plugin"><a class="header" href="#plugin">Plugin</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Method</th><th>Path</th><th>Auth</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>POST</code></td><td><code>/plugin/validate</code></td><td>None</td><td>Validate a plugin architecture</td></tr>
+</tbody>
+</table>
+</div>
+<hr>
+<h2 id="endpoint-details"><a class="header" href="#endpoint-details">Endpoint Details</a></h2>
+<h3 id="get-health"><a class="header" href="#get-health"><code>GET /health</code></a></h3>
+<p>Health check endpoint. No authentication required.</p>
+<p><strong>Response</strong> <code>200 OK</code>:</p>
+<pre><code class="language-json">{
+  "status": "ok"
+}
+</code></pre>
+<hr>
+<h3 id="post-analyze"><a class="header" href="#post-analyze"><code>POST /analyze</code></a></h3>
+<p>Run the full 10‑pass analytical pipeline on a model configuration.</p>
+<p><strong>Request Body</strong>:</p>
+<pre><code class="language-json">{
+  "topology": {
+    "schema_version": "1.0",
+    "model": {
+      "name": "MyModel",
+      "type": "transformer",
+      "global_params": {
+        "num_layers": 12,
+        "sequence_length": 2048,
+        "vocab_size": 50257,
+        "embedding_dim": 768
+      },
+      "layers": [
+        {
+          "id": "layer_1",
+          "layer_type": "embedding",
+          "params": {
+            "vocab_size": 50257,
+            "embedding_dim": 768
+          }
+        }
+      ]
+    },
+    "training": {
+      "batch_size": 128,
+      "max_steps": 100000
+    },
+    "hardware": {
+      "gpus": [
+        {"name": "A100-SXM", "count": 8}
+      ]
+    }
+  }
+}
+</code></pre>
+<p><strong>Response</strong> <code>200 OK</code>:</p>
+<pre><code class="language-json">{
+  "report": {
+    "model_name": "MyModel",
+    "total_parameters": 125000000,
+    "total_flops": 2.5e17,
+    "peak_vram_bytes": 42000000000,
+    "training_cost_usd": 45000.00,
+    "training_time_hours": 120.5,
+    "energy_kwh": 15000.0,
+    "co2_kg": 4500.0,
+    "metrics": { },
+    "diagnostics": [ ],
+    "phase_timeline": [ ]
+  }
+}
+</code></pre>
+<p><strong>Error Responses</strong>:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Code</th><th>Message</th></tr>
+</thead>
+<tbody>
+<tr><td><code>400</code></td><td><code>Analysis error: &lt;details&gt;</code> — Invalid model config</td></tr>
+<tr><td><code>504</code></td><td><code>Analysis timed out after 60 seconds</code></td></tr>
+<tr><td><code>500</code></td><td><code>Analysis task failed unexpectedly</code></td></tr>
+</tbody>
+</table>
+</div>
+<hr>
+<h3 id="post-analyzestream"><a class="header" href="#post-analyzestream"><code>POST /analyze/stream</code></a></h3>
+<p>Start a streaming analysis job. Returns a job ID for SSE streaming.</p>
+<p><strong>Request Body</strong> (same as <code>/analyze</code>).</p>
+<p><strong>Response</strong> <code>200 OK</code>:</p>
+<pre><code class="language-json">{
+  "job_id": "abc123-...",
+  "status": "running"
+}
+</code></pre>
+<hr>
+<h3 id="get-analyzestreamjob_id"><a class="header" href="#get-analyzestreamjob_id"><code>GET /analyze/stream/{job_id}</code></a></h3>
+<p>Stream Server‑Sent Events for a running analysis job.</p>
+<p><strong>Response</strong> <code>text/event-stream</code>:</p>
+<pre><code>event: phase
+data: {"phase": "Architecture", "status": "running", "progress": 10}
+
+event: metric
+data: {"name": "total_parameters", "value": 125000000, "unit": "params"}
+
+event: done
+data: {"job_id": "abc123-...", "status": "completed"}
+</code></pre>
+<hr>
+<h3 id="get-analyzeresultjob_id"><a class="header" href="#get-analyzeresultjob_id"><code>GET /analyze/result/{job_id}</code></a></h3>
+<p>Retrieve the completed analysis report for a job.</p>
+<p><strong>Response</strong> <code>200 OK</code>:</p>
+<pre><code class="language-json">{
+  "job_id": "abc123-...",
+  "status": "completed",
+  "report": { }
+}
+</code></pre>
+<hr>
+<h3 id="post-analyzecompare"><a class="header" href="#post-analyzecompare"><code>POST /analyze/compare</code></a></h3>
+<p>Compare up to 8 hardware configurations for the same model.</p>
+<p><strong>Request Body</strong>:</p>
+<pre><code class="language-json">{
+  "topology": { },
+  "configs": [
+    {
+      "hardware": "H100-SXM",
+      "gpu_count": 8,
+      "precision": "fp16",
+      "gpu_memory_gb": 80,
+      "gpu_bandwidth_gbs": 3352.0
+    },
+    {
+      "hardware": "A100-SXM",
+      "gpu_count": 8,
+      "precision": "bf16",
+      "gpu_memory_gb": 80,
+      "gpu_bandwidth_gbs": 2039.0
+    }
+  ]
+}
+</code></pre>
+<p><strong>Response</strong> <code>200 OK</code>:</p>
+<pre><code class="language-json">{
+  "results": [
+    {
+      "label": "8 × H100-SXM @ fp16",
+      "report": { }
+    },
+    {
+      "label": "8 × A100-SXM @ bf16",
+      "report": { }
+    }
+  ]
+}
+</code></pre>
+<hr>
+<h3 id="post-inferencesimulate"><a class="header" href="#post-inferencesimulate"><code>POST /inference/simulate</code></a></h3>
+<p>Simulate inference behavior for a model configuration.</p>
+<p><strong>Request Body</strong>:</p>
+<pre><code class="language-json">{
+  "topology": { },
+  "params": {
+    "model_name": "MyModel",
+    "num_layers": 12,
+    "d_model": 768,
+    "num_heads": 12,
+    "seq_len": 2048,
+    "vocab_size": 50257,
+    "batch_size": 1,
+    "precision": "fp16",
+    "hardware": "A100-SXM"
+  }
+}
+</code></pre>
+<p><strong>Response</strong> <code>200 OK</code>:</p>
+<pre><code class="language-json">{
+  "report": {
+    "model_name": "MyModel",
+    "stability_index": 0.85,
+    "hallucination_risk": 0.12,
+    "sampling_volatility": 0.05,
+    "latency_ms": 12.5,
+    "throughput_tokens_per_s": 800.0
+  }
+}
+</code></pre>
+<hr>
+<h3 id="post-timemachine"><a class="header" href="#post-timemachine"><code>POST /timemachine</code></a></h3>
+<p>Multi‑year cost/carbon projection.</p>
+<p><strong>Request Body</strong>:</p>
+<pre><code class="language-json">{
+  "topology": { },
+  "years": 5,
+  "hardware_growth_rate": 0.15,
+  "energy_cost_per_kwh": 0.12,
+  "carbon_intensity_g_per_kwh": 475
+}
+</code></pre>
+<p><strong>Response</strong> <code>200 OK</code>:</p>
+<pre><code class="language-json">{
+  "projections": [
+    {
+      "year": 2026,
+      "training_cost_usd": 45000.0,
+      "energy_kwh": 15000.0,
+      "co2_kg": 4500.0
+    }
+  ],
+    "compliance": { }
+}
+</code></pre>
+<hr>
+<h3 id="post-exportonnx"><a class="header" href="#post-exportonnx"><code>POST /export/onnx</code></a></h3>
+<p>Export a model topology to ONNX binary format.</p>
+<p><strong>Request Body</strong>:</p>
+<pre><code class="language-json">{
+  "topology": { },
+  "model_name": "MyModel"
+}
+</code></pre>
+<p><strong>Response</strong> <code>200 OK</code>:</p>
+<pre><code class="language-json">{
+  "data": "&lt;base64-encoded-onnx-protobuf&gt;",
+  "model_name": "MyModel",
+  "node_count": 12
+}
+</code></pre>
+<hr>
+<h3 id="post-exportgithub"><a class="header" href="#post-exportgithub"><code>POST /export/github</code></a></h3>
+<p>Push model files to a GitHub repository and optionally create a pull request.</p>
+<p><strong>Request Body</strong>:</p>
+<pre><code class="language-json">{
+  "topology": { },
+  "github_token": "&lt;personal-access-token&gt;",
+  "owner": "username",
+  "repo": "repo-name",
+  "branch": "main",
+  "create_pr": true,
+  "pr_title": "Add MyModel architecture",
+  "pr_body": "Auto-generated by NEURAX"
+}
+</code></pre>
+<p><strong>Response</strong> <code>200 OK</code>:</p>
+<pre><code class="language-json">{
+  "success": true,
+  "commit_sha": "abc123...",
+  "pr_url": "https://github.com/rustnew/NEURAX/pull/1"
+}
+</code></pre>
+<hr>
+<h3 id="get-projects"><a class="header" href="#get-projects"><code>GET /projects</code></a></h3>
+<p>List all projects for the authenticated user.</p>
+<p><strong>Response</strong> <code>200 OK</code>:</p>
+<pre><code class="language-json">[
+  {
+    "id": "proj_123",
+    "name": "My Project",
+    "description": "A transformer model",
+    "topology": { },
+    "created_at": "2026-07-24T10:00:00Z",
+    "updated_at": "2026-07-24T10:00:00Z"
+  }
+]
+</code></pre>
+<hr>
+<h3 id="post-projects"><a class="header" href="#post-projects"><code>POST /projects</code></a></h3>
+<p>Create a new project.</p>
+<p><strong>Request Body</strong>:</p>
+<pre><code class="language-json">{
+  "name": "My Project",
+  "description": "A transformer model",
+  "topology": { }
+}
+</code></pre>
+<p><strong>Response</strong> <code>200 OK</code>:</p>
+<pre><code class="language-json">{
+  "id": "proj_123",
+  "name": "My Project",
+  "description": "A transformer model",
+  "topology": { },
+  "created_at": "2026-07-24T10:00:00Z",
+  "updated_at": "2026-07-24T10:00:00Z"
+}
+</code></pre>
+<hr>
+<h3 id="get-credits"><a class="header" href="#get-credits"><code>GET /credits</code></a></h3>
+<p>Get the current user’s credit balance and plan information.</p>
+<p><strong>Response</strong> <code>200 OK</code>:</p>
+<pre><code class="language-json">{
+  "credits": {
+    "used": 150,
+    "limit": 1000,
+    "plan": "elite",
+    "period_start": "2026-07-01T00:00:00Z",
+    "period_end": "2026-08-01T00:00:00Z"
+  }
+}
+</code></pre>
+<hr>
+<h3 id="get-complianceconfig"><a class="header" href="#get-complianceconfig"><code>GET /compliance/config</code></a></h3>
+<p>Get regulatory compliance configuration (EU AI Act, CSRD, DSA).</p>
+<p><strong>Response</strong> <code>200 OK</code>:</p>
+<pre><code class="language-json">{
+  "eu_ai_act": { },
+  "csrd": { },
+  "dsa": { }
+}
+</code></pre>
+<hr>
+<h3 id="api-key-management"><a class="header" href="#api-key-management">API Key Management</a></h3>
+<h4 id="post-api-keys"><a class="header" href="#post-api-keys"><code>POST /api-keys</code></a></h4>
+<p>Create a new API key.</p>
+<p><strong>Request Body</strong>:</p>
+<pre><code class="language-json">{
+  "name": "My API Key",
+  "scopes": ["analyze", "inference", "export"]
+}
+</code></pre>
+<p><strong>Response</strong> <code>200 OK</code>:</p>
+<pre><code class="language-json">{
+  "key": "nrx_abc123...",
+  "name": "My API Key",
+  "user_id": "user_123",
+  "created_at": "2026-07-24T10:00:00Z",
+  "active": true,
+  "scopes": ["analyze", "inference", "export"]
+}
+</code></pre>
+<h4 id="get-api-keys"><a class="header" href="#get-api-keys"><code>GET /api-keys</code></a></h4>
+<p>List all API keys for the current user.</p>
+<h4 id="post-api-keyskey_idrevoke"><a class="header" href="#post-api-keyskey_idrevoke"><code>POST /api-keys/{key_id}/revoke</code></a></h4>
+<p>Revoke (deactivate) an API key.</p>
+<h4 id="delete-api-keyskey_id"><a class="header" href="#delete-api-keyskey_id"><code>DELETE /api-keys/{key_id}</code></a></h4>
+<p>Delete (permanently remove) an API key.</p>
+<hr>
+<h3 id="post-pluginvalidate"><a class="header" href="#post-pluginvalidate"><code>POST /plugin/validate</code></a></h3>
+<p>Validate a plugin architecture specification.</p>
+<p><strong>Request Body</strong>:</p>
+<pre><code class="language-json">{
+  "topology": { }
+}
+</code></pre>
+<p><strong>Response</strong> <code>200 OK</code>:</p>
+<pre><code class="language-json">{
+  "valid": true,
+  "warnings": [],
+  "errors": []
+}
+</code></pre>
+<hr>
+<h2 id="python-agent-api"><a class="header" href="#python-agent-api">Python Agent API</a></h2>
+<p>The <code>neurax-agent</code> (FastAPI, port 8099) provides a separate API for AI‑driven architecture design.</p>
+<h3 id="post-runs"><a class="header" href="#post-runs"><code>POST /runs</code></a></h3>
+<p>Start a new agent run. The agent uses an LLM (OpenAI or Anthropic) to plan, validate, and materialize an architecture.</p>
+<p><strong>Request Body</strong>:</p>
+<pre><code class="language-json">{
+  "user_message": "Design a transformer model with 12 layers for text classification",
+  "snapshot": {
+    "family": "transformer",
+    "nodes": [],
+    "connections": [],
+    "groups": [],
+    "allowed_layer_types": [],
+    "allowed_families": ["transformer", "cnn", "moe"],
+    "catalogue_id": null,
+    "catalogue": [],
+    "missing_mandatory_fields": [],
+    "hw_config": {},
+    "analysis_warnings": []
+  },
+  "creativity": 0.3
+}
+</code></pre>
+<p><strong>Response</strong> <code>200 OK</code>:</p>
+<pre><code class="language-json">{
+  "run_id": "abc123-..."
+}
+</code></pre>
+<h3 id="get-runsrun_idevents"><a class="header" href="#get-runsrun_idevents"><code>GET /runs/{run_id}/events</code></a></h3>
+<p>Stream Server‑Sent Events for an agent run.</p>
+<p><strong>Response</strong> <code>text/event-stream</code>:</p>
+<pre><code>event: assistant
+data: {"content": "I'll design a transformer architecture for you..."}
+
+event: tool
+data: {"name": "add_node", "args": {"id": "input", "type": "input", "params": {}}}
+
+event: done
+data: {}
+</code></pre>
+<h3 id="get-health-1"><a class="header" href="#get-health-1"><code>GET /health</code></a></h3>
+<p>Agent health check.</p>
+<p><strong>Response</strong> <code>200 OK</code>:</p>
+<pre><code class="language-json">{
+  "status": "ok"
+}
+</code></pre>
+<hr>
+<h2 id="cli-interface"><a class="header" href="#cli-interface">CLI Interface</a></h2>
+<p>The <code>neurax</code> CLI provides command‑line access to the core analysis pipeline.</p>
+<pre><code class="language-bash"># Analyze a model and generate a report
+neurax analyze model.json -o report.md
+
+# Analyze with JSON output
+neurax analyze model.json -f json -o report.json
+
+# Validate a JSON model configuration
+neurax validate model.json
+
+# Show a quick summary of the model
+neurax summary model.json
+
+# Full compilation: validate → analyze → generate MLIR
+neurax compile model.json -o output/
+
+# Show version
+neurax version
+</code></pre>
+<h3 id="compile-output"><a class="header" href="#compile-output">Compile Output</a></h3>
+<p>The <code>compile</code> command generates:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>File</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>model.mlir</code></td><td>NEURAX MLIR with 13 custom dialects</td></tr>
+<tr><td><code>llvm_ir.ll</code></td><td>LLVM IR</td></tr>
+<tr><td><code>assembly.s</code></td><td>Assembly code</td></tr>
+<tr><td><code>model.o</code></td><td>Object file</td></tr>
+<tr><td><code>report.md</code></td><td>Analysis report</td></tr>
+</tbody>
+</table>
+</div>
+<hr>
+<h2 id="mcp-server"><a class="header" href="#mcp-server">MCP Server</a></h2>
+<p>The <code>neurax-mcp</code> package provides a Model Context Protocol server that exposes NEURAX capabilities to MCP‑compatible clients (e.g., Claude Desktop).</p>
+<h3 id="available-tools"><a class="header" href="#available-tools">Available Tools</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Tool</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>analyze_architecture</code></td><td>Analyze a neural network architecture</td></tr>
+<tr><td><code>list_templates</code></td><td>List available reference templates</td></tr>
+<tr><td><code>get_template</code></td><td>Get a specific template</td></tr>
+<tr><td><code>list_hardware</code></td><td>List supported hardware</td></tr>
+<tr><td><code>estimate_training_cost</code></td><td>Estimate training cost for a model</td></tr>
+<tr><td><code>get_compliance_config</code></td><td>Get regulatory compliance configuration</td></tr>
+<tr><td><code>get_credits</code></td><td>Get credit balance information</td></tr>
+<tr><td><code>get_user_info</code></td><td>Get user profile information</td></tr>
+<tr><td><code>health_check</code></td><td>Check NEURAX service health</td></tr>
+</tbody>
+</table>
+</div>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="deployment-guide"><a class="header" href="#deployment-guide">Deployment Guide</a></h1>
+<p>This guide covers how to deploy NEURAX in development and production environments.</p>
+<hr>
+<h2 id="table-of-contents-1"><a class="header" href="#table-of-contents-1">Table of Contents</a></h2>
+<ol>
+<li><a href="#quick-deploy-docker-compose">Quick Deploy (Docker Compose)</a></li>
+<li><a href="#development-setup">Development Setup</a></li>
+<li><a href="#production-deployment">Production Deployment</a></li>
+<li><a href="#environment-variables">Environment Variables</a></li>
+<li><a href="#health-checks">Health Checks</a></li>
+<li><a href="#troubleshooting">Troubleshooting</a></li>
+</ol>
+<hr>
+<h2 id="quick-deploy-docker-compose"><a class="header" href="#quick-deploy-docker-compose">Quick Deploy (Docker Compose)</a></h2>
+<p>The fastest way to run all NEURAX services locally is via Docker Compose.</p>
+<h3 id="prerequisites"><a class="header" href="#prerequisites">Prerequisites</a></h3>
+<ul>
+<li>Docker Engine 24+</li>
+<li>Docker Compose v2+</li>
+</ul>
+<h3 id="steps"><a class="header" href="#steps">Steps</a></h3>
+<pre><code class="language-bash"># 1. Clone the repository
+git clone https://github.com/rustnew/NEURAX.git
+cd NEURAX
+
+# 2. Configure environment files
+cp neurax-service/.env.example neurax-service/.env
+cp neurax-ui/.env.example neurax-ui/.env
+cp neurax-agent/.env neurax-agent/.env  # Already exists, adjust as needed
+
+# 3. Start all services
+docker compose up
+
+# 4. Verify
+curl http://localhost:9098/health
+curl http://localhost:8099/health
+# Open http://localhost:8081 in your browser
+</code></pre>
+<h3 id="services"><a class="header" href="#services">Services</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Service</th><th>Port</th><th>Dockerfile</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>service</code></td><td>9098</td><td><code>Dockerfile</code></td><td>Rust actix-web backend (38 routes)</td></tr>
+<tr><td><code>ui</code></td><td>8081</td><td><code>Dockerfile.ui</code></td><td>React 18 + TypeScript frontend</td></tr>
+<tr><td><code>agent</code></td><td>8099</td><td><code>Dockerfile.agent</code></td><td>Python FastAPI + LangChain agent</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="stopping"><a class="header" href="#stopping">Stopping</a></h3>
+<pre><code class="language-bash">docker compose down
+</code></pre>
+<hr>
+<h2 id="development-setup"><a class="header" href="#development-setup">Development Setup</a></h2>
+<p>For active development, run each service locally without Docker.</p>
+<h3 id="option-a-all-in-one-script"><a class="header" href="#option-a-all-in-one-script">Option A: All-in-One Script</a></h3>
+<pre><code class="language-bash"># Clone and enter the repo
+git clone https://github.com/rustnew/NEURAX.git
+cd NEURAX
+
+# Run the development startup script
+chmod +x start-dev.sh
+./start-dev.sh
+</code></pre>
+<p>The <code>start-dev.sh</code> script launches all three services in the background:</p>
+<ul>
+<li><strong>Rust backend</strong> (<code>neurax-service</code>) on port 9098</li>
+<li><strong>Python agent</strong> (<code>neurax-agent</code>) on port 8099</li>
+<li><strong>React frontend</strong> (<code>neurax-ui</code>) on port 8081</li>
+</ul>
+<h3 id="option-b-manual-setup"><a class="header" href="#option-b-manual-setup">Option B: Manual Setup</a></h3>
+<h4 id="1-rust-backend-neurax-service"><a class="header" href="#1-rust-backend-neurax-service">1. Rust Backend (neurax-service)</a></h4>
+<pre><code class="language-bash"># Install Rust (if not already installed)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source ~/.cargo/env
+
+# Run the service
+cargo run -p neurax-service
+# → http://localhost:9098
+</code></pre>
+<h4 id="2-python-agent-neurax-agent"><a class="header" href="#2-python-agent-neurax-agent">2. Python Agent (neurax-agent)</a></h4>
+<pre><code class="language-bash"># Create and activate a virtual environment
+python3 -m venv .venv
+source .venv/bin/activate
+
+# Install dependencies
+pip install -r neurax-agent/requirements.txt
+
+# Set environment variables
+export OPENAI_API_KEY="sk-..."  # Or ANTHROPIC_API_KEY
+export NEURAX_AGENT_HOST=127.0.0.1
+export NEURAX_AGENT_PORT=8099
+
+# Run the agent
+cd neurax-agent
+python3 -m uvicorn app:app --host 127.0.0.1 --port 8099 --reload
+# → http://localhost:8099
+</code></pre>
+<h4 id="3-react-frontend-neurax-ui"><a class="header" href="#3-react-frontend-neurax-ui">3. React Frontend (neurax-ui)</a></h4>
+<pre><code class="language-bash"># Install dependencies
+cd neurax-ui
+npm install  # or: pnpm install
+
+# Configure environment
+cp .env.example .env
+# Edit .env:
+#   VITE_SUPABASE_DISABLED=true
+#   VITE_NEURAX_API_URL=http://127.0.0.1:9098
+#   VITE_AGENT_BASE_URL=http://127.0.0.1:8099
+
+# Start the dev server
+npm run dev
+# → http://localhost:8081
+</code></pre>
+<h3 id="4-mcp-server-neurax-mcp"><a class="header" href="#4-mcp-server-neurax-mcp">4. MCP Server (neurax-mcp)</a></h3>
+<pre><code class="language-bash"># Install
+pip install -e neurax-mcp
+
+# Run (stdio mode, configured in Claude Desktop's claude_desktop_config.json)
+# See: https://modelcontextprotocol.io/docs/develop/server
+</code></pre>
+<hr>
+<h2 id="production-deployment"><a class="header" href="#production-deployment">Production Deployment</a></h2>
+<h3 id="docker-compose-recommended"><a class="header" href="#docker-compose-recommended">Docker Compose (Recommended)</a></h3>
+<pre><code class="language-bash"># 1. Create production .env files
+cp neurax-service/.env.example neurax-service/.env
+# Edit with real Supabase URL, Stripe keys, etc.
+
+cp neurax-ui/.env.example neurax-ui/.env
+# Set VITE_NEURAX_API_URL and VITE_AGENT_BASE_URL to production URLs
+
+cp neurax-agent/.env neurax-agent/.env
+# Set OPENAI_API_KEY or ANTHROPIC_API_KEY
+
+# 2. Build and start
+docker compose up -d
+
+# 3. Verify health
+./healthcheck.sh
+</code></pre>
+<h3 id="docker-build-individual-services"><a class="header" href="#docker-build-individual-services">Docker Build (Individual Services)</a></h3>
+<pre><code class="language-bash"># Build the Rust service
+docker build -t neurax-service -f Dockerfile .
+
+# Build the UI
+docker build -t neurax-ui -f Dockerfile.ui .
+
+# Build the agent
+docker build -t neurax-agent -f Dockerfile.agent .
+</code></pre>
+<h3 id="kubernetes"><a class="header" href="#kubernetes">Kubernetes</a></h3>
+<p>A Kubernetes deployment manifest is planned. For now, use Docker Compose with a reverse proxy (nginx/Caddy) for TLS termination and load balancing.</p>
+<p>Example nginx reverse proxy config:</p>
+<pre><code class="language-nginx">server {
+    listen 443 ssl http2;
+    server_name neurax.example.com;
+
+    ssl_certificate /path/to/cert.pem;
+    ssl_certificate_key /path/to/key.pem;
+
+    location / {
+        proxy_pass http://localhost:8081;
+        proxy_set_header Host $host;
+    }
+
+    location /api/ {
+        proxy_pass http://localhost:9098/;
+        proxy_set_header Host $host;
+    }
+
+    location /agent/ {
+        proxy_pass http://localhost:8099/;
+        proxy_set_header Host $host;
+    }
+}
+</code></pre>
+<hr>
+<h2 id="environment-variables"><a class="header" href="#environment-variables">Environment Variables</a></h2>
+<h3 id="neurax-service-1"><a class="header" href="#neurax-service-1">neurax-service</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Variable</th><th>Default</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>NEURAX_BIND</code></td><td><code>0.0.0.0:9098</code></td><td>Bind address for the Actix server</td></tr>
+<tr><td><code>RUST_LOG</code></td><td><code>info</code></td><td>Logging level</td></tr>
+<tr><td><code>NEURAX_DEBUG_NOAUTH</code></td><td><code>false</code></td><td>Bypass auth for development</td></tr>
+<tr><td><code>NEURAX_MOCK_PLAN</code></td><td><code>elite</code></td><td>Mock subscription plan for development</td></tr>
+<tr><td><code>SUPABASE_URL</code></td><td>—</td><td>Supabase project URL</td></tr>
+<tr><td><code>SUPABASE_SERVICE_ROLE_KEY</code></td><td>—</td><td>Supabase service role key (backend only)</td></tr>
+<tr><td><code>STRIPE_SECRET_KEY</code></td><td>—</td><td>Stripe secret key</td></tr>
+<tr><td><code>STRIPE_WEBHOOK_SECRET</code></td><td>—</td><td>Stripe webhook signing secret</td></tr>
+<tr><td><code>STRIPE_PRICE_ESSENTIAL_MONTHLY</code></td><td>—</td><td>Stripe price ID</td></tr>
+<tr><td><code>STRIPE_PRICE_ESSENTIAL_ANNUAL</code></td><td>—</td><td>Stripe price ID</td></tr>
+<tr><td><code>STRIPE_PRICE_ARCHITECT_MONTHLY</code></td><td>—</td><td>Stripe price ID</td></tr>
+<tr><td><code>STRIPE_PRICE_ARCHITECT_ANNUAL</code></td><td>—</td><td>Stripe price ID</td></tr>
+<tr><td><code>STRIPE_PRICE_ELITE_MONTHLY</code></td><td>—</td><td>Stripe price ID</td></tr>
+<tr><td><code>STRIPE_PRICE_ELITE_ANNUAL</code></td><td>—</td><td>Stripe price ID</td></tr>
+<tr><td><code>STRIPE_PORTAL_RETURN_URL</code></td><td>—</td><td>Stripe portal return URL</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="neurax-agent-1"><a class="header" href="#neurax-agent-1">neurax-agent</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Variable</th><th>Default</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>OPENAI_API_KEY</code></td><td>—</td><td>OpenAI API key (for GPT models)</td></tr>
+<tr><td><code>ANTHROPIC_API_KEY</code></td><td>—</td><td>Anthropic API key (for Claude models)</td></tr>
+<tr><td><code>NEURAX_AGENT_HOST</code></td><td><code>127.0.0.1</code></td><td>Bind address</td></tr>
+<tr><td><code>NEURAX_AGENT_PORT</code></td><td><code>8099</code></td><td>Port number</td></tr>
+<tr><td><code>NEURAX_SERVICE_URL</code></td><td><code>http://127.0.0.1:9098</code></td><td>Backend service URL</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="neurax-ui-1"><a class="header" href="#neurax-ui-1">neurax-ui</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Variable</th><th>Default</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>VITE_NEURAX_API_URL</code></td><td><code>http://localhost:9098</code></td><td>Backend API URL</td></tr>
+<tr><td><code>VITE_AGENT_BASE_URL</code></td><td><code>http://localhost:8099</code></td><td>Agent API URL</td></tr>
+<tr><td><code>VITE_SUPABASE_DISABLED</code></td><td><code>false</code></td><td>Disable Supabase auth for development</td></tr>
+</tbody>
+</table>
+</div>
+<hr>
+<h2 id="health-checks"><a class="header" href="#health-checks">Health Checks</a></h2>
+<p>Use the included health check script to verify all services are running:</p>
+<pre><code class="language-bash">./healthcheck.sh
+</code></pre>
+<p>Expected output:</p>
+<pre><code>[✓] neurax-service (port 9098): healthy
+[✓] neurax-agent (port 8099): healthy
+[✓] neurax-ui (port 8081): healthy
+</code></pre>
+<hr>
+<h2 id="troubleshooting"><a class="header" href="#troubleshooting">Troubleshooting</a></h2>
+<h3 id="port-already-in-use"><a class="header" href="#port-already-in-use">Port Already in Use</a></h3>
+<pre><code class="language-bash"># Check what's using a port
+lsof -i :9098
+
+# Kill the process
+kill -9 &lt;PID&gt;
+</code></pre>
+<h3 id="docker-build-fails-mlir"><a class="header" href="#docker-build-fails-mlir">Docker Build Fails (MLIR)</a></h3>
+<p>The MLIR backend requires LLVM 18. If you don’t need MLIR code generation, build without the <code>mlir</code> feature:</p>
+<pre><code class="language-bash">cargo build -p neurax-service  # Without MLIR
+# Or with MLIR (requires LLVM 18):
+sudo apt install llvm-18 llvm-18-dev libmlir-18-dev mlir-18-tools
+export LLVM_SYS_180_PREFIX=/usr/lib/llvm-18
+export MLIR_SYS_180_PREFIX=/usr/lib/llvm-18
+cargo build -p neurax-service --features mlir
+</code></pre>
+<h3 id="agent-llm-not-responding"><a class="header" href="#agent-llm-not-responding">Agent LLM Not Responding</a></h3>
+<p>Ensure <code>OPENAI_API_KEY</code> or <code>ANTHROPIC_API_KEY</code> is set in <code>neurax-agent/.env</code>.</p>
+<h3 id="supabase-connection-issues"><a class="header" href="#supabase-connection-issues">Supabase Connection Issues</a></h3>
+<p>Verify <code>SUPABASE_URL</code> and <code>SUPABASE_SERVICE_ROLE_KEY</code> are set correctly in <code>neurax-service/.env</code>.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="-neurax-20---roadmap-stratégique"><a class="header" href="#-neurax-20---roadmap-stratégique">🚀 NEURAX 2.0 - Roadmap Stratégique</a></h1>
+<p><strong>Date :</strong> 31 Juillet 2026<br><strong>Version Actuelle :</strong> 0.6.3<br><strong>Version Cible :</strong> 2.0<br><strong>Horizon :</strong> 24 mois (2026-2028)</p>
+<hr>
+<h2 id="-vision-neurax-20"><a class="header" href="#-vision-neurax-20">🎯 Vision NEURAX 2.0</a></h2>
+<blockquote>
+<p><strong>“Le Figma de l’Intelligence Artificielle”</strong></p>
+<p>Transformer NEURAX d’un <strong>design tool</strong> excellent en une <strong>plateforme end-to-end</strong> pour la recherche et le déploiement d’architectures IA.</p>
+</blockquote>
+<h3 id="mission-statement"><a class="header" href="#mission-statement">Mission Statement</a></h3>
+<p><strong>Permettre à tout chercheur/ingénieur ML de :</strong></p>
+<ol>
+<li><strong>Designer</strong> une architecture en quelques minutes</li>
+<li><strong>Valider</strong> sa faisabilité instantanément (coût, mémoire, performance)</li>
+<li><strong>Prototyper</strong> avec export automatique vers PyTorch/HuggingFace</li>
+<li><strong>Collaborer</strong> en temps réel avec son équipe</li>
+<li><strong>Déployer</strong> en un clic vers le cloud</li>
+<li><strong>Apprendre</strong> de chaque run pour améliorer les prédictions</li>
+</ol>
+<hr>
+<h2 id="-état-actuel-vs-vision-20"><a class="header" href="#-état-actuel-vs-vision-20">📊 État Actuel vs Vision 2.0</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Catégorie</th><th>v0.6.3 (Actuel)</th><th>v2.0 (Cible)</th><th>Priorité</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>Design</strong></td><td>✅ Excellent</td><td>✅ Maintenir + améliorer</td><td>P2</td></tr>
+<tr><td><strong>Validation</strong></td><td>⚠️ 99.7% claimed, pas de proof</td><td>✅ Benchmark public + paper</td><td>P0</td></tr>
+<tr><td><strong>Export Code</strong></td><td>⚠️ JSON/ONNX uniquement</td><td>✅ PyTorch/HF/JAX direct</td><td>P1</td></tr>
+<tr><td><strong>Training Integration</strong></td><td>❌ Aucune</td><td>✅ Monitor real-time</td><td>P1</td></tr>
+<tr><td><strong>Collaboration</strong></td><td>❌ Single-user</td><td>✅ Multi-user CRDT</td><td>P2</td></tr>
+<tr><td><strong>Cloud Deploy</strong></td><td>❌ Aucune</td><td>✅ AWS/GCP/Azure</td><td>P2</td></tr>
+<tr><td><strong>Learning Loop</strong></td><td>❌ Static formulas</td><td>✅ Self-improving</td><td>P1</td></tr>
+<tr><td><strong>Mobile</strong></td><td>❌ Aucune</td><td>✅ iOS/Android apps</td><td>P3</td></tr>
+<tr><td><strong>Community</strong></td><td>❌ Pas de hub</td><td>✅ Template Hub</td><td>P2</td></tr>
+<tr><td><strong>Education</strong></td><td>⚠️ Docs only</td><td>✅ Interactive tutorials</td><td>P3</td></tr>
+</tbody>
+</table>
+</div>
+<p><strong>Priorités :</strong></p>
+<ul>
+<li><strong>P0</strong> : Critique pour crédibilité (Validation)</li>
+<li><strong>P1</strong> : Haute valeur ajoutée (Export, Training, Learning)</li>
+<li><strong>P2</strong> : Différenciation importante (Collaboration, Cloud, Community)</li>
+<li><strong>P3</strong> : Nice-to-have (Mobile, Education)</li>
+</ul>
+<hr>
+<h2 id="-roadmap-par-phase-24-mois"><a class="header" href="#-roadmap-par-phase-24-mois">🗺️ Roadmap par Phase (24 mois)</a></h2>
+<pre><code class="language-mermaid">gantt
+    title NEURAX 2.0 Development Roadmap
+    dateFormat YYYY-MM
+    
+    section Phase 1: Validation ✅
+    Benchmark Suite             :p1a, 2026-08, 3M
+    Dataset Training Costs      :p1b, 2026-08, 3M
+    Research Paper              :p1c, 2026-09, 4M
+    
+    section Phase 2: Training Integration 🔧
+    PyTorch Export              :p2a, 2026-11, 3M
+    HuggingFace Integration     :p2b, 2026-12, 2M
+    Real-time Monitoring        :p2c, 2027-01, 4M
+    Learning Loop               :p2d, 2027-03, 3M
+    
+    section Phase 3: Collaboration 🤝
+    Template Hub                :p3a, 2027-02, 3M
+    Multi-user Editing (CRDT)   :p3b, 2027-04, 4M
+    Comments &amp; Reviews          :p3c, 2027-06, 2M
+    
+    section Phase 4: Intelligence 🧠
+    Auto-optimization Engine    :p4a, 2027-06, 4M
+    What-If Analysis            :p4b, 2027-08, 3M
+    Neural Architecture Search  :p4c, 2027-09, 4M
+    
+    section Phase 5: Cloud &amp; Deploy ☁️
+    AWS/GCP/Azure Integration   :p5a, 2027-08, 4M
+    Production Monitoring       :p5b, 2027-10, 3M
+    Auto-scaling                :p5c, 2028-01, 2M
+    
+    section Phase 6: Ecosystem 🌍
+    Mobile Apps (iOS/Android)   :p6a, 2027-11, 5M
+    Education Mode              :p6b, 2028-02, 3M
+    API Marketplace             :p6c, 2028-04, 3M
+</code></pre>
+<hr>
+<h2 id="-délivrables-par-phase"><a class="header" href="#-délivrables-par-phase">📦 Délivrables par Phase</a></h2>
+<h3 id="phase-1--validation--crédibilité-mois-1-4"><a class="header" href="#phase-1--validation--crédibilité-mois-1-4">Phase 1 : Validation &amp; Crédibilité (Mois 1-4)</a></h3>
+<p><strong>Objectif :</strong> Prouver scientifiquement que NEURAX est précis</p>
+<p><strong>Délivrables :</strong></p>
+<ul>
+<li><input disabled="" type="checkbox"> Benchmark suite publique (100+ modèles)</li>
+<li><input disabled="" type="checkbox"> Dataset de training costs réels</li>
+<li><input disabled="" type="checkbox"> Paper académique (NeurIPS/ICML)</li>
+<li><input disabled="" type="checkbox"> Dashboard de validation public</li>
+</ul>
+<p><strong>KPIs :</strong></p>
+<ul>
+<li>95%+ accuracy confirmée sur benchmark</li>
+<li>1,000+ citations du paper (12 mois post-publication)</li>
+<li>50+ researchers contribuant au dataset</li>
+</ul>
+<hr>
+<h3 id="phase-2--training-integration-mois-5-11"><a class="header" href="#phase-2--training-integration-mois-5-11">Phase 2 : Training Integration (Mois 5-11)</a></h3>
+<p><strong>Objectif :</strong> NEURAX devient compagnon de training, pas juste design tool</p>
+<p><strong>Délivrables :</strong></p>
+<ul>
+<li><input disabled="" type="checkbox"> <code>.to_pytorch()</code> export automatique</li>
+<li><input disabled="" type="checkbox"> HuggingFace Trainer integration</li>
+<li><input disabled="" type="checkbox"> Real-time monitoring pendant training</li>
+<li><input disabled="" type="checkbox"> Learning loop (calibration automatique)</li>
+</ul>
+<p><strong>KPIs :</strong></p>
+<ul>
+<li>70% des users exportent vers PyTorch</li>
+<li>5% réduction d’erreur de prédiction via learning loop</li>
+<li>10,000+ modèles trackés en training</li>
+</ul>
+<hr>
+<h3 id="phase-3--collaboration-mois-6-13"><a class="header" href="#phase-3--collaboration-mois-6-13">Phase 3 : Collaboration (Mois 6-13)</a></h3>
+<p><strong>Objectif :</strong> Devenir le “Figma de l’IA”</p>
+<p><strong>Délivrables :</strong></p>
+<ul>
+<li><input disabled="" type="checkbox"> Template Hub (community templates)</li>
+<li><input disabled="" type="checkbox"> Real-time co-editing (CRDT)</li>
+<li><input disabled="" type="checkbox"> Comments, reviews, versions</li>
+<li><input disabled="" type="checkbox"> Team workspaces</li>
+</ul>
+<p><strong>KPIs :</strong></p>
+<ul>
+<li>5,000+ templates community</li>
+<li>30% des sessions sont multi-user</li>
+<li>50+ entreprises avec team plans</li>
+</ul>
+<hr>
+<h3 id="phase-4--intelligence-mois-12-17"><a class="header" href="#phase-4--intelligence-mois-12-17">Phase 4 : Intelligence (Mois 12-17)</a></h3>
+<p><strong>Objectif :</strong> NEURAX propose des optimisations automatiques</p>
+<p><strong>Délivrables :</strong></p>
+<ul>
+<li><input disabled="" type="checkbox"> Auto-optimization engine</li>
+<li><input disabled="" type="checkbox"> What-if analysis (“change X → gain Y”)</li>
+<li><input disabled="" type="checkbox"> Neural Architecture Search intégré</li>
+<li><input disabled="" type="checkbox"> Recommendation system</li>
+</ul>
+<p><strong>KPIs :</strong></p>
+<ul>
+<li>80% des suggestions acceptées par users</li>
+<li>20% amélioration coût moyen via auto-optim</li>
+<li>1,000+ architectures découvertes par NAS</li>
+</ul>
+<hr>
+<h3 id="phase-5--cloud--deploy-mois-14-20"><a class="header" href="#phase-5--cloud--deploy-mois-14-20">Phase 5 : Cloud &amp; Deploy (Mois 14-20)</a></h3>
+<p><strong>Objectif :</strong> Du design au déploiement en un clic</p>
+<p><strong>Délivrables :</strong></p>
+<ul>
+<li><input disabled="" type="checkbox"> AWS SageMaker integration</li>
+<li><input disabled="" type="checkbox"> GCP Vertex AI integration</li>
+<li><input disabled="" type="checkbox"> Azure ML integration</li>
+<li><input disabled="" type="checkbox"> Production monitoring dashboard</li>
+<li><input disabled="" type="checkbox"> Auto-scaling policies</li>
+</ul>
+<p><strong>KPIs :</strong></p>
+<ul>
+<li>40% des users déploient via NEURAX</li>
+<li>99.9% uptime monitoring</li>
+<li>$10M+ infrastructure managée</li>
+</ul>
+<hr>
+<h3 id="phase-6--ecosystem-mois-15-24"><a class="header" href="#phase-6--ecosystem-mois-15-24">Phase 6 : Ecosystem (Mois 15-24)</a></h3>
+<p><strong>Objectif :</strong> Construire un écosystème complet</p>
+<p><strong>Délivrables :</strong></p>
+<ul>
+<li><input disabled="" type="checkbox"> Mobile apps (iOS/Android)</li>
+<li><input disabled="" type="checkbox"> Education mode + certifications</li>
+<li><input disabled="" type="checkbox"> API marketplace (plugins tiers)</li>
+<li><input disabled="" type="checkbox"> NEURAX Conference annuelle</li>
+</ul>
+<p><strong>KPIs :</strong></p>
+<ul>
+<li>100,000+ app downloads</li>
+<li>10,000+ certifications délivrées</li>
+<li>200+ plugins tiers sur marketplace</li>
+</ul>
+<hr>
+<h2 id="-métriques-de-succès-globales"><a class="header" href="#-métriques-de-succès-globales">🎯 Métriques de Succès Globales</a></h2>
+<h3 id="adoption"><a class="header" href="#adoption">Adoption</a></h3>
+<ul>
+<li><strong>100,000 users actifs</strong> (vs 10,000 aujourd’hui)</li>
+<li><strong>1,000 entreprises clientes</strong></li>
+<li><strong>Top 10</strong> ML tools (par usage GitHub/research)</li>
+</ul>
+<h3 id="revenue"><a class="header" href="#revenue">Revenue</a></h3>
+<ul>
+<li><strong>$10M ARR</strong> (Annual Recurring Revenue)</li>
+<li><strong>50% du marché</strong> “ML design tools”</li>
+<li><strong>Break-even</strong> atteint mois 18</li>
+</ul>
+<h3 id="impact-scientifique"><a class="header" href="#impact-scientifique">Impact Scientifique</a></h3>
+<ul>
+<li><strong>10,000+ citations</strong> du paper NEURAX</li>
+<li><strong>50+ universités</strong> utilisant NEURAX pour enseigner</li>
+<li><strong>20+ startups</strong> construites sur NEURAX</li>
+</ul>
+<h3 id="technique"><a class="header" href="#technique">Technique</a></h3>
+<ul>
+<li><strong>99% accuracy</strong> prédictions (vs 95% aujourd’hui)</li>
+<li><strong>&lt;25ms</strong> analyse (vs &lt;50ms aujourd’hui)</li>
+<li><strong>1M+ modèles</strong> analysés cumulatifs</li>
+</ul>
+<hr>
+<h2 id="-investissement-requis"><a class="header" href="#-investissement-requis">💰 Investissement Requis</a></h2>
+<h3 id="budget-total--15m-sur-24-mois"><a class="header" href="#budget-total--15m-sur-24-mois">Budget Total : $15M sur 24 mois</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Catégorie</th><th>Budget</th><th>%</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>Engineering</strong></td><td>$8M</td><td>53%</td></tr>
+<tr><td><strong>Research</strong> (validation, paper)</td><td>$2M</td><td>13%</td></tr>
+<tr><td><strong>Infrastructure</strong> (cloud, GPU clusters)</td><td>$2M</td><td>13%</td></tr>
+<tr><td><strong>Marketing &amp; Sales</strong></td><td>$1.5M</td><td>10%</td></tr>
+<tr><td><strong>Operations</strong></td><td>$1M</td><td>7%</td></tr>
+<tr><td><strong>Legal &amp; Compliance</strong></td><td>$0.5M</td><td>3%</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="équipe-requise"><a class="header" href="#équipe-requise">Équipe Requise</a></h3>
+<p><strong>Année 1 (10 personnes) :</strong></p>
+<ul>
+<li>4 ML Engineers (Rust/Python)</li>
+<li>2 Research Scientists</li>
+<li>1 DevOps Engineer</li>
+<li>1 Product Manager</li>
+<li>1 Designer</li>
+<li>1 Community Manager</li>
+</ul>
+<p><strong>Année 2 (25 personnes) :</strong></p>
+<ul>
+<li>+6 ML Engineers</li>
+<li>+2 Research Scientists</li>
+<li>+2 DevOps Engineers</li>
+<li>+2 Product Managers</li>
+<li>+1 Designer</li>
+<li>+2 Sales/Marketing</li>
+</ul>
+<hr>
+<h2 id="-risques--mitigation"><a class="header" href="#-risques--mitigation">🚧 Risques &amp; Mitigation</a></h2>
+<h3 id="risque-1--validation-échoue-p0"><a class="header" href="#risque-1--validation-échoue-p0">Risque 1 : Validation échoue (P0)</a></h3>
+<p><strong>Impact :</strong> Crédibilité détruite<br><strong>Probabilité :</strong> 15%<br><strong>Mitigation :</strong></p>
+<ul>
+<li>Commencer small (10 modèles), puis scale</li>
+<li>Collaborer avec labs académiques (Meta, OpenAI)</li>
+<li>Publier résultats intermédiaires (transparency)</li>
+</ul>
+<h3 id="risque-2--concurrence-weights--biases-etc"><a class="header" href="#risque-2--concurrence-weights--biases-etc">Risque 2 : Concurrence (Weights &amp; Biases, etc.)</a></h3>
+<p><strong>Impact :</strong> Perte de market share<br><strong>Probabilité :</strong> 40%<br><strong>Mitigation :</strong></p>
+<ul>
+<li>Focus sur “design-time” (notre avantage unique)</li>
+<li>Partnerships vs competition (intégrer W&amp;B)</li>
+<li>Move fast (ship Phase 1-2 en 12 mois)</li>
+</ul>
+<h3 id="risque-3--adoption-lente"><a class="header" href="#risque-3--adoption-lente">Risque 3 : Adoption lente</a></h3>
+<p><strong>Impact :</strong> Revenue goals manqués<br><strong>Probabilité :</strong> 30%<br><strong>Mitigation :</strong></p>
+<ul>
+<li>Free tier généreux (attirer users)</li>
+<li>Education program (universities)</li>
+<li>Case studies (OpenAI, Anthropic testimonials)</li>
+</ul>
+<h3 id="risque-4--technical-debt-scalability"><a class="header" href="#risque-4--technical-debt-scalability">Risque 4 : Technical debt (scalability)</a></h3>
+<p><strong>Impact :</strong> Performance dégradée<br><strong>Probabilité :</strong> 25%<br><strong>Mitigation :</strong></p>
+<ul>
+<li>Refactoring continu (20% time budget)</li>
+<li>Load testing dès Phase 1</li>
+<li>Microservices architecture</li>
+</ul>
+<hr>
+<h2 id="-documents-détaillés"><a class="header" href="#-documents-détaillés">📚 Documents Détaillés</a></h2>
+<p>Cette roadmap est accompagnée de documents détaillés pour chaque phase :</p>
+<ol>
+<li><strong>ROADMAP_PHASE1_VALIDATION.md</strong> — Validation &amp; benchmark</li>
+<li><strong>ROADMAP_PHASE2_TRAINING.md</strong> — Training integration</li>
+<li><strong>ROADMAP_PHASE3_COLLABORATION.md</strong> — Multi-user features</li>
+<li><strong>ROADMAP_PHASE4_INTELLIGENCE.md</strong> — Auto-optimization &amp; NAS</li>
+<li><strong>ROADMAP_PHASE5_CLOUD.md</strong> — Cloud deployment</li>
+<li><strong>ROADMAP_PHASE6_ECOSYSTEM.md</strong> — Mobile, education, marketplace</li>
+</ol>
+<hr>
+<h2 id="-next-steps-week-1"><a class="header" href="#-next-steps-week-1">✅ Next Steps (Week 1)</a></h2>
+<ol>
+<li><strong>Validation du plan</strong> avec stakeholders</li>
+<li><strong>Fundraising</strong> ($5M seed pour Phase 1-2)</li>
+<li><strong>Hiring</strong> (2 Research Scientists + 2 ML Engineers)</li>
+<li><strong>Kick-off Phase 1</strong> (Benchmark suite)</li>
+</ol>
+<hr>
+<p><strong>Créé par :</strong> Kiro AI Agent<br><strong>Date :</strong> 31 Juillet 2026<br><strong>Version :</strong> 1.0<br><strong>Statut :</strong> DRAFT — À valider</p>
+<p>🚀 <strong>Let’s build the future of AI development together!</strong></p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="changelog"><a class="header" href="#changelog">Changelog</a></h1>
+<p>All notable changes to <strong>NEURAX</strong> — The Pre‑Flight Compiler for Artificial Intelligence are documented in this file.</p>
+<p>The format is based on <a href="https://keepachangelog.com/en/1.1.0/">Keep a Changelog</a>,
+and this project adheres to <a href="https://semver.org/spec/v2.0.0.html">Semantic Versioning</a>.</p>
+<hr>
+<h2 id="063--202608"><a class="header" href="#063--202608">[0.6.3] — 2026‑08</a></h2>
+<h3 id="changed"><a class="header" href="#changed">Changed</a></h3>
+<ul>
+<li>Replace generic emojis with the <strong>Notionists</strong> avatar family across the UI.</li>
+<li>Add <strong>Multimodal (VLM)</strong> support: new <code>ModelType::Multimodal</code> for
+vision+language models (CLIP, LLaVA-style, mobile VLMs) — parser, agent
+planning template (parallel vision+text branches with fusion), and tests.</li>
+<li>Fix parameter calculation: fall back to <code>ffn_dim</code>/<code>num_heads</code> when
+<code>intermediate_size</code>/<code>num_attention_heads</code> are absent.</li>
+<li>Add <code>.cargo/config.toml</code> pointing MLIR crates at LLVM 18.</li>
+<li>Add MIT <code>LICENSE</code>, <code>ROADMAP_NEURAX_2.0.md</code>, deployment scripts, and
+<code>examples/models</code> reference configs.</li>
+</ul>
+<h2 id="062--202608"><a class="header" href="#062--202608">[0.6.2] — 2026‑08</a></h2>
+<h3 id="changed-1"><a class="header" href="#changed-1">Changed</a></h3>
+<ul>
+<li>Refactor README, increase fonts, integrate Notionists avatars system.</li>
+</ul>
+<h2 id="061--202607"><a class="header" href="#061--202607">[0.6.1] — 2026‑07</a></h2>
+<h3 id="added"><a class="header" href="#added">Added</a></h3>
+<ul>
+<li>Modernized landing page with 5 components + Notionists avatar system.</li>
+<li><strong>Hyperparameter Optimization</strong> system (3 strategies, 11 families,
+hardware-aware).</li>
+<li>LLM-builder implementation and testing.</li>
+</ul>
+<h2 id="050--202607"><a class="header" href="#050--202607">[0.5.0] — 2026‑07</a></h2>
+<h3 id="-complete-v050"><a class="header" href="#-complete-v050">✅ Complete (v0.5.0)</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Phase</th><th>Feature</th><th>Status</th></tr>
+</thead>
+<tbody>
+<tr><td>Core</td><td>10‑pass analytical IR pipeline</td><td>✅</td></tr>
+<tr><td>Core</td><td>MLIR compiler backend (13 dialects, LLVM 18)</td><td>✅</td></tr>
+<tr><td>Core</td><td>CLI: <code>analyze</code>, <code>compile</code>, <code>validate</code>, <code>summary</code></td><td>✅</td></tr>
+<tr><td>Core</td><td>Hardware database (20 GPUs, 2 CPUs, 5 interconnects)</td><td>✅</td></tr>
+<tr><td>Core</td><td>ONNX binary export</td><td>✅</td></tr>
+<tr><td>Core</td><td>Streaming SSE analysis API</td><td>✅</td></tr>
+<tr><td>Core</td><td>Inference simulation pass (22 parameters, 10 widgets)</td><td>✅</td></tr>
+<tr><td>Core</td><td>Dynamic analysis (virtual memory, stability, behavioral synthesis)</td><td>✅</td></tr>
+<tr><td>Core</td><td>Multi‑hardware comparison (up to 8 configurations)</td><td>✅</td></tr>
+<tr><td>Core</td><td>Time Machine cost/carbon projection</td><td>✅</td></tr>
+<tr><td>Core</td><td>Regulatory compliance configuration</td><td>✅</td></tr>
+<tr><td>Core</td><td>Credits system with plan‑based limits</td><td>✅</td></tr>
+<tr><td>Core</td><td>API key management (scopes, revocation)</td><td>✅</td></tr>
+<tr><td>Core</td><td>Stripe billing integration</td><td>✅</td></tr>
+<tr><td>Core</td><td>Supabase auth integration</td><td>✅</td></tr>
+<tr><td>Core</td><td>GitHub export with PR creation</td><td>✅</td></tr>
+<tr><td>Core</td><td>Plugin validation endpoint</td><td>✅</td></tr>
+<tr><td>Core</td><td>Presets (88 reference templates)</td><td>✅</td></tr>
+<tr><td>Web</td><td>React 18 + TypeScript + Vite frontend</td><td>✅</td></tr>
+<tr><td>Web</td><td>Visual canvas with React Flow</td><td>✅</td></tr>
+<tr><td>Web</td><td>Real‑time metrics dashboard (40+ metrics)</td><td>✅</td></tr>
+<tr><td>Web</td><td>AI Chat Drawer with agent integration</td><td>✅</td></tr>
+<tr><td>Web</td><td>Hyperparameter Optimization (3 strategies, 6 objectives)</td><td>✅</td></tr>
+<tr><td>Web</td><td>Cloud project CRUD</td><td>✅</td></tr>
+<tr><td>Web</td><td>Multi‑hardware comparison UI</td><td>✅</td></tr>
+<tr><td>Agent</td><td>Architecture planning via FastAPI + LangChain</td><td>✅</td></tr>
+<tr><td>Agent</td><td>3‑phase declarative pipeline (plan → validate → materialize)</td><td>✅</td></tr>
+<tr><td>Agent</td><td>Auto‑correction with retry (up to 3 attempts)</td><td>✅</td></tr>
+<tr><td>Agent</td><td>Catalogue store with 11 model families</td><td>✅</td></tr>
+<tr><td>MCP</td><td>Model Context Protocol server</td><td>✅</td></tr>
+<tr><td>TUI</td><td>Ratatui terminal interface</td><td>✅</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="-in-progress"><a class="header" href="#-in-progress">🚧 In Progress</a></h3>
+<ul>
+<li><strong>NEURAX‑MLIR → IREE kernels</strong> — Lowering NEURAX MLIR dialects to runnable IREE kernels for cross‑platform deployment (CPU, CUDA, Vulkan, Metal, ROCm).</li>
+<li><strong>Public benchmark suite</strong> — Validation set comparing analytical predictions against measured real‑world runs across 11 model families.</li>
+<li><strong>Batch HPO backend API</strong> — Server‑side batch hyperparameter optimization via backend API (frontend already has client‑side HPO).</li>
+</ul>
+<h3 id="-planned"><a class="header" href="#-planned">📋 Planned</a></h3>
+<ul>
+<li>PostgreSQL persistence for cloud project storage</li>
+<li>Multi‑node distributed training projections</li>
+<li>Model Hub with HuggingFace integration</li>
+<li>Fine‑tuning cost projections (LoRA, QLoRA, full)</li>
+<li>Integration with actual training frameworks (PyTorch Lightning, HF Trainer)</li>
+<li>Collaborative multi‑user editing with CRDT</li>
+</ul>
+<hr>
+<h2 id="040--202606"><a class="header" href="#040--202606">[0.4.0] — 2026‑06</a></h2>
+<h3 id="added-1"><a class="header" href="#added-1">Added</a></h3>
+<ul>
+<li>Hyperparameter Optimization system with 3 strategies (Grid Search, Random Search, Bayesian), 6 objectives, and hardware‑aware recommendations across 11 model families.</li>
+<li>14‑GPU frontend database (H200, GH200, H100 SXM/PCIe, A100 SXM/PCIe, L40S, L40, V100, RTX 4090/4080/3090, RTX A6000, T4).</li>
+<li>Hardware‑aware optimizer with VRAM, bandwidth, and ridge‑point capacity analysis.</li>
+<li>Inference Intelligence panel with 22 parameters and 10 widgets (stability, hallucination risk, sampling volatility).</li>
+<li>Time Machine compliance overlay with EU AI Act, CSRD, DSA regulatory data.</li>
+<li>GitHub export panel with direct push and PR creation.</li>
+<li>Credits system with plan‑based usage limits and billing integration.</li>
+<li>API key management with scope‑based authorization.</li>
+</ul>
+<h3 id="changed-2"><a class="header" href="#changed-2">Changed</a></h3>
+<ul>
+<li>Aligned README claims with audited codebase reality.</li>
+<li>Replaced ASCII art diagrams with Mermaid diagrams for better rendering.</li>
+</ul>
+<hr>
+<h2 id="030--202602"><a class="header" href="#030--202602">[0.3.0] — 2026‑02</a></h2>
+<h3 id="added-2"><a class="header" href="#added-2">Added</a></h3>
+<ul>
+<li>Streaming SSE analysis with authentication.</li>
+<li>Multi‑hardware comparison (up to 8 configurations).</li>
+<li>Cloud project CRUD (create, read, update, delete).</li>
+<li>ONNX binary export.</li>
+<li>GitHub push with PR creation.</li>
+<li>Billing, credits, and compliance infrastructure.</li>
+<li>Docker multi‑service orchestration.</li>
+</ul>
+<h3 id="changed-3"><a class="header" href="#changed-3">Changed</a></h3>
+<ul>
+<li>Web platform visual canvas, drag‑and‑drop, and live metrics.</li>
+<li>AI Chat Drawer with agent integration.</li>
+</ul>
+<hr>
+<h2 id="020--202506"><a class="header" href="#020--202506">[0.2.0] — 2025‑06</a></h2>
+<h3 id="added-3"><a class="header" href="#added-3">Added</a></h3>
+<ul>
+<li>10‑pass analytical IR pipeline (Architecture → Graph → Tensor → Operator → Compute → Memory → Parallelism → Hardware → Cost → Report).</li>
+<li>MLIR compiler backend with 13 custom dialects (Architecture, Graph, Tensor, Operator, Compute, Memory, Parallelism, Hardware, Cost, Report, Training, Data, Optimization).</li>
+<li>CLI with <code>analyze</code>, <code>compile</code>, <code>validate</code>, and <code>summary</code> commands.</li>
+<li>Hardware database with 20 GPUs, 2 CPUs, and 5 interconnect specifications.</li>
+<li>88 reference architecture templates across 11 model families.</li>
+<li>Terminal UI (TUI) for model compilation visualization.</li>
+</ul>
+<hr>
+<h2 id="010--202412"><a class="header" href="#010--202412">[0.1.0] — 2024‑12</a></h2>
+<h3 id="added-4"><a class="header" href="#added-4">Added</a></h3>
+<ul>
+<li>Initial analytical compiler framework.</li>
+<li>JSON model config parser with schema validation.</li>
+<li>Core IR pipeline with FLOPs, parameter count, memory, and cost formulas.</li>
+<li>MLIR code generation backend.</li>
+<li>Foundation for 11 model families: Transformer, MoE, CNN, SSM, Diffusion, GNN, GAN, RL, SNN, RNN, Experimental.</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+
+            </nav>
+
+        </div>
+
+        <template id=fa-eye><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM432 256c0 79.5-64.5 144-144 144s-144-64.5-144-144s64.5-144 144-144s144 64.5 144 144zM288 192c0 35.3-28.7 64-64 64c-11.5 0-22.3-3-31.6-8.4c-.2 2.8-.4 5.5-.4 8.4c0 53 43 96 96 96s96-43 96-96s-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6z"/></svg></span></template>
+        <template id=fa-eye-slash><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M38.8 5.1C28.4-3.1 13.3-1.2 5.1 9.2S-1.2 34.7 9.2 42.9l592 464c10.4 8.2 25.5 6.3 33.7-4.1s6.3-25.5-4.1-33.7L525.6 386.7c39.6-40.6 66.4-86.1 79.9-118.4c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C465.5 68.8 400.8 32 320 32c-68.2 0-125 26.3-169.3 60.8L38.8 5.1zM223.1 149.5C248.6 126.2 282.7 112 320 112c79.5 0 144 64.5 144 144c0 24.9-6.3 48.3-17.4 68.7L408 294.5c5.2-11.8 8-24.8 8-38.5c0-53-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6c0 10.2-2.4 19.8-6.6 28.3l-90.3-70.8zm223.1 298L373 389.9c-16.4 6.5-34.3 10.1-53 10.1c-79.5 0-144-64.5-144-144c0-6.9 .5-13.6 1.4-20.2L83.1 161.5C60.3 191.2 44 220.8 34.5 243.7c-3.3 7.9-3.3 16.7 0 24.6c14.9 35.7 46.2 87.7 93 131.1C174.5 443.2 239.2 480 320 480c47.8 0 89.9-12.9 126.2-32.5z"/></svg></span></template>
+        <template id=fa-copy><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M502.6 70.63l-61.25-61.25C435.4 3.371 427.2 0 418.7 0H255.1c-35.35 0-64 28.66-64 64l.0195 256C192 355.4 220.7 384 256 384h192c35.2 0 64-28.8 64-64V93.25C512 84.77 508.6 76.63 502.6 70.63zM464 320c0 8.836-7.164 16-16 16H255.1c-8.838 0-16-7.164-16-16L239.1 64.13c0-8.836 7.164-16 16-16h128L384 96c0 17.67 14.33 32 32 32h47.1V320zM272 448c0 8.836-7.164 16-16 16H63.1c-8.838 0-16-7.164-16-16L47.98 192.1c0-8.836 7.164-16 16-16H160V128H63.99c-35.35 0-64 28.65-64 64l.0098 256C.002 483.3 28.66 512 64 512h192c35.2 0 64-28.8 64-64v-32h-47.1L272 448z"/></svg></span></template>
+        <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
+        <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr-ef4e11c1.min.js"></script>
+        <script src="mark-09e88c2c.min.js"></script>
+        <script src="searcher-09f2665d.js"></script>
+
+        <script src="clipboard-1626706a.min.js"></script>
+        <script src="highlight-abc7f01d.js"></script>
+        <script src="book-609e4cb8.js"></script>
+
+        <!-- Custom JS scripts -->
+
+        <script>
+        window.addEventListener('load', function() {
+            window.setTimeout(window.print, 100);
+        });
+        </script>
+
+
+    </div>
+    </body>
+</html>
