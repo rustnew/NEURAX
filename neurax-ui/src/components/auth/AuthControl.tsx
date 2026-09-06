@@ -24,6 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select.tsx';
+import { useProviderModels } from '@/hooks/useProviderModels.ts';
 import { useToast } from '@/hooks/use-toast.ts';
 import { NotionistsAvatarPicker, AVATAR_OPTIONS, resolveAvatar } from '@/components/profile/NotionistsAvatarPicker.tsx';
 
@@ -70,6 +71,10 @@ export function AuthControl({
   const [apiKeyValue, setApiKeyValue] = useState('');
   const [apiCustomEndpoint, setApiCustomEndpoint] = useState('');
   const [apiModel, setApiModel] = useState('');
+
+  // The real models this key can reach — see Account.tsx for why the
+  // hand-maintained default this replaces could not stay correct.
+  const modelList = useProviderModels(apiProvider, apiKeyValue, apiCustomEndpoint);
 
   const avatarSrc = useMemo(() => (user ? avatarUrl : identiconDataUri('user')), [user, avatarUrl]);
   const displayName = user?.username ?? 'User';
@@ -308,15 +313,62 @@ export function AuthControl({
 
         {/* Model (optional) */}
         <div>
-          <label className="text-[10px] font-mono uppercase tracking-wider text-white/30 mb-1.5 block">
-            Model <span className="text-white/20">(optional)</span>
-          </label>
-          <Input
-            placeholder={PROVIDER_DEFAULTS[apiProvider].defaultModel}
-            value={apiModel}
-            onChange={(e) => setApiModel(e.target.value)}
-            className="bg-white/5 border-white/10 text-white placeholder:text-white/20"
-          />
+          <div className="flex items-center justify-between gap-2 mb-1.5">
+            <label className="text-[10px] font-mono uppercase tracking-wider text-white/30 block">
+              Model <span className="text-white/20">(optional)</span>
+            </label>
+            {modelList.status === 'loading' ? (
+              <span className="text-[10px] font-mono uppercase tracking-wider text-white/40">
+                Loading models…
+              </span>
+            ) : modelList.models.length > 0 ? (
+              <button
+                type="button"
+                onClick={modelList.reset}
+                className="text-[10px] font-mono uppercase tracking-wider text-white/40 hover:text-white/70"
+              >
+                Enter manually
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={modelList.load}
+                disabled={!apiKeyValue.trim()}
+                className="text-[10px] font-mono uppercase tracking-wider text-emerald-400/80 hover:text-emerald-300 disabled:text-white/20 disabled:hover:text-white/20"
+              >
+                {modelList.status === 'error' ? 'Retry' : 'Load my models'}
+              </button>
+            )}
+          </div>
+          {modelList.models.length > 0 ? (
+            <Select value={apiModel} onValueChange={setApiModel}>
+              <SelectTrigger className="bg-white/5 border-white/10 text-white">
+                <SelectValue placeholder="Choose a model" />
+              </SelectTrigger>
+              <SelectContent className="bg-[#1a1a2e] border-white/10 max-h-72">
+                {modelList.models.map((m) => (
+                  <SelectItem key={m} value={m} className="text-white focus:bg-white/10 focus:text-white font-mono text-xs">
+                    {m}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <Input
+              placeholder={PROVIDER_DEFAULTS[apiProvider].defaultModel}
+              value={apiModel}
+              onChange={(e) => setApiModel(e.target.value)}
+              className="bg-white/5 border-white/10 text-white placeholder:text-white/20"
+            />
+          )}
+          {modelList.models.length > 0 ? (
+            <p className="mt-1.5 text-[10px] font-mono text-white/30">
+              {modelList.models.length} model{modelList.models.length === 1 ? '' : 's'} this key can reach.
+            </p>
+          ) : null}
+          {modelList.error ? (
+            <p className="mt-1.5 text-[10px] font-mono text-red-400/80">{modelList.error}</p>
+          ) : null}
         </div>
 
         {/* Custom endpoint (only for custom provider) */}

@@ -305,6 +305,55 @@ export function hydrateNodesForFamily(
   });
 }
 
+/**
+ * The agent's hyperparameter names, translated into this codebase's.
+ *
+ * The agent names them the way papers and training scripts do
+ * (`learning_rate`, `warmup_steps`); `HardwareConfig` names them the way the
+ * rest of this app does. Anything without a field of its own goes to
+ * `customParams`, which exists for exactly that and is forwarded verbatim into
+ * the model's `global_params` — dropping it would lose a value the agent is
+ * actively reasoning about (betas, dropout, gradient clipping).
+ */
+const AGENT_HYPERPARAM_FIELDS: Record<string, keyof HardwareConfig> = {
+  learning_rate: 'learningRate',
+  weight_decay: 'weightDecay',
+  warmup_steps: 'warmupSteps',
+  max_steps: 'maxSteps',
+  batch_size: 'batchSize',
+  gradient_accumulation_steps: 'gradAccumSteps',
+  lr_schedule: 'lrScheduler',
+  optimizer: 'optimizer',
+  num_epochs: 'numEpochs',
+  zero_stage: 'zeroStage',
+  gradient_checkpointing: 'gradientCheckpointing',
+  precision: 'precision',
+};
+
+export function mapAgentHyperparams(
+  updates: Record<string, unknown>,
+  currentCustomParams?: Record<string, string | number | boolean>,
+): Record<string, unknown> {
+  const mapped: Record<string, unknown> = {};
+  const custom: Record<string, string | number | boolean> = {};
+
+  for (const [key, value] of Object.entries(updates)) {
+    const field = AGENT_HYPERPARAM_FIELDS[key];
+    if (field) {
+      mapped[field] = value;
+    } else if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+      custom[key] = value;
+    }
+  }
+
+  if (Object.keys(custom).length > 0) {
+    // Merged, not replaced: a later `set_hyperparams` must not wipe what an
+    // earlier one put there.
+    mapped.customParams = { ...(currentCustomParams ?? {}), ...custom };
+  }
+  return mapped;
+}
+
 export function buildHardwareConfigFromPreset(
   preset: VariantPreset,
   current: HardwareConfig,
@@ -2308,17 +2357,31 @@ params: params as Record<string, ParameterValue>,
     const name = tool?.name;
     const args = tool?.args ?? {};
 
-    if (name === 'clear_canvas') {
-      droppedNodeIdsRef.current = new Set();
-      bridgeSourcesRef.current = new Map();
-      handleClearCanvas();
-      return;
-    }
-
     if (name === 'set_hw_config') {
       const updates = (args as any)?.updates;
       if (!updates || typeof updates !== 'object') return;
       updateHwConfig(updates as any);
+      triggerAgentAutoAnalysis();
+      return;
+    }
+
+    // `initialize_hyperparams` and `set_hyperparams` were granted to three of
+    // the agent's four modes and applied to its own snapshot, but nothing here
+    // handled them — so a training configuration the agent believed it had set
+    // never reached the canvas, silently, in both directions. Both arrive as
+    // `{updates: {...}}` (agent_graph.py fills in the values that
+    // `initialize_hyperparams` derives, since the call itself carries none).
+    if (name === 'initialize_hyperparams' || name === 'set_hyperparams') {
+      const updates = (args as any)?.updates;
+      if (!updates || typeof updates !== 'object') return;
+
+      const mapped = mapAgentHyperparams(
+        updates as Record<string, unknown>,
+        hwConfig.customParams,
+      );
+      if (Object.keys(mapped).length === 0) return;
+
+      updateHwConfig(mapped as any);
       triggerAgentAutoAnalysis();
       return;
     }
@@ -2356,16 +2419,6 @@ params: params as Record<string, ParameterValue>,
       }
 
       addNodeFromConfig(cfg as LayerConfig, x, y, nodeId);
-      triggerAgentAutoAnalysis();
-      return;
-    }
-
-    if (name === 'move_node') {
-      const nodeId = String(args.node_id ?? '');
-      const x = Number(args.x ?? 0);
-      const y = Number(args.y ?? 0);
-      if (!nodeId) return;
-      handleUpdateNode(nodeId, { x, y });
       triggerAgentAutoAnalysis();
       return;
     }
@@ -2462,7 +2515,7 @@ params: params as Record<string, ParameterValue>,
       handleSelectNode(nodeId || null);
       return;
     }
-  }, [handleClearCanvas, layerConfigByType, toast, handleAddNode, handleUpdateNode, handleAddConnection, handleDeleteConnection, handleDeleteNode, handleSelectNode, triggerAgentAutoAnalysis, handleArchitectureChange, updateHwConfig, nodes, connections, setActiveWorkspaceTab, handleRunAnalysis]);
+  }, [layerConfigByType, toast, handleAddNode, handleUpdateNode, handleAddConnection, handleDeleteConnection, handleDeleteNode, handleSelectNode, triggerAgentAutoAnalysis, handleArchitectureChange, updateHwConfig, nodes, connections, setActiveWorkspaceTab, handleRunAnalysis]);
 
   const handleImportArchitecture = useCallback((result: ImportResult) => {
     // 1. Update family if present

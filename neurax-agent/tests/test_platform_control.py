@@ -11,8 +11,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pytest
 from topology_validator import ArchSpec
 from budget_check import spec_to_topology, measure_and_check, suggest_precision
-from materializer import materialize
-from layout_engine import assign_positions
 from snapshot_ops import _apply_tool_to_snapshot
 from requirements import extract_budget
 
@@ -32,65 +30,13 @@ SPEC = ArchSpec.from_dict({
 })
 
 
-def _collect(spec):
-    async def run():
-        return [t async for t in materialize(spec, assign_positions(spec))]
-    return asyncio.run(run())
-
 
 def test_spec_carries_platform_settings_and_hyperparameters():
     assert SPEC.hw_config["precision"] == "int8"
     assert SPEC.hyperparams["optimizer"] == "adamw"
 
 
-def test_agent_emits_platform_and_hyperparameter_tools():
-    names = [t["name"] for t in _collect(SPEC)]
-    for expected in ("set_hw_config", "initialize_hyperparams", "set_hyperparams"):
-        assert expected in names, f"{expected} should be emitted; got {names}"
-    # Hardware before the graph, hyperparameters after it: the defaults are
-    # derived from both.
-    assert names.index("set_hw_config") < names.index("add_node")
-    assert names.index("initialize_hyperparams") > names.index("add_node")
 
-
-def test_emitted_tools_actually_land_in_the_snapshot():
-    snapshot = {"nodes": [], "connections": [], "family": "transformer"}
-    for tool in _collect(SPEC):
-        snapshot = _apply_tool_to_snapshot(snapshot, tool)
-    assert snapshot["hw_config"]["precision"] == "int8"
-    assert snapshot["hyperparams"]["optimizer"] == "adamw"
-    assert snapshot["hyperparams"]["warmup_steps"] == 500
-    # Defaults from initialize_hyperparams survive where not overridden.
-    assert "lr_schedule" in snapshot["hyperparams"]
-
-
-def test_clear_canvas_actually_clears():
-    """A retry after a validation failure starts with `clear_canvas`, then
-    re-adds nodes using the same generic ids (`input`, `conv1`, ...) as the
-    attempt it's replacing. If clear_canvas doesn't really empty the
-    snapshot, those ids collide with the leftover ones, get silently
-    renamed to `_2`, and every subsequent set_node_params/connect call in
-    the SAME plan — written against the id it asked for, not the one it
-    silently got — ends up mutating the stale leftover node instead of the
-    fresh one. This is exactly the corruption a real multi-round build hit.
-    """
-    snapshot = {"nodes": [], "connections": [], "family": "transformer"}
-    snapshot = _apply_tool_to_snapshot(snapshot, {"name": "add_node", "args": {"layer_type": "input", "node_id": "input", "x": 0, "y": 0}})
-    snapshot = _apply_tool_to_snapshot(snapshot, {"name": "add_node", "args": {"layer_type": "conv2d", "node_id": "conv1", "x": 100, "y": 0}})
-    snapshot = _apply_tool_to_snapshot(snapshot, {"name": "connect", "args": {"from_id": "input", "to_id": "conv1"}})
-    assert len(snapshot["nodes"]) == 2
-    assert len(snapshot["connections"]) == 1
-
-    snapshot = _apply_tool_to_snapshot(snapshot, {"name": "clear_canvas", "args": {}})
-    assert snapshot["nodes"] == []
-    assert snapshot["connections"] == []
-
-    # Re-add a node under the SAME id a cleared node used to have.
-    snapshot = _apply_tool_to_snapshot(snapshot, {"name": "add_node", "args": {"layer_type": "input", "node_id": "input", "x": 0, "y": 0}})
-    assert snapshot["nodes"][0]["id"] == "input", (
-        "add_node got renamed to avoid a collision with a node clear_canvas "
-        "claimed to have removed — clear_canvas did not actually clear."
-    )
 
 
 def test_budget_measures_the_precision_the_agent_chose():

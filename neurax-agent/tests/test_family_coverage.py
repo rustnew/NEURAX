@@ -39,7 +39,7 @@ REFERENCE_MODELS = {
     "cnn": [
         {"id": "c1", "type": "conv2d", "params": {"in_channels": 3, "out_channels": 64, "kernel_size": 7}},
         # Activation isn't its own block — it's a param on the block it
-        # applies to (see arch_planner.py rule 9).
+        # applies to.
         {"id": "bn", "type": "batchnorm", "params": {"hidden_size": 64, "activation": "relu"}},
         {"id": "pool", "type": "max_pool", "params": {"kernel_size": 2}},
         {"id": "fc", "type": "dense", "params": {"in_features": 64, "out_features": 1000}},

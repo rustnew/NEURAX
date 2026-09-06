@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUp, ChevronRight, Mic, MessageSquareText, Plus, Sparkles, Wallet, X } from 'lucide-react';
+import { ArrowUp, ChevronRight, MessageSquareText, Plus, Sparkles, Square, Wallet, X } from 'lucide-react';
 import { Button } from '@/components/ui/button.tsx';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover.tsx';
 import { Progress } from '@/components/ui/progress.tsx';
@@ -117,6 +117,10 @@ export default function AIChatDrawer({
   const listRef = useRef<HTMLDivElement | null>(null);
   const [isSending, setIsSending] = useState(false);
   const eventSourceRef = useRef<EventSource | null>(null);
+  //: The run currently in flight, so `stopRun` can cancel it server-side.
+  //: A ref, not state: nothing renders from it, and `startRun`'s own
+  //: `runId` is a local that the composer's Stop button cannot reach.
+  const currentRunIdRef = useRef<string | null>(null);
 
   const [runStatus, setRunStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
   const [runRequest, setRunRequest] = useState<string>('');
@@ -365,6 +369,7 @@ export default function AIChatDrawer({
       const data = (await resp.json()) as { run_id?: string };
       runId = data.run_id ?? null;
       if (!runId) throw new Error('Missing run_id');
+      currentRunIdRef.current = runId;
 
       if (catalogueKeyToMarkSent) {
         try {
@@ -436,6 +441,7 @@ export default function AIChatDrawer({
       es.addEventListener('done', () => {
         es.close();
         if (eventSourceRef.current === es) eventSourceRef.current = null;
+        currentRunIdRef.current = null;
         setIsSending(false);
 
         setRunBlocks((prev) => {
@@ -496,9 +502,21 @@ export default function AIChatDrawer({
         }
       });
 
-      es.onerror = () => {
+      // `error` is EventSource's own reserved event type, so a server-sent
+      // `event: error` frame is dispatched as an `error` event and reaches
+      // this handler too — not only the dedicated listener above. Without
+      // this guard the agent's own error payload (a 404 from the model
+      // provider, say) was shown to the user a second time as "Agent
+      // connection error. Is neurax-agent running?" while the agent was in
+      // fact running and had just reported the real reason; worse, the
+      // `close()` below tore the stream down before the `assistant` and
+      // `done` frames the backend always sends after an `error` one. A
+      // genuine transport failure is a plain Event and carries no `data`.
+      es.onerror = (evt) => {
+        if ('data' in evt) return;
         es.close();
         if (eventSourceRef.current === es) eventSourceRef.current = null;
+        currentRunIdRef.current = null;
         setMessages((prev) => [
           ...prev,
           { id: `a-${Date.now()}`, role: 'assistant', content: 'Agent connection error. Is neurax-agent running?', createdAt: Date.now() },
@@ -536,6 +554,40 @@ export default function AIChatDrawer({
     summarizeTool,
     // getSnapshot intentionally excluded — accessed via getSnapshotRef to avoid stale closures
   ]);
+
+  /**
+   * Abandon the run in flight.
+   *
+   * Closing the stream is not on its own an answer: the backend only ends a
+   * run when it notices the socket is gone, and every step until then is a
+   * real LLM call billed to the user's own key. So this says so explicitly
+   * (`DELETE /runs/{id}`, which cancels the task outright) as well as
+   * closing the stream locally. The delete is fire-and-forget on purpose —
+   * the button must feel immediate, and a failed cancel still leaves the
+   * bounded run to end on its own step/time ceiling.
+   */
+  const stopRun = useCallback(() => {
+    const es = eventSourceRef.current;
+    if (es) {
+      es.close();
+      eventSourceRef.current = null;
+    }
+
+    const runId = currentRunIdRef.current;
+    currentRunIdRef.current = null;
+    if (runId) {
+      const baseUrl = (agentBaseUrl ?? (import.meta as any).env?.VITE_AGENT_BASE_URL ?? 'http://127.0.0.1:8099') as string;
+      void fetch(`${baseUrl.replace(/\/$/, '')}/runs/${runId}`, { method: 'DELETE' }).catch(() => {
+        // Nothing useful to tell the user: locally the run is already over.
+      });
+    }
+
+    setIsSending(false);
+    setRunStatus('done');
+    // Named as stopped, not finished — what is on the canvas is whatever the
+    // run had already applied, and saying "Done" would misdescribe that.
+    setRunBlocks((prev) => [...prev, { kind: 'done', content: 'Stopped', ts: Date.now() }]);
+  }, [agentBaseUrl]);
 
   if (!open) return null;
 
@@ -848,12 +900,6 @@ export default function AIChatDrawer({
 
           <div className="mt-3 flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5">
-              <Button type="button" size="icon" variant="ghost" className="h-8 w-8 rounded-xl hover:bg-primary/10 hover:text-primary transition-colors" aria-label="Add context">
-                <Plus className="w-4 h-4" />
-              </Button>
-
-              <div className="h-4 w-px bg-border/40 mx-1" />
-
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
@@ -899,33 +945,37 @@ export default function AIChatDrawer({
                 </PopoverContent>
               </Popover>
 
-              <div className="h-4 w-px bg-border/40 mx-1" />
-
-              <Button type="button" variant="ghost" size="sm" className="h-8 rounded-xl px-3 text-[11px] font-bold text-muted-foreground/70 hover:text-primary hover:bg-primary/5 transition-all">
-                Plan
-              </Button>
             </div>
 
             <div className="flex items-center gap-1.5">
-              <Button type="button" size="icon" variant="ghost" className="h-8 w-8 rounded-xl hover:bg-primary/10 hover:text-primary transition-colors" aria-label="Voice input">
-                <Mic className="w-4 h-4" />
-              </Button>
-
-              <Button
-                type="button"
-                size="icon"
-                disabled={!canSend}
-                onClick={startRun}
-                className={cn(
-                  'h-9 w-9 rounded-2xl transition-all duration-300 active:scale-90',
-                  canSend
-                    ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:shadow-primary/30 hover:-translate-y-0.5'
-                    : 'bg-muted/40 text-muted-foreground/40'
-                )}
-                aria-label="Send message"
-              >
-                <ArrowUp className="w-4.5 h-4.5" />
-              </Button>
+              {isSending ? (
+                <Button
+                  type="button"
+                  size="icon"
+                  onClick={stopRun}
+                  className="h-9 w-9 rounded-2xl transition-all duration-300 active:scale-90 bg-destructive text-destructive-foreground shadow-lg shadow-destructive/20 hover:shadow-destructive/30 hover:-translate-y-0.5"
+                  aria-label="Stop the agent"
+                  title="Stop the agent"
+                >
+                  <Square className="w-3.5 h-3.5 fill-current" />
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  size="icon"
+                  disabled={!canSend}
+                  onClick={startRun}
+                  className={cn(
+                    'h-9 w-9 rounded-2xl transition-all duration-300 active:scale-90',
+                    canSend
+                      ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:shadow-primary/30 hover:-translate-y-0.5'
+                      : 'bg-muted/40 text-muted-foreground/40'
+                  )}
+                  aria-label="Send message"
+                >
+                  <ArrowUp className="w-4.5 h-4.5" />
+                </Button>
+              )}
             </div>
           </div>
         </div>

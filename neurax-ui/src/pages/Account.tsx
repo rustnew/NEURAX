@@ -19,6 +19,7 @@ import {
   FireworksIcon, DeepSeekIcon, GlmIcon, CustomProviderIcon,
 } from '@/components/icons/ProviderIcons.tsx';
 
+import { useProviderModels } from '@/hooks/useProviderModels.ts';
 import { useToast } from '@/hooks/use-toast.ts';
 
 // ─── Notionists Avatar Family ────────────────────────────────────
@@ -76,6 +77,11 @@ export default function Account() {
   const [apiModel, setApiModel] = useState(apiKeyConfig?.model || '');
   const [showApiKey, setShowApiKey] = useState(false);
   const [apiKeyEditMode, setApiKeyEditMode] = useState(!hasApiKey);
+
+  // The real models this key can reach, fetched from the provider on
+  // demand. Replaces a free-text field prefilled from a hand-maintained
+  // default that goes stale whenever a provider retires a model id.
+  const modelList = useProviderModels(apiProvider, apiKeyValue, apiCustomEndpoint);
 
   const username = user?.username ?? 'User';
   const email = user?.email || null;
@@ -371,13 +377,54 @@ export default function Account() {
                     </div>
 
                     <div>
-                      <Label className="text-xs text-muted-foreground">Model <span className="text-muted-foreground/50">(optional)</span></Label>
-                      <Input
-                        placeholder={PROVIDER_DEFAULTS[apiProvider].defaultModel}
-                        value={apiModel}
-                        onChange={(e) => setApiModel(e.target.value)}
-                        className="mt-1"
-                      />
+                      <div className="flex items-center justify-between gap-2">
+                        <Label className="text-xs text-muted-foreground">Model <span className="text-muted-foreground/50">(optional)</span></Label>
+                        {modelList.status === 'loading' ? (
+                          <span className="text-xs text-muted-foreground">Loading models…</span>
+                        ) : modelList.models.length > 0 ? (
+                          <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={modelList.reset}>
+                            Enter manually
+                          </Button>
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 px-2 text-xs"
+                            disabled={!apiKeyValue.trim()}
+                            onClick={modelList.load}
+                          >
+                            {modelList.status === 'error' ? 'Retry' : 'Load my models'}
+                          </Button>
+                        )}
+                      </div>
+                      {modelList.models.length > 0 ? (
+                        <Select value={apiModel} onValueChange={setApiModel}>
+                          <SelectTrigger className="mt-1">
+                            <SelectValue placeholder="Choose a model" />
+                          </SelectTrigger>
+                          <SelectContent className="max-h-72">
+                            {modelList.models.map((m) => (
+                              <SelectItem key={m} value={m} className="font-mono text-xs">{m}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Input
+                          placeholder={PROVIDER_DEFAULTS[apiProvider].defaultModel}
+                          value={apiModel}
+                          onChange={(e) => setApiModel(e.target.value)}
+                          className="mt-1"
+                        />
+                      )}
+                      {modelList.models.length > 0 ? (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {modelList.models.length} model{modelList.models.length === 1 ? '' : 's'} this key can reach.
+                        </p>
+                      ) : null}
+                      {modelList.error ? (
+                        <p className="mt-1 text-xs text-destructive">{modelList.error}</p>
+                      ) : null}
                     </div>
 
                     {apiProvider === 'custom' && (

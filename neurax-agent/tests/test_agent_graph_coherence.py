@@ -1,6 +1,6 @@
 """`agent_graph.py`'s coherence gate on `done` — the real gap this closes:
 
-`agent_runner.py`'s old 3-phase pipeline plans a whole `ArchSpec` and runs
+The old 3-phase pipeline planned a whole `ArchSpec` and ran
 `topology_validator.validate_arch_spec` on it before a single tool call is
 emitted. The new step-by-step loop emits tool calls one at a time with no
 such gate anywhere — before this, the model could call `done` on a design

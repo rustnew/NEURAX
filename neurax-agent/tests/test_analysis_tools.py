@@ -9,7 +9,7 @@ convention); this file follows the same pattern for the same reason: the one
 thing actually worth checking there is that the real endpoint understands
 what gets sent, which no mock can tell you.
 
-The other eight tools have no existing neurax-agent equivalent and are
+The remaining tools have no existing neurax-agent equivalent and are
 tested here against a faked `httpx.AsyncClient` — deterministic regardless
 of whether a real backend is running, matching `test_credentials.py`'s style
 for `make_chat_model`.
@@ -113,7 +113,7 @@ def test_estimate_training_cost_honours_explicit_hours_over_the_flop_estimate():
     assert "Estimated Hours: 10.00 hours" in text
 
 
-# ─── The eight standalone HTTP tools: faked httpx.AsyncClient ─────────────
+# ─── The standalone HTTP tools: faked httpx.AsyncClient ───────────────────
 
 class _FakeResponse:
     def __init__(self, payload, status_code=200):
@@ -188,22 +188,7 @@ def test_get_compliance_config_returns_json(monkeypatch):
     assert "eu_ai_act" in text
 
 
-def test_get_credits_formats_usage(monkeypatch):
-    _patch_client(monkeypatch, payload={"credits": {"used": 5, "limit": 100, "plan": "pro"}})
-    text = asyncio.run(analysis_tools.get_credits())
-    assert "Used: 5" in text and "pro" in text
 
-
-def test_get_user_info_formats_id_and_plan(monkeypatch):
-    _patch_client(monkeypatch, payload={"user_id": "u1", "plan": "pro"})
-    text = asyncio.run(analysis_tools.get_user_info())
-    assert "u1" in text and "pro" in text
-
-
-def test_health_check_returns_json(monkeypatch):
-    _patch_client(monkeypatch, payload={"status": "ok"})
-    text = asyncio.run(analysis_tools.health_check())
-    assert "ok" in text
 
 
 def test_a_connection_error_produces_a_readable_message_not_a_crash(monkeypatch):
@@ -220,8 +205,21 @@ def test_a_backend_error_status_is_reported_with_its_code(monkeypatch):
 
 # ─── dispatch() routing ────────────────────────────────────────────────────
 
-def test_all_eleven_tool_names_are_registered():
-    assert len(analysis_tools.ANALYSIS_TOOL_NAMES) == 11
+def test_every_registered_tool_is_one_a_mode_can_actually_reach():
+    """A count is not the invariant that matters; reachability is.
+
+    `get_credits`, `get_user_info` and `health_check` were implemented,
+    routed by `dispatch` and described to nobody: no entry in any of
+    `MODE_TOOL_GRANTS`'s four sets, so `execute_tool` would have refused
+    them had the model ever named one. This asserts the property that was
+    actually violated, rather than restoring a number that only counted
+    dead code.
+    """
+    import agent_graph
+
+    granted = set().union(*agent_graph.MODE_TOOL_GRANTS.values())
+    unreachable = analysis_tools.ANALYSIS_TOOL_NAMES - granted
+    assert not unreachable, f"registered but no mode grants them: {sorted(unreachable)}"
 
 
 def test_dispatch_routes_estimate_training_cost(monkeypatch):

@@ -28,13 +28,6 @@ class _ToolCall(BaseModel):
     args: dict[str, Any] = Field(default_factory=dict)
 
 
-class _FamilySelection(BaseModel):
-    """Family selection response - must include family name."""
-    family: str = Field(
-        description="The selected architecture family name. MUST be exactly one of the allowed families provided in the prompt."
-    )
-
-
 #: Default models, when the caller names none.
 #:
 #: Stated here rather than inline so the agent and the studio cannot drift:
@@ -233,148 +226,124 @@ def make_chat_model(
     )
 
 
-async def select_family(
-    *,
-    user_message: str,
-    allowed_families: list[str],
-    catalogue: list[dict[str, Any]],
-    current_family: Optional[str],
-    max_retries: int = 3,
-) -> str:
-    """Select the best architecture family using LangChain structured output."""
-    from langchain_core.prompts import ChatPromptTemplate
-
-    # Normalize allowed families
-    allowed = [str(x).strip() for x in allowed_families if str(x).strip()]
-    if not allowed:
-        raise ValueError("allowed_families is empty")
-
-    # Build lookup for case-insensitive matching
-    allowed_lower_to_orig = {a.lower(): a for a in allowed}
-
-    # Build catalogue by family - show block types and their capabilities
-    blocks_by_family: dict[str, list[dict[str, Any]]] = {f: [] for f in allowed}
-    for item in catalogue:
-        fam = item.get("family")
-        item_type = str(item.get("type", "")).lower()
-        
-        # Infer family from block type/name if not explicit
-        if not fam:
-            if any(kw in item_type for kw in ("moe", "expert", "router")):
-                fam = "moe"
-            elif any(kw in item_type for kw in ("conv", "pool", "stem", "backbone")):
-                fam = "cnn"
-            elif any(kw in item_type for kw in ("attention", "embedding", "transformer")):
-                fam = "transformer"
-            elif any(kw in item_type for kw in ("graph", "gcn", "gat", "sage")):
-                fam = "gnn"
-            elif any(kw in item_type for kw in ("diffusion", "unet", "vae", "denois")):
-                fam = "diffusion"
-            elif any(kw in item_type for kw in ("ssm", "mamba", "state")):
-                fam = "ssm"
-            else:
-                fam = item_type
-
-        if fam in blocks_by_family:
-            blocks_by_family[fam].append({
-                "type": item.get("type"),
-                "name": item.get("name"),
-                "category": item.get("category"),
-            })
-
-    # Build a capability-focused description
-    catalogue_desc = ""
-    for fam, blocks in blocks_by_family.items():
-        if not blocks:
-            continue
-        types = list(set(str(b.get("type", "")) for b in blocks if b.get("type")))
-        categories = list(set(str(b.get("category", "")) for b in blocks if b.get("category")))
-        catalogue_desc += f"\n  {fam}:\n"
-        catalogue_desc += f"    blocks: {', '.join(types[:12])}\n"
-        if categories:
-            catalogue_desc += f"    capabilities: {', '.join(categories[:5])}\n"
+#: Substrings that mark a provider's refusal as "that model, not that key".
+#: Deliberately matched on the message rather than on a status code: every
+#: provider here returns this as a 404 *except* when it doesn't (a gateway in
+#: front of one may re-wrap it), and the wording is what actually identifies
+#: the failure. Checked case-insensitively.
+_MODEL_NOT_FOUND_MARKERS = (
+    "model not found",
+    "model_not_found",
+    "does not exist",
+    "not deployed",
+    "invalid model",
+    "unknown model",
+)
 
 
-    llm = make_chat_model()
-    structured = llm.with_structured_output(_FamilySelection)
+def _is_model_not_found(err: Exception) -> bool:
+    text = str(err).lower()
+    return any(marker in text for marker in _MODEL_NOT_FOUND_MARKERS)
 
-    # Architecture-agnostic family selection prompt
-    system_template = """You are Neurax, a consultative AI architect. Your task is to interpret a user's business requirements and select the most appropriate neural architecture family.
 
-## Your Role
-You bridge the gap between business needs (e.g., "detect factory defects", "forecast sales", "analyze customer sentiment") and technical implementations.
+#: Same deny-list as the studio's own model picker
+#: (`neurax-ui/src/services/providerModels.ts`), for the same reason: every
+#: step of this loop is a `with_structured_output` call, so substituting an
+#: embedding or image model would trade a clear "model not found" for a much
+#: more confusing structured-output failure.
+_NON_CHAT_MARKERS = (
+    "embed", "rerank", "whisper", "tts", "dall-e", "moderation", "guard",
+    "stable-diffusion", "sdxl", "flux", "image", "audio", "transcribe",
+    "bge-", "clip-", "text-similarity", "text-search", "davinci", "babbage",
+)
 
-## Business Domain Mapping
-Use these associations as a guide when the user provides non-technical requirements:
-- **Computer Vision (CNN)**: Image classification, "detecting [objects/defects]", "analyzing photos", "visual quality control".
-- **Natural Language / Sequences (Transformer)**: Chatbots, "analyzing text", "translating documents", "summarizing meetings", "sentiment analysis".
-- **Time Series / Financial (SSM/RNN)**: "Stock prediction", "sales forecasting", "sensor telemetry analysis", "fraud detection in transaction streams".
-- **Specialized Reasoning (MoE/Transformer)**: "Expert reasoning systems", "large-scale general intelligence", "multi-task optimization".
-- **Graph/Network Data (GNN)**: "Social network analysis", "drug discovery (molecular graphs)", "recommendation systems (user-item graphs)", "supply chain optimization".
-- **Generative Media (Diffusion/GAN)**: "Creating realistic images", "generating artwork", "image restoration", "synthetic data generation".
 
-## Selection Principles
-1. **Business Objective First**: Identify the core problem. Is it seeing, reading, predicting, or creating?
-2. **Consultative Approach**: Select the family that offers the best "backbone" for that specific business domain.
-3. **Handle Ambiguity**: If the request is broad, select the most versatile family (usually Transformer or CNN) that fits the likely data type.
+def _is_chat_model(model_id: str) -> bool:
+    lower = model_id.lower()
+    return not any(marker in lower for marker in _NON_CHAT_MARKERS)
 
-## Available Families
-{families_list}
 
-## Family Capabilities
-{catalogue_desc}
+async def list_available_models(credentials: Optional[dict[str, Any]]) -> list[str]:
+    """Every chat model the caller's own key can actually reach.
 
-## Output
-Return ONLY a JSON object with the selected family name. The family MUST be exactly one from the available families list."""
+    The mirror image of the studio's picker, on the server side, and it exists
+    for the case that picker cannot reach: a configuration saved *before* the
+    picker existed still names whatever hardcoded default was current then, and
+    providers retire model ids. `accounts/fireworks/models/llama-v3p1-70b-instruct`
+    was the studio's own Fireworks default long after Fireworks stopped serving
+    it, so every run under that saved configuration died on a raw 404 with a
+    perfectly valid key.
 
-    user_template = """User request: {user_message}
+    Best-effort by construction: any failure returns `[]`, and the caller then
+    reports the provider's original error rather than one about this lookup.
+    """
+    import httpx
 
-Current family: {current_family}
+    creds = credentials or {}
+    key = str(creds.get("api_key") or "").strip()
+    if not key:
+        return []
+    provider = str(creds.get("provider") or "").strip().lower()
+    base_url = str(creds.get("base_url") or "").strip().rstrip("/")
 
-Based on the request and available family capabilities, which family is most appropriate?"""
-
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", system_template),
-        ("human", user_template),
-    ])
-
-    last_err: Optional[Exception] = None
-    for attempt in range(max_retries):
-        try:
-            messages = prompt.format_messages(
-                families_list=", ".join(allowed),
-                catalogue_desc=catalogue_desc or "  (no blocks available)",
-                user_message=user_message,
-                current_family=current_family or "None set",
-            )
-            out: _FamilySelection = await structured.ainvoke(messages)
-            
-            fam_raw = str(out.family or "").strip()
-            if not fam_raw:
-                raise ValueError(f"Family is empty in response: {out.model_dump()}")
-            fam = allowed_lower_to_orig.get(fam_raw.lower())
-            if fam is None:
-                logger.error(f"❌ INVALID FAMILY: '{fam_raw}' not in {allowed}")
-                raise ValueError(f"Selected family '{fam_raw}' not in allowed_families: {allowed}")
-            
-            logger.info(f"✅ FAMILY SELECTED: '{fam}'")
-            return fam
-        except Exception as e:
-            last_err = e
-            logger.error(f"❌ FAMILY SELECTION FAILED (attempt {attempt + 1}): {e}")
-            if attempt < max_retries - 1:
-                # Strengthen the prompt on retry
-                system_template += (
-                    "\n\nCRITICAL: You MUST return ONLY valid JSON with the exact family name from: "
-                    f"{', '.join(allowed)}"
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            if provider == "anthropic":
+                r = await client.get(
+                    f"{base_url or 'https://api.anthropic.com/v1'}/models",
+                    params={"limit": 100},
+                    headers={"x-api-key": key, "anthropic-version": "2023-06-01"},
                 )
-                prompt = ChatPromptTemplate.from_messages([
-                    ("system", system_template),
-                    ("human", user_template),
-                ])
+                r.raise_for_status()
+                ids = [str(m.get("id") or "") for m in (r.json().get("data") or [])]
 
-    logger.error(f"❌ FAMILY SELECTION FAILED after {max_retries} retries: {last_err}")
-    raise ValueError(f"Failed to select family after {max_retries} retries: {last_err}")
+            elif provider == "google":
+                r = await client.get(
+                    "https://generativelanguage.googleapis.com/v1beta/models",
+                    params={"key": key, "pageSize": 200},
+                )
+                r.raise_for_status()
+                ids = [
+                    str(m.get("name") or "").removeprefix("models/")
+                    # The API states per model which methods it supports, so
+                    # this is the provider's own answer, not a guess.
+                    for m in (r.json().get("models") or [])
+                    if "generateContent" in (m.get("supportedGenerationMethods") or [])
+                ]
+
+            else:
+                base = base_url or (OPENAI_COMPATIBLE_DEFAULTS.get(provider) or {}).get(
+                    "base_url"
+                ) or "https://api.openai.com/v1"
+                r = await client.get(f"{base}/models", headers={"Authorization": f"Bearer {key}"})
+                r.raise_for_status()
+                body = r.json()
+                rows = body.get("data") if isinstance(body, dict) else body
+                ids = [str(m.get("id") or m.get("name") or "") for m in (rows or [])]
+    except Exception as e:
+        logger.warning(f"could not list models for provider '{provider or 'openai'}': {e}")
+        return []
+
+    return sorted({m for m in ids if m and _is_chat_model(m)})
+
+
+async def pick_available_model(credentials: Optional[dict[str, Any]]) -> Optional[str]:
+    """One model from `list_available_models`, or `None` if there is none.
+
+    Prefers an id that names itself as instruction- or chat-tuned; a base
+    completion model of the same family follows instructions poorly enough
+    that a structured-output loop rarely survives it. Falls back to the first
+    of the sorted list, so a provider whose naming says nothing still yields a
+    usable answer rather than nothing at all.
+    """
+    models = await list_available_models(credentials)
+    if not models:
+        return None
+    for marker in ("instruct", "chat", "-it"):
+        for model in models:
+            if marker in model.lower():
+                return model
+    return models[0]
 
 
 class _ControllerStep(BaseModel):
@@ -409,13 +378,6 @@ async def plan_run_strategy(
     ever depend on; `agent_graph.py`'s only caller treats an empty plan as
     "no roadmap to enforce", not an error.
 
-    Deliberately not `arch_planner.plan_strategy` (the old pipeline's
-    equivalent): that prompt is hard-coded to a "design a backbone from
-    scratch" framing (`bridge business needs to technical implementation`)
-    that fits creation mode and nothing else — asking it to plan an
-    optimization or a read-only explanation would return build-shaped
-    steps for a run that isn't building anything. This one is mode-aware
-    from its own `_MODE_HINTS`-equivalent framing below.
     """
     mode_action = {
         "creation": "building",
@@ -433,13 +395,31 @@ User request: {user_message}
 
 Return JSON: a list of items, each with "id" (a short string, e.g. "1") and "text" (the step)."""
 
-    try:
-        llm = make_chat_model(credentials=credentials, temperature=0.0)
+    async def _generate(creds: Optional[dict[str, Any]]) -> list[dict[str, str]]:
+        llm = make_chat_model(credentials=creds, temperature=0.0)
         structured = llm.with_structured_output(_RunPlan)
         result: _RunPlan = await structured.ainvoke(prompt)
         items = [{"id": str(it.id), "text": str(it.text)} for it in result.items if str(it.text).strip()]
         return items[:max_items]
+
+    try:
+        return await _generate(credentials)
     except Exception as e:
+        # This call runs before the loop's first step, so it is usually the
+        # first thing to hit a model id the provider no longer serves. Recover
+        # here too rather than only in `run_controller_step`: otherwise the
+        # run silently loses its roadmap and only the controller comes back.
+        if _is_model_not_found(e):
+            replacement = await pick_available_model(credentials)
+            if replacement:
+                logger.warning(
+                    f"🔁 plan: model '{(credentials or {}).get('model')}' not available — "
+                    f"retrying with '{replacement}'"
+                )
+                try:
+                    return await _generate({**(credentials or {}), "model": replacement})
+                except Exception as retry_err:
+                    e = retry_err
         logger.warning(f"upfront plan generation failed, continuing without one: {e}")
         return []
 
@@ -488,9 +468,6 @@ ANALYSIS_TOOL_DESCRIPTIONS: dict[str, str] = {
         "(args: parameters, tokens, gpu_type, gpu_count, hours)."
     ),
     "get_compliance_config": "EU AI Act / CSRD compliance info, no args.",
-    "get_credits": "Account credit balance, no args — may fail if this deployment has no account context; that's expected, not a bug.",
-    "get_user_info": "Account info, no args — may fail if this deployment has no account context; that's expected, not a bug.",
-    "health_check": "Whether the NEURAX backend is reachable, no args.",
 }
 
 #: The explanation-mode-only lookup tool — reads straight off the snapshot's
@@ -656,6 +633,12 @@ async def run_controller_step(
 
     llm = make_chat_model(credentials=credentials)
     structured = llm.with_structured_output(_ControllerStep)
+
+    # Set when the configured model turns out not to exist and this call
+    # substitutes a real one — surfaced in the step's own narration below, so
+    # the user is told what happened instead of silently getting a model they
+    # did not choose.
+    substituted_model: Optional[str] = None
 
     # Extract snapshot data
     allowed_families = snapshot.get("allowed_families") or []
@@ -957,7 +940,11 @@ What is the next step to progress toward a complete architecture?"""
     ])
 
     last_err = None
-    for _ in range(max_retries):
+    tried_model_recovery = False
+    # One extra attempt beyond `max_retries`: a model substitution consumes an
+    # attempt discovering the problem, and would otherwise leave none to use
+    # the answer it found.
+    for _ in range(max_retries + 1):
         try:
             # Build connection summary
             connection_summary = ""
@@ -1011,10 +998,37 @@ What is the next step to progress toward a complete architecture?"""
             else:
                 logger.info(f"🔧 TOOL: {tool_name} | args={tool_args}")
             
-            return {"assistant": out.assistant, "tool": {"name": tool_name, "args": tool_args}}
+            assistant_text = out.assistant
+            if substituted_model:
+                # Said once, on the step that recovered — enough for the user
+                # to know why the model differs and how to make it stick,
+                # without repeating it every step for the rest of the run.
+                assistant_text = (
+                    f"Your saved model isn't available on this key, so I'm using "
+                    f"`{substituted_model}` instead. Save it in Account → API & Agent "
+                    f"to keep it. " + assistant_text
+                )
+                substituted_model = None
+            return {"assistant": assistant_text, "tool": {"name": tool_name, "args": tool_args}}
         except Exception as e:
             last_err = e
             logger.error(f"❌ CONTROLLER STEP FAILED: {e}")
+
+            # A model id that the provider does not serve is not a transient
+            # failure: retrying it unchanged burns the remaining attempts and
+            # fails identically. Ask the key itself what it can run, once.
+            if _is_model_not_found(e) and not tried_model_recovery:
+                tried_model_recovery = True
+                replacement = await pick_available_model(credentials)
+                if replacement:
+                    logger.warning(
+                        f"🔁 model '{(credentials or {}).get('model')}' not available — "
+                        f"retrying with '{replacement}'"
+                    )
+                    substituted_model = replacement
+                    credentials = {**(credentials or {}), "model": replacement}
+                    llm = make_chat_model(credentials=credentials)
+                    structured = llm.with_structured_output(_ControllerStep)
 
     logger.error(f"❌ CONTROLLER STEP FAILED after {max_retries} retries: {last_err}")
     raise ValueError(f"Controller step failed after {max_retries}: {last_err}")

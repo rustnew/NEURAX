@@ -306,7 +306,7 @@ class BudgetReport:
 
 #: Image-shaped families ([batch, channels, height, width]) — the compiler
 #: reads their entry shape from `data.image_*`, the same fields
-#: materializer.py already backstops into hw_config for these families.
+#: The canvas's own hw_config already carries these for these families.
 _IMAGE_SHAPE_FAMILIES = {"cnn", "vit", "gan", "diffusion"}
 
 

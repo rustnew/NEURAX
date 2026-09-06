@@ -1,11 +1,10 @@
 """Neurax Agent - FastAPI entry point.
 
 Code is split into modules:
-- graph_utils.py: Graph topology analysis
-- suggestions.py: Action suggestion functions
-- prompts.py: LLM prompt builders
-- snapshot_ops.py: Snapshot manipulation
-- agent_runner.py: Main agent orchestration
+- agent_graph.py: the step-by-step agentic loop (LangGraph)
+- langchain_runner.py: model construction and per-step prompting
+- snapshot_ops.py: applying a tool call to the canvas snapshot
+- analysis_tools.py / memory_tools.py / web_search_tools.py: the tool vocabulary
 - config.py: Shared state and utilities
 """
 import asyncio
@@ -199,6 +198,25 @@ async def create_run(req: RunRequest, request: Request) -> dict[str, Any]:
     )
     _runs[run_id] = RunEntry(task=task, queue=q, created_at=time.monotonic())
     return {"run_id": run_id}
+
+
+@app.delete("/runs/{run_id}")
+async def stop_run(run_id: str) -> dict[str, str]:
+    """Stop a run the caller no longer wants.
+
+    Closing the `/events` stream already stops a run — `_stop_run` runs in
+    that endpoint's `finally` — but only once the server notices the socket
+    is gone, which is not something a "Stop" button should have to depend on
+    to be truthful about having stopped anything. Every further step is a
+    real, billed LLM call, so the client says so explicitly and this cancels
+    the task outright.
+
+    Idempotent, and deliberately not a 404 for an unknown id: a run that
+    already finished, or that was swept, is exactly the state the caller
+    wanted to reach.
+    """
+    _stop_run(run_id)
+    return {"status": "stopped"}
 
 
 @app.get("/runs/{run_id}/events")

@@ -281,7 +281,7 @@ def validate_arch_spec(
     Validate a declarative ArchSpec before materialisation.
 
     Args:
-        spec:        The architecture spec from arch_planner.py
+        spec:        The architecture spec built from a canvas snapshot
         catalogue:   Family-specific block catalogue (list of {type, name, defaultParams})
         constraints: Family constraints from catalogue.json ({requiredBlocks, incompatibleBlocks})
 

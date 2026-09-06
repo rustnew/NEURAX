@@ -1,6 +1,18 @@
-fastapi==0.110.0
+# httpx is pinned at 0.28.1, not 0.27.0, and fastapi moves up with it. The
+# 2026-09-04 security bump below took langchain-google-genai to 4.4.0, whose
+# new transitive `google-genai` SDK requires httpx>=0.28.1 — against
+# httpx==0.27.0 this file did not resolve at all: `pip install -r
+# requirements.txt` failed with ResolutionImpossible, so a venv created
+# before that bump kept the whole old 0.2.x set and never got `langgraph`,
+# leaving `app.py` unimportable and the studio's agent panel reporting
+# "Agent error: Load failed" (nothing listening on 8099).
+# fastapi follows because starlette 0.36.3 — fastapi 0.110's floor — has a
+# TestClient that calls `httpx.Client(app=...)`, an argument httpx removed in
+# 0.28 (`tests/test_rate_limit.py` is the caller). fastapi 0.115 brings
+# starlette 0.46, which doesn't pass it.
+fastapi==0.115.14
 uvicorn[standard]==0.27.1
-httpx==0.27.0
+httpx==0.28.1
 pydantic>=2.10.0,<3.0.0
 python-dotenv>=1.0.0
 

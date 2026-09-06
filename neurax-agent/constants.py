@@ -8,8 +8,8 @@ import json
 from pathlib import Path
 
 # Block types that can accept multiple incoming edges (fan-in capable merge nodes).
-# Used by both arch_planner.py (prompt generation) and topology_validator.py
-# (validation, and picking a block to auto-insert when a design needs one).
+# Used by topology_validator.py (validation, and picking a block to
+# auto-insert when a design needs one).
 #
 # Derived from block_constraints.json's `merge_capable_types` — the file
 # `topology_validator` actually validates a design against — rather than a

@@ -1,18 +1,18 @@
 """The compiler-facing half of the agent's tool vocabulary.
 
-`neurax-mcp` already exposes 11 read/analysis operations over MCP for
+`neurax-mcp` already exposes read/analysis operations over MCP for
 external clients (Claude Desktop, etc.), but `neurax-agent`'s own LLM loop
 (`agent_graph.py`) never called any of them — it only ever emitted
 canvas-mutation tool calls, with budget-checking happening as deterministic
 glue between planning attempts rather than something the model itself could
-decide to do. This module is what closes that gap: the same 11 operations,
+decide to do. This module is what closes that gap: those operations,
 callable from the step-by-step loop.
 
 Three of them (`analyze_architecture`, `check_budget`,
 `find_optimal_hyperparameters`) are thin wrappers around
 `budget_check.py`'s already-tested `measure_and_check`/
 `optimize_hyperparameters` — real, working code this file reuses rather than
-reimplements. The other eight have no existing neurax-agent equivalent, so
+reimplements. The others have no existing neurax-agent equivalent, so
 they call `neurax-service` directly, formatted the same way
 `neurax-mcp/neurax_mcp/server.py`'s tool handlers already do (that
 formatting is good and proven; only the plumbing around it changes here).
@@ -76,9 +76,6 @@ ANALYSIS_TOOL_NAMES = frozenset({
     "get_preset",
     "estimate_training_cost",
     "get_compliance_config",
-    "get_credits",
-    "get_user_info",
-    "health_check",
 })
 
 
@@ -303,48 +300,7 @@ async def get_compliance_config() -> str:
         return f"Cannot reach NEURAX backend at {NEURAX_SERVICE_URL}. Is the server running?"
 
 
-async def get_credits() -> str:
-    # `/credits` is session/API-key-gated on the backend — see this module's
-    # own docstring on why these calls carry no credential today. Calling it
-    # anyway (rather than refusing to bind the tool at all) surfaces that as
-    # a normal, readable backend error instead of a mysterious silent gap in
-    # what the agent can do.
-    try:
-        result = await _get("/credits")
-    except httpx.HTTPStatusError as e:
-        return f"Backend error ({e.response.status_code}): {e.response.text[:500]}"
-    except httpx.RequestError:
-        return f"Cannot reach NEURAX backend at {NEURAX_SERVICE_URL}. Is the server running?"
 
-    credits = result.get("credits", {}) if isinstance(result, dict) else {}
-    return (
-        "Credits:\n"
-        f"- Used: {credits.get('used', 0)}\n"
-        f"- Limit: {credits.get('limit', 'unlimited')}\n"
-        f"- Plan: {credits.get('plan', 'unknown')}\n"
-        f"- Period: {credits.get('period_start', '?')} to {credits.get('period_end', '?')}"
-    )
-
-
-async def get_user_info() -> str:
-    try:
-        result = await _get("/me")
-    except httpx.HTTPStatusError as e:
-        return f"Backend error ({e.response.status_code}): {e.response.text[:500]}"
-    except httpx.RequestError:
-        return f"Cannot reach NEURAX backend at {NEURAX_SERVICE_URL}. Is the server running?"
-
-    return f"User Info:\n- User ID: {result.get('user_id', '?')}\n- Plan: {result.get('plan', '?')}"
-
-
-async def health_check() -> str:
-    try:
-        result = await _get("/health")
-        return json.dumps(result, indent=2)
-    except httpx.HTTPStatusError as e:
-        return f"Backend error ({e.response.status_code}): {e.response.text[:500]}"
-    except httpx.RequestError:
-        return f"Cannot reach NEURAX backend at {NEURAX_SERVICE_URL}. Is the server running?"
 
 
 async def dispatch(name: str, args: dict[str, Any], snapshot: dict[str, Any]) -> str:
@@ -383,10 +339,4 @@ async def dispatch(name: str, args: dict[str, Any], snapshot: dict[str, Any]) ->
         )
     if name == "get_compliance_config":
         return await get_compliance_config()
-    if name == "get_credits":
-        return await get_credits()
-    if name == "get_user_info":
-        return await get_user_info()
-    if name == "health_check":
-        return await health_check()
     raise ValueError(f"Unknown analysis tool: {name}")

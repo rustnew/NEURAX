@@ -1,15 +1,14 @@
 """agent_graph.py — the step-by-step agentic loop.
 
-`agent_runner.py`'s `_run_agent` plans a *whole* architecture in one
-structured-output call, then materializes it deterministically. That is
-correct and well-tested for "build me an X" — a single shot at a complete
-design, bounded by `MAX_ATTEMPTS = 4` retries. It cannot do the other half of
-what an autonomous agent needs: take one small step, look at the real result,
-and decide the next one — the shape "plan and work for minutes at a time"
-actually requires.
+This module replaced a 3-phase declarative pipeline that planned a *whole*
+architecture in one structured-output call and then materialized it
+deterministically. That was correct for "build me an X" — a single shot at a
+complete design — but it could not do the other half of what an autonomous
+agent needs: take one small step, look at the real result, and decide the next
+one, the shape "plan and work for minutes at a time" actually requires. That
+pipeline is gone; this is what runs.
 
-This module is that loop, built on LangGraph (`StateGraph`) rather than a
-hand-rolled `while`, for the reasons recorded in the project's own plan
+Built on LangGraph (`StateGraph`) rather than a hand-rolled `while`, for the reasons recorded in the project's own plan
 document: step-by-step execution, a real stop condition instead of an
 unbounded loop, and streaming that maps directly onto the SSE events
 `app.py`'s `/runs/{id}/events` already serves.
@@ -298,8 +297,8 @@ def _validate_canvas_coherence(snapshot: dict[str, Any]) -> list[str]:
     node left off that path, fan-in limits — the same
     `topology_validator.validate_arch_spec` the old 3-phase pipeline
     already gated materialization on, reused rather than re-derived.
-    `agent_runner.py`'s pipeline plans a whole spec and validates it before
-    a single tool call is ever emitted; this loop emits tool calls
+    The pipeline this loop replaced planned a whole spec and validated it
+    before a single tool call was ever emitted; this loop emits tool calls
     one at a time with no such gate at all until this function's one call
     site (`execute_tool`'s `done` handling) — without it, the model could
     call `done` on a design with a block connected to nothing, and nothing
@@ -341,10 +340,9 @@ def _explain_layer_type(snapshot: dict[str, Any], layer_type: str) -> str:
 async def execute_tool(state: AgentGraphState) -> dict[str, Any]:
     """Apply the planned tool — to the canvas if it's a mutation, to the
     compiler if it's an analysis call (`analysis_tools.ANALYSIS_TOOL_NAMES`).
-    `_apply_tool_to_snapshot` is the same validation `agent_runner.py`'s
-    materialization already goes through for canvas edits: a cycle or a
-    fan-in violation is rejected there exactly as it always was, regardless
-    of what the model intended.
+    `_apply_tool_to_snapshot` applies the same validation to every canvas
+    edit: a cycle or a fan-in violation is rejected there regardless of what
+    the model intended.
 
     The very first check, before any of that, is the structural
     least-privilege gate: a tool outside `state["allowed_tools"]` (`"done"`
@@ -504,6 +502,17 @@ async def execute_tool(state: AgentGraphState) -> dict[str, Any]:
     # rather than relying on the caller not noticing the aliasing.
     snapshot = _apply_tool_to_snapshot(dict(state["snapshot"]), tool)
 
+    # `initialize_hyperparams` takes no arguments — it derives a whole training
+    # configuration from the design (`snapshot_ops`). The tool event carries
+    # only what the model *asked* for, so the frontend received an empty
+    # `args` and had nothing to apply: the agent's own snapshot gained a
+    # training config the canvas never saw. Emitting the values it actually
+    # computed is what closes that, and it keeps the frontend on one code
+    # path — both hyperparameter tools arrive as `{updates: {...}}`, exactly
+    # like `set_hw_config` already does.
+    if name == "initialize_hyperparams":
+        tool = {"name": name, "args": {"updates": snapshot.get("hyperparams") or {}}}
+
     rejection = snapshot.pop("_last_tool_rejection", None)
     if rejection:
         history.append({
@@ -609,10 +618,9 @@ async def run_agent_graph(
     enable_plan: bool = True,
 ) -> None:
     """Drive the graph for one run, forwarding every event it produces to
-    the same SSE queue `agent_runner.py::_run_agent` already writes to.
-    `app.py`'s `/runs/{id}/events` does not know or care which orchestrator
-    produced an event — only that the stream ends in a `done` event, which
-    this function guarantees exactly like `_run_agent` does, `finally`.
+    the SSE queue `app.py`'s `/runs/{id}/events` serves. That endpoint only
+    requires the stream to end in a `done` event, which this function
+    guarantees in a `finally`.
 
     `mode` resolves to a tool grant via `MODE_TOOL_GRANTS`; an unrecognized
     mode falls back to `DEFAULT_MODE` rather than raising — a stale or

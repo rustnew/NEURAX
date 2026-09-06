@@ -60,31 +60,6 @@ def _apply_tool_to_snapshot(snapshot: dict[str, Any], tool: dict[str, Any]) -> d
         t = node_type(node_id)
         return get_max_inputs(t)
 
-    if name == "clear_canvas":
-        # Wipe all nodes, edges, and cached analysis so the build starts from blank.
-        #
-        # Must reset the *local* `nodes`/`conns` lists, not just the `snapshot`
-        # dict keys: every branch in this function (including this one, until
-        # now) mutates the local copies, and the unconditional
-        # `snapshot["nodes"] = nodes` at the bottom of the function writes
-        # whatever `nodes` holds back over `snapshot["nodes"]` regardless.
-        # Setting only `snapshot["nodes"] = []` here left `nodes` holding the
-        # pre-clear list captured at the top of this call, so that stale list
-        # got written straight back a few lines later — clear_canvas never
-        # actually cleared anything. The very next add_node would then
-        # collide with the "removed" nodes, get silently auto-renamed to
-        # `_2`, while this plan's own subsequent set_node_params/connect
-        # calls kept referencing the un-renamed id — pointing at the stale
-        # leftover node instead of the fresh one. Every retry after a
-        # validation failure hit this, corrupting the canvas with orphaned,
-        # unparameterized, disconnected duplicate nodes.
-        logger.info(f"🧹 CLEAR CANVAS: removed {initial_node_count} nodes, {initial_conn_count} connections")
-        nodes = []
-        conns = []
-        snapshot["groups"] = []
-        snapshot["analysis_warnings"] = []
-        snapshot["missing_mandatory_fields"] = list(snapshot.get("missing_mandatory_fields") or [])
-
     if name == "set_family":
         fam = str(args.get("family") or "")
         if fam:
@@ -129,7 +104,7 @@ def _apply_tool_to_snapshot(snapshot: dict[str, Any], tool: dict[str, Any]) -> d
         if actual_id:
             nodes.append({"id": actual_id, "type": layer_type, "name": layer_type, "x": x, "y": y, "params": {}})
             logger.info(f"➕ ADD NODE: id='{actual_id}' type='{layer_type}' pos=({x:.0f}, {y:.0f})")
-            # Store the actual ID used so agent_runner can feed it back to LLM
+            # Store the actual ID used so the loop can feed it back to the model
             snapshot["_last_added_node_id"] = actual_id
         else:
             logger.warning(f"⚠️ ADD NODE FAILED: invalid node_id")
@@ -168,15 +143,6 @@ def _apply_tool_to_snapshot(snapshot: dict[str, Any], tool: dict[str, Any]) -> d
                     snapshot["analysis_warnings"] = [w for w in aw if _keep(w)]
             else:
                 logger.warning(f"⚠️ SET PARAMS FAILED: node='{node_id}' not found")
-
-    elif name == "move_node":
-        node_id = str(args.get("node_id") or "")
-        x = float(args.get("x") or 0)
-        y = float(args.get("y") or 0)
-        n = find_node(node_id)
-        if n:
-            n["x"] = x
-            n["y"] = y
 
     elif name == "initialize_hyperparams":
         # Initialize hyperparameters based on model architecture and hardware config
