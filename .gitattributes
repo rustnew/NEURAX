@@ -1,6 +1,2 @@
 # Language detection overrides for GitHub linguist
-# NEURAX defines its MLIR dialects in TableGen (.td) files — map them to MLIR
-# so the MLIR backend shows up in the repository language stats.
-*.td linguist-language=MLIR
-*.mlir linguist-language=MLIR
 *.td linguist-vendored=false

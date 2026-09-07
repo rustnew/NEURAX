@@ -368,7 +368,7 @@ fn decompose_layer_to_ops(
 ///
 /// Exposed publicly so other consumers of the real per-layer-type formulas
 /// this pass already applies don't have to re-derive their own, separate
-/// approximation. The MLIR backend used to: its own `compiler.rs` counted
+/// approximation. A since-deleted MLIR backend did exactly that: it counted
 /// attention as `4 × hidden²` FLOPs and left every CNN, SSM, GAN, RNN and
 /// diffusion layer type silently uncounted, simply because nothing connected
 /// it to this pass.

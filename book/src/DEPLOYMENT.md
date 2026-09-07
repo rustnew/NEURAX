@@ -289,19 +289,6 @@ lsof -i :9098
 kill -9 <PID>
 ```
 
-### Docker Build Fails (MLIR)
-
-The MLIR backend requires LLVM 18. If you don't need MLIR code generation, build without the `mlir` feature:
-
-```bash
-cargo build -p neurax-service  # Without MLIR
-# Or with MLIR (requires LLVM 18):
-sudo apt install llvm-18 llvm-18-dev libmlir-18-dev mlir-18-tools
-export LLVM_SYS_180_PREFIX=/usr/lib/llvm-18
-export MLIR_SYS_180_PREFIX=/usr/lib/llvm-18
-cargo build -p neurax-service --features mlir
-```
-
 ### Agent LLM Not Responding
 
 Ensure `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` is set in `neurax-agent/.env`.

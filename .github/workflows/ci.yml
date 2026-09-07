@@ -19,12 +19,11 @@ jobs:
 
       # `target` used to be part of this cache too and grew to 4+ GB over the
       # life of the repository, back when this job also apt-installed LLVM
-      # 18/MLIR to build `neurax-mlir` — enough to tip the runner into a
-      # "No space left on device" failure. `neurax-mlir` is no longer a
-      # workspace member (nothing in the workspace depends on it; see its
-      # own exclusion comment in the root Cargo.toml), so this job doesn't
-      # need LLVM at all anymore — the registry and git caches below are
-      # what actually save time (skipping re-fetching every crate).
+      # 18/MLIR to build an MLIR backend crate — enough to tip the runner
+      # into a "No space left on device" failure. That crate has been
+      # deleted, so this job needs no LLVM at all — the registry and git
+      # caches below are what actually save time (skipping re-fetching
+      # every crate).
       - name: Cache cargo
         uses: actions/cache@v4
         with:

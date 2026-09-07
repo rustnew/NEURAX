@@ -4,8 +4,7 @@
 //! different reported value than the one being checked) and compare against
 //! whether the compiler actually fired it. A mismatch in either direction —
 //! fired when it shouldn't have (false positive) or silent when it should
-//! have fired (false negative) — is a real implementation bug, the same
-//! standard `formula_mlir_crosscheck.rs` holds the FLOPs formulas to.
+//! have fired (false negative) — is a real implementation bug.
 //!
 //! This is the discipline described as missing this session: no lint should
 //! ship without being checked against a real corpus for its false-positive

@@ -775,24 +775,10 @@ neurax validate model.json
 # Show a quick summary of the model
 neurax summary model.json
 
-# Full compilation: validate → analyze → generate MLIR
-neurax compile model.json -o output/
-
 # Show version
 neurax version
 ```
 
-### Compile Output
-
-The `compile` command generates:
-
-| File | Description |
-|---|---|
-| `model.mlir` | NEURAX MLIR with 14 custom dialects |
-| `llvm_ir.ll` | LLVM IR |
-| `assembly.s` | Assembly code |
-| `model.o` | Object file |
-| `report.md` | Analysis report |
 
 ---
 

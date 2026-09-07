@@ -16,11 +16,11 @@ COPY neurax-formulas/Cargo.toml neurax-formulas/Cargo.toml
 COPY neurax-hardware-db/Cargo.toml neurax-hardware-db/Cargo.toml
 COPY neurax-tui/Cargo.toml neurax-tui/Cargo.toml
 COPY neurax-service/Cargo.toml neurax-service/Cargo.toml
-COPY neurax-mlir/Cargo.toml neurax-mlir/Cargo.toml
+COPY neurax-opspec/Cargo.toml neurax-opspec/Cargo.toml
 
-# Create dummy src files so cargo can resolve the workspace
-# (neurax-mlir is a workspace member but NOT a dependency of neurax-service,
-#  so it only needs a stub for workspace resolution — it is never built here)
+# Create dummy src files so cargo can resolve the workspace. Every member
+# needs one, whether or not neurax-service depends on it — resolution reads
+# the whole workspace.
 RUN mkdir -p neurax-core/src && echo "fn main(){}" > neurax-core/src/lib.rs \
     && mkdir -p neurax-parser/src && echo "fn main(){}" > neurax-parser/src/lib.rs \
     && mkdir -p neurax-ir/src && echo "fn main(){}" > neurax-ir/src/lib.rs \
@@ -28,7 +28,7 @@ RUN mkdir -p neurax-core/src && echo "fn main(){}" > neurax-core/src/lib.rs \
     && mkdir -p neurax-hardware-db/src && echo "fn main(){}" > neurax-hardware-db/src/lib.rs \
     && mkdir -p neurax-tui/src && echo "fn main(){}" > neurax-tui/src/main.rs \
     && mkdir -p neurax-service/src && echo "fn main(){}" > neurax-service/src/main.rs \
-    && mkdir -p neurax-mlir/src && echo "fn main(){}" > neurax-mlir/src/lib.rs
+    && mkdir -p neurax-opspec/src && echo "fn main(){}" > neurax-opspec/src/lib.rs
 
 # Build dependencies only (cached layer)
 RUN cargo build --release -p neurax-service 2>/dev/null || true

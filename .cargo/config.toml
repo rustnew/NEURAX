@@ -1,8 +1,0 @@
-# NEURAX build configuration
-# LLVM 18 / MLIR are required by neurax-mlir (tblgen-alt / mlir-sys).
-# The system installs llvm-18 with llvm-config-18 but not a bare
-# `llvm-config` in PATH, so we point the MLIR crates at the LLVM 18 prefix.
-[env]
-LLVM_CONFIG = "/usr/lib/llvm-18/bin/llvm-config"
-LLVM_SYS_180_PREFIX = "/usr/lib/llvm-18"
-MLIR_SYS_180_PREFIX = "/usr/lib/llvm-18"

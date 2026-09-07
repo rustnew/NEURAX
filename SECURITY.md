@@ -28,7 +28,5 @@ We aim to acknowledge reports within **48 hours** and publish a fix within
 
 - NEURAX analyzes **untrusted model JSON files** — the parser is fuzz-tested,
   but treat configs from unknown sources with care.
-- The `neurax-mlir` backend invokes external MLIR/LLVM tooling; keep those
-  pinned to trusted versions.
 - API keys (Stripe, Supabase) must only be set via environment variables,
   never committed.

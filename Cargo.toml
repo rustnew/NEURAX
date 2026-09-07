@@ -19,17 +19,7 @@ members = [
 # README) — deliberately excluded so it never becomes a silent dependency of
 # the product or a thing CI has to keep green. Build/run it explicitly with
 # `--manifest-path neurax-ir-poc/Cargo.toml`.
-#
-# `neurax-mlir` is excluded for the same reason: nothing in the workspace
-# imports `neurax_mlir::` anywhere (verified — grepped every other crate),
-# and its own FLOPs/param "computation" (`compiler.rs::calculate_total_*`)
-# just calls back into `neurax_ir`, so it adds zero independent value while
-# forcing an LLVM-18 toolchain onto every `cargo build --workspace` for a
-# crate nothing uses. Kept in the repo (its melior/MLIR lowering is real,
-# not hollow — see its own tests) in case it becomes the basis of a real
-# native cross-check pass later; build/test it explicitly with
-# `--manifest-path neurax-mlir/Cargo.toml` until then.
-exclude = ["neurax-desktop", "neurax-ir-poc", "neurax-mlir"]
+exclude = ["neurax-desktop", "neurax-ir-poc"]
 resolver = "2"
 
 [workspace.dependencies]
@@ -44,7 +34,6 @@ dashmap = "6"
 evalexpr = "11"
 indexmap = "2"
 itertools = "0.13"
-melior = "0.18"
 num_cpus = "1"
 once_cell = "1"
 parking_lot = "0.12"

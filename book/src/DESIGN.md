@@ -194,7 +194,7 @@ ctx.set_metric("total_flops", forward_flops);      // written by ComputePass
 let total_flops = ctx.get_metric("total_flops");   // read by ParallelismPass
 ```
 
-*Figure 4 — the shape of this channel is intentionally simple (string key, `f64` value, no schema), which is also its main risk: a producer that is never wired up fails silently rather than at compile time. This was a real, found-and-fixed bug this session — `ParallelismPass` read `total_flops` from a channel nothing had ever written to, computing every downstream compute-time and communication-overhead figure from zero. The fix was adding the one missing `ctx.set_metric()` call in `ComputePass`, not changing the channel's design — but it is the reason this document calls the mechanism out explicitly rather than leaving it implicit: any future producer/consumer pair added to it needs to be verified against a real model, the same way `neurax-core/examples/validate_hints.rs` and `formula_mlir_crosscheck.rs` verify the rest of the pipeline.*
+*Figure 4 — the shape of this channel is intentionally simple (string key, `f64` value, no schema), which is also its main risk: a producer that is never wired up fails silently rather than at compile time. This was a real, found-and-fixed bug this session — `ParallelismPass` read `total_flops` from a channel nothing had ever written to, computing every downstream compute-time and communication-overhead figure from zero. The fix was adding the one missing `ctx.set_metric()` call in `ComputePass`, not changing the channel's design — but it is the reason this document calls the mechanism out explicitly rather than leaving it implicit: any future producer/consumer pair added to it needs to be verified against a real model, the same way `neurax-core/examples/validate_hints.rs` verifies the rest of the pipeline.*
 
 ---
 
@@ -238,46 +238,6 @@ The orchestrator that wires together the 11-phase pipeline, dynamic analysis, an
 - `validate_json()` — JSON validation
 - `get_model_summary()` — quick model summary
 - ONNX export via `neurax-core/src/export/`
-
-### neurax-mlir
-
-MLIR compiler backend with 14 custom dialects, callable as a library
-(`compile_model_to_mlir`) and covered by its own 119 tests.
-
-**Not part of the request path above.** Nothing in `neurax-service` or
-`neurax-core` calls into this crate — the diagrams in this document used to
-show it wired into the live pipeline, feeding LLVM 18/IREE for CPU, CUDA,
-Vulkan, Metal and ROCm targets, which described a lowering pipeline that
-doesn't run. What actually produces every metric a user sees is the
-11-phase analytical IR pipeline above (`neurax-ir` + `neurax-formulas`).
-`neurax-mlir` is real, working code — reachable by depending on the crate
-directly, see `examples/compile_to_mlir.rs` — that emits textual MLIR from
-the same parsed `ModelConfig`, using the same real per-layer formulas as
-the analytical pipeline (`neurax_ir::calculate_layer_params`,
-`neurax_ir::layer_flops`) rather than the standalone approximation it used
-to keep. Lowering that MLIR the rest of the way to LLVM IR, an object
-file, or any of the target backends below is not wired up to anything —
-the dialects and target-specific codegen modules exist, but nothing in
-the shipped product calls them today.
-
-| Dialect | Purpose |
-|---|---|
-| Architecture | Model structure (model, layers, global params) |
-| Graph | Computation graph topology |
-| Tensor | Tensor shapes and memory layout |
-| Operator | Operator-level operations (attention, MLP, conv) |
-| Compute | Compute characteristics (FLOPs, throughput) |
-| Memory | Memory operations (allocations, copies) |
-| Parallelism | Parallelism strategies (TP, PP, DP, EP) |
-| Hardware | Hardware specifications and constraints |
-| Cost | Cost model operations |
-| Report | Report generation operations |
-| Training | Training-specific operations |
-| Data | Data pipeline operations |
-| Optimization | Optimization pass operations |
-| Utils | Shared helpers used across the other dialects |
-
-**Target backend code that exists but nothing calls**: CPU, CUDA, Vulkan, Metal, ROCm codegen modules, plus IREE integration — implemented, tested in isolation, not reachable from an analysis request.
 
 ### neurax-formulas
 
@@ -421,7 +381,7 @@ H006, H007 and H008 are the most recent additions and are the ones that reach ac
 
 ### A note on "how many metrics" — there is no single honest number
 
-At different points the project has stated 43, 66, 35, 70+ and 77 metrics in five different places (an MLIR doc comment, this book, two comments in the same source file, and a test file) — five different answers to what sounds like one simple question. Counting a real report's JSON output directly (`gpt3_175b.json`, via `to_json()`) resolves why: it has 168 leaf fields, but a large share of them are **per-layer breakdowns** (`structure.params_per_layer.layer_3`, `performance.latency_per_layer.mlp_7`, ...) whose count scales with the model's own depth — a 96-layer model produces far more JSON keys than a 10-layer one for the exact same set of *kinds* of information. "How many metrics" is really two different, both-true answers: a **fixed** ~76 scalar fields across the 9 static phases (`neurax-core/tests/metrics_count.rs`, manually tallied, not by struct reflection), plus the 3 Dynamic sub-passes' own structs (`VirtualMemoryMetrics` + `StabilityMetrics` + `BehavioralMetrics`, 33 fields combined as of this writing), plus a **variable** number of per-layer entries. Stating one flat number without that distinction is exactly how five different, individually-defensible counts ended up contradicting each other — this document states the breakdown instead of adding a sixth number to the pile.
+At different points the project has stated 43, 66, 35, 70+ and 77 metrics in five different places (a since-deleted MLIR backend's doc comment, this book, two comments in the same source file, and a test file) — five different answers to what sounds like one simple question. Counting a real report's JSON output directly (`gpt3_175b.json`, via `to_json()`) resolves why: it has 168 leaf fields, but a large share of them are **per-layer breakdowns** (`structure.params_per_layer.layer_3`, `performance.latency_per_layer.mlp_7`, ...) whose count scales with the model's own depth — a 96-layer model produces far more JSON keys than a 10-layer one for the exact same set of *kinds* of information. "How many metrics" is really two different, both-true answers: a **fixed** ~76 scalar fields across the 9 static phases (`neurax-core/tests/metrics_count.rs`, manually tallied, not by struct reflection), plus the 3 Dynamic sub-passes' own structs (`VirtualMemoryMetrics` + `StabilityMetrics` + `BehavioralMetrics`, 33 fields combined as of this writing), plus a **variable** number of per-layer entries. Stating one flat number without that distinction is exactly how five different, individually-defensible counts ended up contradicting each other — this document states the breakdown instead of adding a sixth number to the pile.
 
 ---
 

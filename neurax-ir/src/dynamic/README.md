@@ -133,5 +133,4 @@ if report.is_production_ready() {
 
 - [ ] V2 BehavioralSynthesisPass with GNN model
 - [ ] Calibration data integration
-- [ ] MLIR dialect `virt` implementation
 - [ ] Additional stability metrics per layer type

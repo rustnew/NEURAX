@@ -144,9 +144,7 @@ Passes 7 & 8 run concurrently (rayon), and the whole pipeline is deterministic.
 | **neurax-core** | **The unified engine (this crate)** |
 
 These are workspace crates in this repository — use a path or git dependency
-to reach any of them from outside a checkout. `neurax-mlir` exists in the
-repository but is excluded from this workspace and has no consumers — see
-its own README for why.
+to reach any of them from outside a checkout.
 
 ## License
 
