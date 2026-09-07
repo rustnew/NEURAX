@@ -2,6 +2,7 @@
 import json
 import logging
 from typing import Any, Optional
+from catalogue_store import get_families
 from topology_validator import get_max_inputs
 
 # Configure logging
@@ -62,7 +63,37 @@ def _apply_tool_to_snapshot(snapshot: dict[str, Any], tool: dict[str, Any]) -> d
 
     if name == "set_family":
         fam = str(args.get("family") or "")
-        if fam:
+        # The set NEURAX supports end to end: `neurax-parser`'s
+        # `ModelType::from_str` accepts these eight and no others, and the
+        # studio, the catalogue and the served presets all agree (see
+        # `tests/test_family_coverage.py`'s cross-source assertion).
+        #
+        # This used to accept any string at all. Nothing downstream caught it
+        # either: `get_catalogue_for_family` returns no blocks for an unknown
+        # family and `get_family_constraints` falls back to a permissive
+        # default, so the loop went on reasoning about a family the canvas
+        # never adopted — the frontend validates `set_family` and drops it, so
+        # the agent's snapshot said one thing and the real canvas another,
+        # silently, until `/analyze` refused the design with
+        # `Invalid model type`. Rejected here instead, the same way a cycle or
+        # a fan-in violation is, so the model reads its own failure on the
+        # next step and picks a real family.
+        #
+        # `allowed_families` is what the caller itself declared it supports
+        # (`Index.tsx::agentGetSnapshot` sends exactly
+        # `ALL_ARCHITECTURE_FAMILIES`); the catalogue is the fallback for a
+        # caller that sends none, not a second opinion that could disagree.
+        allowed = [str(f) for f in (snapshot.get("allowed_families") or [])] or get_families()
+        if fam and fam not in allowed:
+            msg = f"'{fam}' is not a supported family; choose one of: {', '.join(sorted(allowed))}"
+            logger.warning(f"⚠️ SET FAMILY REJECTED: {msg}")
+            snapshot["_last_tool_rejection"] = {
+                "tool": name,
+                "args": {"family": fam},
+                "reason": "unknown_family",
+                "message": msg,
+            }
+        elif fam:
             old_family = snapshot.get("family", "none")
             snapshot["family"] = fam
             logger.info(f"🏷️ SET FAMILY: '{old_family}' → '{fam}'")
