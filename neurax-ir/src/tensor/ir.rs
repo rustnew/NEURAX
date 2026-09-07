@@ -82,18 +82,26 @@ impl Shape {
     }
 
     /// Calculate size in bytes
+    /// Byte size of this shape at `dtype`.
+    ///
+    /// Delegates to `neurax_formulas::dtype_bytes` — the project's one table of
+    /// storage widths — rather than keeping a second one here. The copy this
+    /// replaces had drifted in the way a duplicated table always eventually
+    /// does: it had no `int4` arm, so int4 fell through to `_ => 4` and every
+    /// *output* tensor was sized at fp32 width, while input tensors on the
+    /// lines above already used `dtype_bytes` and correctly took 0.5. Across
+    /// all 106 reference templates that mix reported int4 activations at
+    /// 0.54–0.99x fp32 instead of 0.125x — larger, on every single model, than
+    /// the same design at int8.
+    ///
+    /// The integer `bytes_per_elem` was the deeper half of the fault: a width
+    /// of half a byte cannot be expressed in it at all, so no `int4` arm could
+    /// have been added without this change. int4 packs two values per byte
+    /// (GPTQ/AWQ/QLoRA-NF4/GGUF Q4 all store it that way), which is exactly
+    /// why `dtype_bytes` returns `f64`.
     pub fn size_bytes(&self, dtype: &str) -> u64 {
         let elements = self.num_elements().unwrap_or(0);
-        let bytes_per_elem = match dtype {
-            "fp64" | "float64" => 8,
-            "fp32" | "float32" => 4,
-            "fp16" | "float16" => 2,
-            "bf16" | "bfloat16" => 2,
-            "int8" => 1,
-            "fp8" | "float8" => 1,
-            _ => 4,
-        };
-        (elements * bytes_per_elem) as u64
+        (elements as f64 * neurax_formulas::dtype_bytes(dtype)).round() as u64
     }
 }
 

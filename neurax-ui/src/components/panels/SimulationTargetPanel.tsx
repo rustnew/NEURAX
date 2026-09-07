@@ -16,7 +16,7 @@ import { Cpu, Check, X, AlertTriangle, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog.tsx';
 import { Input } from '@/components/ui/input.tsx';
 import { cn } from '@/lib/utils.ts';
-import { useHardware } from '@/contexts/HardwareContext.tsx';
+import { useHardware, type HardwareConfig } from '@/contexts/HardwareContext.tsx';
 import { listHardware, type HardwareDetail } from '@/services/neuraxApi.ts';
 
 /**
@@ -76,6 +76,31 @@ interface SimulationTargetPanelProps {
   isOpen: boolean;
   onClose: () => void;
 }
+
+/**
+ * The precisions the analysis actually understands.
+ *
+ * `neuraxCompiler`'s `VALID_PRECISIONS` is the gate — anything outside this set
+ * silently becomes fp32 — and `neurax-formulas::dtype_bytes` is where each one
+ * turns into a byte width. Both are mirrored in the labels below so a user can
+ * see why the memory figures move before they move.
+ *
+ * This control did not exist. `precision` sits in `MANDATORY_FIELDS.common`
+ * beside `hardware` and `batchSize`, it multiplies every memory number the
+ * product reports, and no surface in the studio could set it: a canvas stayed
+ * on the `DEFAULT_HARDWARE_CONFIG` value of fp16 unless the design came in
+ * through an import or the agent wrote it. The Inference workspace's
+ * "Quantization Level" select looks like this control but is not — it seeds
+ * itself from `design.precision` and writes only to a local inference-simulation
+ * parameter, so it never changes the design's own weights or VRAM.
+ */
+const PRECISIONS: { value: HardwareConfig['precision']; label: string; bytesPerParam: string }[] = [
+  { value: 'fp32', label: 'Full precision', bytesPerParam: '4 bytes per parameter' },
+  { value: 'fp16', label: 'Half precision', bytesPerParam: '2 bytes per parameter' },
+  { value: 'bf16', label: 'Brain float', bytesPerParam: '2 bytes per parameter' },
+  { value: 'int8', label: '8-bit integer', bytesPerParam: '1 byte per parameter' },
+  { value: 'int4', label: '4-bit integer', bytesPerParam: '0.5 byte per parameter, two packed per byte' },
+];
 
 export function SimulationTargetPanel({ isOpen, onClose }: SimulationTargetPanelProps) {
   const { config, updateConfig } = useHardware();
@@ -170,6 +195,45 @@ export function SimulationTargetPanel({ isOpen, onClose }: SimulationTargetPanel
               <span className="text-[11px]">Loading hardware specifications…</span>
             </div>
           )}
+
+            <div className="rounded-[8px] border border-border/60 bg-background/40 p-3">
+              <label
+                htmlFor="numeric-precision"
+                className="text-[10px] font-bold uppercase tracking-[0.15em] text-foreground/80"
+              >
+                Numeric precision
+              </label>
+              <p className="text-[10px] text-muted-foreground mt-0.5 mb-2">
+                Width every weight, activation and optimizer state is stored at. Multiplies
+                the whole memory analysis — int4 packs two values per byte, an eighth of fp32.
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {PRECISIONS.map((option) => {
+                  const active = config.precision === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => updateConfig({ precision: option.value })}
+                      aria-pressed={active}
+                      title={`${option.label} — ${option.bytesPerParam}`}
+                      className={
+                        'px-2.5 py-1 rounded-[6px] border text-[11px] font-mono transition-colors ' +
+                        (active
+                          ? 'border-primary bg-primary/10 text-primary font-semibold'
+                          : 'border-border/60 text-muted-foreground hover:text-foreground hover:border-border')
+                      }
+                    >
+                      {option.value}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[10px] font-mono text-muted-foreground/70 mt-2">
+                {PRECISIONS.find((o) => o.value === config.precision)?.bytesPerParam ??
+                  'unrecognised — the analysis falls back to fp32'}
+              </p>
+            </div>
 
           {catalogue && (
             <>

@@ -36,6 +36,7 @@ pub use ssm::*;
 /// to fit a model in less memory.
 pub fn dtype_bytes(dtype: &str) -> f64 {
     match dtype {
+        "fp64" | "float64" => 8.0,
         "fp32" | "float32" => 4.0,
         "fp16" | "float16" => 2.0,
         "bf16" | "bfloat16" => 2.0,
