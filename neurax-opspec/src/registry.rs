@@ -1401,12 +1401,27 @@ static GNN_SPECS: &[OpSpec] = &[
 /// falling back to the Cora citation-graph benchmark's real size, the same
 /// default a GNN design with no explicit graph size already assumed before
 /// migrating.
+/// A positive size from `global_params`, or `default`.
+///
+/// Every caller of this helper asks for a quantity that cannot meaningfully be
+/// zero — a graph with no nodes, a batch of no samples. A present zero is
+/// therefore a sender's "unset" sentinel, not a value, and treating it as one
+/// silently zeroes the formula that reads it: `gcn_flops(0, in, out, 0)` is 0,
+/// and a report whose total FLOPs is zero is rejected outright. Six GNN
+/// reference templates failed exactly that way, because the studio wrote
+/// `num_nodes: 0` for a config that had never set it.
+///
+/// The studio no longer sends those zeros, but it is not the only client:
+/// `neurax-agent`, `neurax-mcp`, an older frontend build and hand-written JSON
+/// all reach this same code. Rejecting a non-positive value here is what makes
+/// the default mean "no usable value was supplied", from any of them.
 fn extra_usize(global_params: &GlobalParams, key: &str, default: usize) -> usize {
     global_params
         .extra
         .get(key)
         .and_then(|v| v.as_u64())
         .map(|v| v as usize)
+        .filter(|v| *v > 0)
         .unwrap_or(default)
 }
 
@@ -1667,6 +1682,34 @@ mod tests {
         let out_w = 32 + 2 * padding - 7 + 1;
         let expected = 2.0 * 1.0 * out_h as f64 * out_w as f64 * 8.0 * 5.0 * 7.0 * (3.0 / 1.0);
         assert_eq!(flops, expected);
+    }
+
+    #[test]
+    fn a_zero_sized_global_falls_back_instead_of_zeroing_the_formula() {
+        // The studio used to write `num_nodes: 0` whenever a config had never
+        // set it, which drove every GCN/GAT template's FLOPs to zero — and the
+        // compiler rejects a report whose total is zero. A sender's "unset"
+        // sentinel must reach the same default an absent key would.
+        let spec = op_spec(LayerType::GraphConvNet).unwrap();
+        let layer = bare_layer(LayerType::GraphConvNet);
+
+        let mut zeroed = GlobalParams::default();
+        zeroed
+            .extra
+            .insert("num_nodes".to_string(), serde_json::json!(0));
+        zeroed
+            .extra
+            .insert("num_edges".to_string(), serde_json::json!(0));
+
+        let empty = GlobalParams::default();
+        let with_zeros = (spec.flops_fn)(&layer, 1, 1, &default_ctx(&zeroed));
+        let with_nothing = (spec.flops_fn)(&layer, 1, 1, &default_ctx(&empty));
+
+        assert!(with_zeros > 0.0, "a zero-sized graph must not zero the FLOPs");
+        assert_eq!(
+            with_zeros, with_nothing,
+            "an explicit zero must behave exactly like an absent key"
+        );
     }
 
     #[test]

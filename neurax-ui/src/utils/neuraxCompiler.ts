@@ -2118,6 +2118,44 @@ export function compileToNeuraxIR(
     datasetSize?: number | null;
   } = {}
 ) {
+  // Every field below whose only sensible values are positive.
+  //
+  // `HardwareConfig` uses 0 as its "not set for this family" sentinel — a
+  // transformer config ships `numNodes: 0`, a GNN config ships `vocabSize: 0`,
+  // and `DEFAULT_HARDWARE_CONFIG` ships zeros for all of them. Everything
+  // downstream reaches for a default with `??`, which only fires on null or
+  // undefined, so a sentinel zero was never a missing value — it was a real
+  // one, and it won.
+  //
+  // The damage was not theoretical. `computeCnnShapes(..., imgHeight ?? 224)`
+  // started pix2pix at a 0×0 image, its convolutions collapsed to 1×1, and the
+  // whole design priced at zero FLOPs — which the backend rejects outright
+  // (`400 Compute IR error: Total FLOPs is zero`). The GNN formulas failed the
+  // same way through `num_nodes`. Normalising once here, rather than auditing
+  // every `??` in this file, is what makes the rule hold for fields added
+  // later too.
+  const POSITIVE_ONLY_ENV = [
+    'seqLen', 'maxSeqLen', 'vocabSize', 'hiddenDim', 'hiddenSize', 'numHeads',
+    'headDim', 'ffnDim', 'numLayers', 'numDecoderLayers', 'kvHeads',
+    'imgHeight', 'imgWidth', 'inChannels', 'numClasses',
+    'patchSize', 'numPatches', 'numDenoisingSteps',
+    'numNodes', 'numEdges', 'nodeFeatDim', 'edgeFeatDim', 'outDim',
+    'dState', 'dtRank', 'convKernel', 'expandFactor', 'projSize', 'timesteps',
+    'numExperts', 'topK', 'expertCapacity',
+    'gpuCount', 'gpuMemoryGb', 'datasetSize', 'batchSize',
+    'microBatchSize', 'gradAccumSteps', 'expertParallel',
+    'tensorParallel', 'pipelineParallel', 'maxSteps', 'numEpochs',
+  ] as const;
+
+  const sanitized: Record<string, unknown> = { ...(options as Record<string, unknown>) };
+  for (const key of POSITIVE_ONLY_ENV) {
+    const value = sanitized[key];
+    if (typeof value === 'number' && !(Number.isFinite(value) && value > 0)) {
+      sanitized[key] = null;
+    }
+  }
+  options = sanitized as typeof options;
+
   const {
     modelName = 'NeuraxModel',
     family = 'transformer',
@@ -3064,26 +3102,59 @@ export function compileToNeuraxIR(
 
   // Build global_params from env
   const global_params: NeuraxGlobalParams = {};
-  if (hiddenDim != null) global_params.hidden_size = hiddenDim;
-  if (numLayers != null) global_params.num_layers = numLayers;
+
+  /**
+   * Write a size-valued global parameter — but only when it really is a size.
+   *
+   * `HardwareConfig` uses 0 as its "not set for this family" sentinel:
+   * `DEFAULT_HARDWARE_CONFIG` ships `numNodes: 0`, `numEdges: 0`,
+   * `nodeFeatDim: 0`, and a transformer-shaped config leaves the graph fields
+   * at zero the same way a GNN config leaves `vocabSize` there. A plain
+   * `!= null` guard let every one of those zeros through.
+   *
+   * That is not a harmless zero. On the backend a *present* key beats the
+   * formula's own fallback — `extra_usize(global_params, "num_nodes", 2708)`
+   * only ever reaches 2708 when the key is absent — so an unset field did not
+   * fall back to a sensible default, it forced a zero into the formula.
+   * `gcn_flops(0, in, out, 0)` is 0, and the compiler rejects any report whose
+   * total FLOPs is zero: every GCN/GAT/ChebNet/TAGCN/RGCN/GaAN template
+   * answered `400 Compute IR error: Total FLOPs is zero` instead of a number.
+   *
+   * None of these quantities has a meaningful zero — a model with no
+   * vocabulary, no attention heads or no graph nodes is not a smaller model,
+   * it is not a model — so "not positive" and "not set" are the same thing,
+   * and omitting the key is what lets the backend's default apply.
+   *
+   * Settings whose zero *is* meaningful (`weight_decay` at 0 means no
+   * regularization; `num_dense_layers` at 0 means an all-MoE stack) keep the
+   * plain null-check and are written below.
+   */
+  const putSize = (key: keyof NeuraxGlobalParams, value: number | null | undefined): void => {
+    if (value != null && Number.isFinite(value) && value > 0) {
+      (global_params as Record<string, unknown>)[key] = value;
+    }
+  };
+
+  putSize('hidden_size', hiddenDim);
+  putSize('num_layers', numLayers);
   if (numDenseLayers != null) global_params.num_dense_layers = numDenseLayers;
-  if (numDecoderLayers != null) global_params.num_decoder_layers = numDecoderLayers;
-  if (vocabSize != null) global_params.vocab_size = vocabSize;
-  if (resolvedSeqLen != null) global_params.sequence_length = resolvedSeqLen;
-  if (numHeads != null) global_params.num_heads = numHeads;
-  if (headDim != null) global_params.head_dim = headDim;
-  if (ffnDim != null) global_params.ffn_dim = ffnDim;
-  if (numExperts != null) global_params.num_experts = numExperts;
-  if (topK != null) global_params.top_k = topK;
+  putSize('num_decoder_layers', numDecoderLayers);
+  putSize('vocab_size', vocabSize);
+  putSize('sequence_length', resolvedSeqLen);
+  putSize('num_heads', numHeads);
+  putSize('head_dim', headDim);
+  putSize('ffn_dim', ffnDim);
+  putSize('num_experts', numExperts);
+  putSize('top_k', topK);
   // GNN graph size — read by the backend's message-passing/GCN/GAT FLOPs
   // formulas (edge count sets how many messages actually get passed). These
   // used to only ever be written onto a local `env` object that nothing
   // downstream of this function ever read; `global_params` is the field the
   // backend's `GlobalResolutionContext` actually parses (`get_u64("num_nodes")`).
-  if (numNodes != null) global_params.num_nodes = numNodes;
-  if (numEdges != null) global_params.num_edges = numEdges;
-  if (nodeFeatDim != null) global_params.node_features = nodeFeatDim;
-  if (edgeFeatDim != null) global_params.edge_features = edgeFeatDim;
+  putSize('num_nodes', numNodes);
+  putSize('num_edges', numEdges);
+  putSize('node_features', nodeFeatDim);
+  putSize('edge_features', edgeFeatDim);
 
   // Settings that describe the training regime rather than the tensor shapes.
   // They ride in global_params, which the backend keeps as a flattened
@@ -3091,9 +3162,12 @@ export function compileToNeuraxIR(
   if (weightDecay != null) global_params.weight_decay = weightDecay;
   if (lrScheduler != null) global_params.lr_scheduler = lrScheduler;
   if (earlyStoppingPatience != null) global_params.early_stopping_patience = earlyStoppingPatience;
-  if (expertParallel != null) global_params.expert_parallel = expertParallel;
-  if (microBatchSize != null) global_params.micro_batch_size = microBatchSize;
-  if (gradAccumSteps != null) global_params.gradient_accumulation_steps = gradAccumSteps;
+  // Counts, not switches: a degree of 0 GPUs, a micro-batch of 0 samples or 0
+  // accumulation steps describe no run at all, so they take the same
+  // positive-only rule as the sizes above.
+  putSize('expert_parallel', expertParallel);
+  putSize('micro_batch_size', microBatchSize);
+  putSize('gradient_accumulation_steps', gradAccumSteps);
 
   // User-defined hyperparameters last, so an explicit entry wins over a
   // built-in of the same name rather than being silently discarded.
