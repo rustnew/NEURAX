@@ -564,17 +564,9 @@ export type LayerType =
   | 'time_embedding'
   | 'unet_downsample'
   | 'unet_upsample'
-  // RL
+  // RLHF heads, offered by the transformer palette
   | 'policy_head'
   | 'value_head'
-  | 'advantage_stream'
-  // SNN
-  | 'lif_neuron'
-  | 'spike_encoder'
-  | 'stdp_synapse'
-  | 'rate_encoder'
-  | 'synaptic_layer'
-  | 'leaky_neuron'
   // Diffusion — extra composite
   | 'unet_block'
   | 'dit_block'
@@ -597,38 +589,8 @@ export type LayerType =
   | 'message_passing'
   | 'graph_pool'
   | 'graph_concat'
-  // RL — types used in templates
-  | 'q_network'
-  | 'actor_network'
-  | 'critic_network'
-  | 'noisy_linear'
-  | 'dueling_network'
-  | 'distributional_q'
-  | 'target_network'
-  // SNN — types used in templates
-  | 'if_neuron'
-  | 'spiking_conv2d'
-  | 'spiking_linear'
-  | 'spiking_self_attention'
-  | 'spike_self_attention'
-  | 'spike_neuron'
-  | 'spiking_transformer_block'
-  // Experimental — types used in templates
-  | 'ode_solver'
-  | 'ode_func'
-  | 'ltc_cell'
+  // Used by the IndRNN template
   | 'temporal_conv'
-  | 'temporal_encoder'
-  | 'systolic_array'
-  | 'pipeline_stage'
-  | 'aer_encoder'
-  | 'synaptic_connection'
-  | 'quantum_circuit'
-  | 'feature_map'
-  | 'deepsets'
-  | 'functional_layer'
-  | 'hyper_lstm'
-  | 'weight_generator'
   // Composite blocks used in templates
   | 'mlp'
   | 'to_rgb'

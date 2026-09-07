@@ -60,7 +60,12 @@ describe('generateModelCode — no silent identity pass-through', () => {
   });
 
   it('makes an unsupported layer fail loudly instead of passing through', () => {
-    const nodes = [node('n1', 'quantum_circuit', {})];
+    // A type the palette does not offer at all — which is the whole point:
+    // `quantum_circuit` used to sit in `LayerType` as a declared-but-
+    // unreachable name, so this test asserted the unsupported path using a
+    // type the union claimed was valid. `as any` now says plainly that this
+    // is not a block NEURAX has.
+    const nodes = [node('n1', 'quantum_circuit' as any, {})];
     const result = generateModelCode(nodes, [], BASE_HW, 'Weird');
     expect(result.fullySupported).toBe(false);
     expect(result.unsupportedTypes).toContain('quantum_circuit');

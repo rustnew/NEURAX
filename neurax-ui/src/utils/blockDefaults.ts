@@ -140,12 +140,7 @@ const DEFAULTS: Record<string, Params> = {
     dit_block: { input_size: 32, patch_size: 2, in_channels: 4, embed_dim: 1152, depth: 28, num_heads: 16, mlp_ratio: 4.0, learn_sigma: true },
 
     // ── SNN ──────────────────────────────────────────────────
-    rate_encoder: { encoding: 'rate', timesteps: 100 },
     latency_encoder: { encoding: 'latency', timesteps: 50 },
-    lif_neuron: { tau: 10.0, threshold: 1.0, reset: 0.0, decay: 0.9 },
-    leaky_neuron: { tau: 5.0, threshold: 0.9, reset: 0.0 },
-    synaptic_layer: { in_features: 256, out_features: 256, delay: 1 },
-    stdp_synapse: { in_features: 256, out_features: 256, a_plus: 0.01, a_minus: 0.012, tau_plus: 20, tau_minus: 20 },
     gan_noise_z: { dim: 100, distribution: 'gaussian' },
     dcgan_generator_block: { out_channels: 256, kernel: 4, stride: 2, padding: 1, activation: 'relu' },
     dcgan_discriminator_block: { out_channels: 256, kernel: 4, stride: 2, padding: 1, activation: 'leaky_relu' },
@@ -154,7 +149,6 @@ const DEFAULTS: Record<string, Params> = {
     // ── RL ───────────────────────────────────────────────────
     policy_head: { d_model: 768, action_dim: 32000, distribution: 'categorical' },
     value_head: { d_model: 768, hidden_dim: 256 },
-    advantage_stream: { d_model: 768, action_dim: 18, hidden_dim: 256 },
 
     // ── Custom ───────────────────────────────────────────────
     custom: { flops_formula: 'B*N*D', memory_formula: 'B*N*D*4' },

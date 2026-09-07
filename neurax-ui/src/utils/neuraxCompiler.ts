@@ -496,10 +496,6 @@ const BLOCK_TYPE_MAP: Partial<Record<LayerType, string>> = {
   unet_upsample: 'Opaque',
   policy_head: 'DenseProjection',
   value_head: 'DenseProjection',
-  advantage_stream: 'DenseProjection',
-  lif_neuron: 'Opaque',
-  spike_encoder: 'Opaque',
-  stdp_synapse: 'Opaque',
   // CNN — Convolutions
   pointwise_conv: 'Conv2D',
   separable_conv: 'SeparableConv',
@@ -797,7 +793,7 @@ function fixDenseParams(
   if (
     'dim' in out &&
     !('out_features' in out) &&
-    !['classification_head', 'policy_head', 'value_head', 'advantage_stream'].includes(nodeType)
+    !['classification_head', 'policy_head', 'value_head'].includes(nodeType)
   ) {
     out.out_features = out.dim;
     delete out.dim;
@@ -830,15 +826,6 @@ function fixDenseParams(
         out.out_features = 1;
       }
       deleteParamKeys(out, ['d_model', 'hidden_dim']);
-      break;
-    case 'advantage_stream':
-      if ('d_model' in out && !('in_features' in out)) {
-        out.in_features = out.d_model;
-      }
-      if ('action_dim' in out && !('out_features' in out)) {
-        out.out_features = out.action_dim;
-      }
-      deleteParamKeys(out, ['d_model', 'action_dim', 'hidden_dim']);
       break;
     default:
       if ('d_model' in out && !('out_features' in out)) {
@@ -899,7 +886,6 @@ function inferNodeOutputDim(node: CanvasNode): number | undefined {
     case 'classification_head':
       return getNumericParam(params, ['num_classes', 'out_features', 'outFeatures']);
     case 'policy_head':
-    case 'advantage_stream':
       return getNumericParam(params, ['action_dim', 'out_features', 'outFeatures']);
     case 'value_head':
       return 1;
@@ -1544,7 +1530,6 @@ function toParserLayerType(blockType: string): string {
     normalized === 'dynamics_predictor' ||
     normalized === 'policy_head' ||
     normalized === 'value_head' ||
-    normalized === 'advantage_stream' ||
     normalized === 'forecasting_head' ||
     normalized === 'mapping_linear' ||
     normalized === 'equalized_lr_linear'

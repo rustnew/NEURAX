@@ -123,11 +123,6 @@ LAYER_TYPE_MAP = {
     "gat_conv": "custom",
     "sage_conv": "custom",
     "edge_conv": "custom",
-    "lif_neuron": "custom",
-    "leaky_neuron": "custom",
-    "synaptic_layer": "custom",
-    "rate_encoder": "custom",
-    "latency_encoder": "custom",
 
     # ── Parameter-free element-wise steps ─────────────────────────────────
     "relu": "custom",

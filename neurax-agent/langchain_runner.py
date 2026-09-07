@@ -766,7 +766,7 @@ async def run_controller_step(
                                       "expert", "gate", "router_softmax", "moe_block", "residual_block",
                                       "unet_block", "downsample", "upsample", "timestep_embedding",
                                       "s4_block", "mamba_block", "lstm", "gru", "bilstm", "lstm_cell", "gru_cell",
-                                      "lif_neuron", "gcn_conv", "gat_conv", "sage_conv", "global_mean_pool"}
+                                      "gcn_conv", "gat_conv", "sage_conv", "global_mean_pool"}
                 if ntype in single_input_types:
                     max_in = 1
                 else:
