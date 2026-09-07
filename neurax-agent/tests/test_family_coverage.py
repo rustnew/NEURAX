@@ -5,6 +5,14 @@ can place but the compiler cannot read fails the entire analysis — the budget
 then goes unverified and the client receives a design nobody measured. These
 tests build one representative model per family out of that family's own
 catalogue blocks and require it to compile.
+
+One fixture per family, and exactly the eight families that exist end to end:
+`neurax-parser`'s `ModelType::from_str` accepts these and no others, and
+`Index.tsx`'s `ALL_ARCHITECTURE_FAMILIES`, `plugins.ts`'s `ArchitectureFamily`
+and `catalogue.json` all agree on the same eight. Fixtures for `snn`,
+`multimodal` and `experimental` used to sit here too and could never pass:
+the compiler answers `Invalid model type` for all three, and no catalogue
+entry exists to validate their blocks against.
 """
 import sys, os, json, asyncio
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -81,24 +89,6 @@ REFERENCE_MODELS = {
         {"id": "attn", "type": "mha", "params": {"hidden_size": 256, "num_heads": 8}},
         {"id": "out", "type": "conv2d", "params": {"in_channels": 128, "out_channels": 3, "kernel_size": 3}},
     ],
-    "snn": [
-        {"id": "enc", "type": "rate_encoder", "params": {"hidden_size": 128}},
-        {"id": "lif", "type": "lif_neuron", "params": {"hidden_size": 128}},
-        {"id": "syn", "type": "synaptic_layer", "params": {"hidden_size": 128},
-         "custom_equations": {"params": "H * H"}},
-        {"id": "head", "type": "classification_head", "params": {"in_features": 128, "out_features": 10}},
-    ],
-    "multimodal": [
-        {"id": "img", "type": "conv2d", "params": {"in_channels": 3, "out_channels": 64, "kernel_size": 8, "stride": 8}},
-        {"id": "txt", "type": "embedding", "params": {"vocab_size": 8000, "hidden_size": 256}},
-        {"id": "fuse", "type": "mha", "params": {"hidden_size": 256, "num_heads": 8}},
-        {"id": "head", "type": "classification_head", "params": {"in_features": 256, "out_features": 100}},
-    ],
-    "experimental": [
-        {"id": "novel", "type": "custom", "params": {"hidden_size": 256},
-         "custom_equations": {"flops_forward": "4 * B * S * H * H", "params": "2 * H * H"}},
-        {"id": "out", "type": "dense", "params": {"in_features": 256, "out_features": 10}},
-    ],
 }
 
 
@@ -145,3 +135,41 @@ def test_reference_models_use_only_their_own_family_blocks(family):
     used = {n["type"] for n in REFERENCE_MODELS[family]}
     foreign = used - catalogue_blocks
     assert foreign == set(), f"{family} fixture uses blocks outside its catalogue: {foreign}"
+
+
+def test_the_families_are_the_same_eight_everywhere():
+    """One list of families, agreed on by four independent places.
+
+    They had drifted: `presets.rs` served `snn` and `rl` presets — six designs
+    a user could load and the compiler would then refuse with
+    `Invalid model type`, since `ModelType::from_str` has never accepted
+    either. This asserts the agreement rather than any one list, so the next
+    family added anywhere has to be added everywhere.
+    """
+    import re
+
+    root = os.path.join(HERE, "..")
+
+    parser = open(os.path.join(root, "neurax-parser", "src", "model_config.rs")).read()
+    body = parser[parser.index("pub fn from_str"):parser.index("pub fn as_str")]
+    compiler = {
+        # The first alternative in each arm is the canonical name; the rest
+        # are aliases ("convolutional", "mamba", ...), not separate families.
+        re.findall(r'"([a-z_]+)"', arm)[0]
+        for arm in re.findall(r'^\s*("[a-z_]+"(?:\s*\|\s*"[a-z_]+")*)\s*=>', body, re.M)
+    }
+
+    ui = open(os.path.join(root, "neurax-ui", "src", "types", "plugins.ts")).read()
+    ui_block = ui[ui.index("export type ArchitectureFamily"):ui.index("export interface ArchitectureFamilyConfig")]
+    studio = set(re.findall(r"'([a-z]+)'", ui_block))
+
+    catalogue = set(CATALOGUE)
+
+    presets = open(os.path.join(root, "neurax-service", "src", "presets.rs")).read()
+    served = set(re.findall(r'family: "([a-z_]+)"', presets))
+
+    assert compiler == studio == catalogue == served == set(REFERENCE_MODELS), (
+        f"families disagree — compiler={sorted(compiler)}, studio={sorted(studio)}, "
+        f"catalogue={sorted(catalogue)}, presets={sorted(served)}, "
+        f"fixtures={sorted(REFERENCE_MODELS)}"
+    )
