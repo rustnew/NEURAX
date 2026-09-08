@@ -1,8 +1,12 @@
 # Le compilateur NEURAX — document de référence
 
 > Ce document décrit l'intégralité du compilateur NEURAX : chaque crate, chaque
-> phase, chaque étape, son rôle, son but et sa position dans la chaîne. Il est
-> écrit à partir du code, et chaque affirmation renvoie au fichier qui la porte.
+> phase, chaque étape, son rôle, son but et sa position dans la chaîne.
+>
+> Il est écrit à partir du code et nomme le fichier qui porte chaque affirmation.
+> Les chiffres viennent d'inspections directes ou d'appels au service en cours
+> d'exécution — l'exemple de bout en bout du §2.2 est une analyse réelle, pas une
+> illustration.
 
 ---
 
@@ -25,6 +29,10 @@
 15. [Le système agentique](#15-le-système-agentique)
 16. [Les couches de vérification](#16-les-couches-de-vérification)
 17. [Limites connues](#17-limites-connues)
+
+*Annexes* — [A · le chemin complet](#annexe-a--le-chemin-complet-dun-bout-à-lautre) ·
+[B · glossaire](#annexe-b--glossaire) ·
+[C · inventaire des modules](#annexe-c--inventaire-des-modules)
 
 ---
 
@@ -98,9 +106,128 @@ flowchart TB
 ```
 
 Le point charnière est le **document IR JSON**. C'est le seul contrat entre
-l'extérieur et le moteur : quatre sections (`model`, `training`, `hardware`,
-`data`), et tout ce qui entre dans NEURAX prend cette forme, qu'il vienne du
-studio, de l'agent, d'un import ou d'un appel HTTP direct.
+l'extérieur et le moteur, et tout ce qui entre dans NEURAX prend cette forme,
+qu'il vienne du studio, de l'agent, d'un import ou d'un appel HTTP direct.
+
+### 2.1 Le contrat : le document IR
+
+Quatre sections, et un numéro de version de schéma.
+
+```json
+{
+  "schema_version": "1.0",
+
+  "model": {
+    "name": "GPT2-Small",
+    "type": "transformer",
+    "global_params": {
+      "hidden_size": 768, "num_layers": 12, "vocab_size": 50257,
+      "sequence_length": 1024, "num_heads": 12
+    },
+    "layers": [
+      { "id": "emb",  "layer_type": "embedding",     "params": { "vocab_size": 50257, "hidden_size": 768 } },
+      { "id": "attn", "layer_type": "attention",     "params": { "hidden_size": 768, "num_heads": 12 } },
+      { "id": "mlp",  "layer_type": "mlp",           "params": { "hidden_size": 768, "intermediate_size": 3072 } },
+      { "id": "ln",   "layer_type": "normalization", "params": { "hidden_size": 768 } }
+    ],
+    "connections": [
+      { "from": "emb",  "to": "attn" },
+      { "from": "attn", "to": "mlp"  },
+      { "from": "mlp",  "to": "ln"   }
+    ]
+  },
+
+  "training": { "batch_size": 8, "precision": "bf16", "optimizer": "adamw" },
+  "hardware": { "gpus": [ { "name": "A100-80GB", "count": 1 } ] },
+  "data":     { "dtype": "bf16", "dataset_size": 10000000000 }
+}
+```
+
+| Section | Ce qu'elle porte | Qui la lit |
+|---|---|---|
+| `model` | La structure : type de famille, paramètres globaux, couches, arêtes. | Phases 1 à 4 |
+| `training` | Le régime : taille de batch, précision, optimiseur. | Phases 5, 6, 9 |
+| `hardware` | La cible : GPU nommés et leur nombre. | Phases 7, 8, 9 |
+| `data` | Le jeu de données : dtype, taille, dimensions d'image le cas échéant. | Phases 3, 9 |
+
+Trois remarques sur ce contrat :
+
+- **`layer_type` est une chaîne, pas une énumération.** Le parseur la résout vers
+  l'une des 61 variantes via 176 alias acceptés. Ce choix rend le document
+  tolérant aux conventions de nommage externes — mais il désarme aussi le
+  filtrage exhaustif du compilateur, ce qui a déjà coûté des bugs (§17).
+- **`global_params` est un fourre-tout aplati.** Il transporte aussi bien des
+  dimensions que des réglages d'entraînement, sans schéma. Une valeur absente y
+  déclenche le défaut de la formule qui la lit ; une valeur **présente à zéro**
+  l'écrase — d'où la règle « une taille non positive vaut absente », appliquée des
+  deux côtés (§5.1 et §9.2).
+- **`schema_version`** est transporté jusque dans les métadonnées du rapport, ce
+  qui permet à un consommateur de savoir sous quelle version un résultat archivé
+  a été produit.
+
+### 2.2 Un exemple de bout en bout
+
+Le document ci-dessus, envoyé à `POST /analyze` sur un service en cours
+d'exécution, donne :
+
+```json
+{
+  "metadata": {
+    "generated_at": "2026-09-08T08:00:38Z",
+    "neurax_version": "0.15.0",
+    "model_name": "GPT2-Small",
+    "model_type": "transformer",
+    "schema_version": "1.0",
+    "analysis_time_ms": 0
+  },
+  "metrics": {
+    "total_parameters":       123633408,
+    "total_flops":            1710552514560.0,
+    "parameter_memory_bytes": 247266816,
+    "activation_memory_bytes":465567744,
+    "optimizer_state_bytes":  494533632,
+    "peak_vram_bytes":        1454635008,
+    "effective_tflops":       130.26,
+    "latency_ms":             13.13,
+    "training_time_hours":    4.45,
+    "training_cost_usd":      13.36,
+    "energy_kwh":             2.14,
+    "co2_kg":                 0.50
+  },
+  "diagnostics":      [ { "severity": "Hint", "code": "H008", "category": "Configuration", "message": "…" } ],
+  "recommendations":  [],
+  "warnings":         [],
+  "confidence_score": 1.0,
+  "phase_timeline":   [ { "name": "Architecture", "duration_ms": 0, "status": "completed" }, … ]
+}
+```
+
+**123 633 408 paramètres.** GPT-2 Small est publié à 124 millions : l'écart est de
+0,3 %. C'est le genre de vérification que le §16 systématise.
+
+Le reste se lit ensemble : le modèle pèse 247 Mo en bf16, ses activations 466 Mo,
+les états d'AdamW 495 Mo — soit **1,45 Go de VRAM au pic**, très loin des 80 Go de
+la carte visée. Il tiendrait donc, et l'entraînement sur 10 milliards de tokens
+prendrait environ 4,5 heures pour 13 dollars, 2,1 kWh et 0,5 kg de CO₂.
+
+### 2.3 Le budget de temps
+
+La promesse « sous les 50 ms » n'est pas un slogan : chaque phase est chronométrée
+et le rapport transporte sa propre chronologie.
+
+```mermaid
+flowchart LR
+    a["Architecture"] --> b["Graph"] --> c["Tensor"] --> d["Operator"] --> e["Compute"] --> f["Memory"] --> g["Cost"] --> h["Report"]
+    t["phase_timeline<br/>name · duration_ms · status"] -.->|renseignée par<br/>chaque phase| a
+```
+
+Sur l'exemple ci-dessus, les huit phases séquentielles se mesurent chacune à
+**0 ms** — la résolution du chronomètre est la milliseconde, et une analyse de
+cette taille passe sous cette résolution en entier. C'est ce qui rend le balayage
+du §13.1 possible : sonder des milliers de configurations coûte ce que coûterait
+une seule exécution ailleurs.
+
+Le champ `analysis_time_ms` des métadonnées porte le total.
 
 ---
 
@@ -238,15 +365,23 @@ zéros).
 `neurax-parser` transforme un texte JSON en une structure typée, ou refuse.
 
 ```mermaid
-flowchart LR
+flowchart TB
     j["JSON brut"] --> s["schema.rs<br/>désérialisation serde"]
-    s --> m["model_config.rs<br/>ModelType::from_str<br/>LayerType::from_str"]
-    m --> v["validator.rs<br/>règles de cohérence"]
+    s --> q1{"le document<br/>a-t-il la forme<br/>attendue ?"}
+    q1 -->|non| e1["Erreur de désérialisation"]
+    q1 -->|oui| q2{"ModelType::from_str<br/>famille connue ?"}
+    q2 -->|non| e2["InvalidModelType<br/>seules 8 familles"]
+    q2 -->|oui| q3{"LayerType::from_str<br/>pour chaque couche"}
+    q3 -->|inconnu| e3["InvalidLayerType<br/>176 chaînes acceptées"]
+    q3 -->|résolu| v["validator.rs<br/>règles de cohérence"]
+    v -->|violation| e4["ValidationError"]
     v -->|ok| c["ModelConfig typé"]
-    v -->|échec| e["ParserError"]
 
     style c fill:#e8f0fe,stroke:#4285f4
-    style e fill:#fdecea,stroke:#d93025
+    style e1 fill:#fdecea,stroke:#d93025
+    style e2 fill:#fdecea,stroke:#d93025
+    style e3 fill:#fdecea,stroke:#d93025
+    style e4 fill:#fdecea,stroke:#d93025
 ```
 
 | Fichier | Rôle |
@@ -256,9 +391,15 @@ flowchart LR
 | `validator.rs` | Les règles de cohérence sur le document lui-même. |
 | `error.rs` | `ParserError` — dont `Invalid model type: '{0}'`, la porte qui refuse une famille hors des huit. |
 
-**C'est ici que se joue la frontière du système.** Un type de couche inconnu
-provoque un `400`, et l'analyse entière échoue — d'où l'importance du repli
-`Opaque` côté studio, qui évite qu'un bloc exotique fasse tomber tout le rapport.
+**C'est ici que se joue la frontière du système**, et elle est stricte : chacune
+des quatre portes ci-dessus rejette le document entier. Un seul type de couche
+inconnu, et l'analyse échoue en `400` — il n'y a pas de dégradation partielle.
+
+C'est ce qui rend le repli `Opaque` du compilateur client si important (§5.1) :
+sans lui, un bloc exotique quelque part sur le canevas ferait tomber tout le
+rapport plutôt que de simplement rester non chiffré. Les deux mécanismes sont les
+deux moitiés d'une même décision de conception — le moteur est intransigeant, le
+client absorbe.
 
 ---
 
@@ -755,6 +896,115 @@ flowchart TB
     style o1 fill:#fff3cd,stroke:#d39e00
 ```
 
+### 12.1 Comment lire un rapport
+
+Un rapport a sept clés de premier niveau. Les connaître, c'est savoir où chercher.
+
+```mermaid
+flowchart TB
+    rep["Rapport"] --> md["<b>metadata</b><br/>version · modèle · horodatage<br/>analysis_time_ms"]
+    rep --> me["<b>metrics</b><br/>57 scalaires + 4 ventilations"]
+    rep --> di["<b>diagnostics</b><br/>ce qui ne va pas, et pourquoi"]
+    rep --> re["<b>recommendations</b><br/>quoi faire, et ce que ça rapporte"]
+    rep --> wa["<b>warnings</b><br/>corrections automatiques appliquées"]
+    rep --> cs["<b>confidence_score</b><br/>fiabilité de la prédiction"]
+    rep --> pt["<b>phase_timeline</b><br/>durée par phase"]
+
+    me --> b1["params_per_layer"]
+    me --> b2["flops_per_layer"]
+    me --> b3["latency_per_layer"]
+    me --> b4["ops_distribution"]
+
+    style di fill:#fdecea,stroke:#d93025
+    style re fill:#e6f4ea,stroke:#34a853
+```
+
+Les métriques les plus consultées, groupées par question :
+
+| Question | Champs |
+|---|---|
+| **Quelle taille ?** | `total_parameters` · `parameter_memory_bytes` · `params_per_layer` |
+| **Combien de calcul ?** | `total_flops` · `forward_flops` · `backward_flops` · `flops_per_token` · `flops_per_layer` |
+| **Est-ce que ça tient ?** | `peak_vram_bytes` · `activation_memory_bytes` · `optimizer_state_bytes` · `gradient_memory_bytes` · `memory_fragmentation_pct` |
+| **À quelle vitesse ?** | `latency_ms` · `effective_tflops` · `gpu_tflops_fp16` · `latency_per_layer` |
+| **Combien ça coûte ?** | `training_time_hours` · `training_cost_usd` · `energy_kwh` · `co2_kg` |
+
+Le rapprochement d'`effective_tflops` et de `gpu_tflops_fp16` est instructif : le
+premier est ce que le modèle atteint réellement, le second la fiche technique du
+GPU. Leur rapport est le rendement du design sur cette carte.
+
+### 12.2 Diagnostics — ce qui ne va pas
+
+Chaque diagnostic porte une **sévérité**, une **catégorie**, un **code stable** et
+un message qui explique la cause plutôt que de la constater.
+
+```mermaid
+flowchart LR
+    an["Analyse"] --> d{"sévérité"}
+    d -->|Critical| c["Le design ne peut pas fonctionner<br/>E001 · OOM"]
+    d -->|Warning| w["Le design fonctionne mais dérive"]
+    d -->|Hint| h["Le design est défendable,<br/>mais discutable<br/>H001 · H008"]
+
+    style c fill:#fdecea,stroke:#d93025
+    style h fill:#e8f0fe,stroke:#4285f4
+```
+
+Deux exemples réels, produits par un design volontairement démesuré (un 175 B en
+fp32 visant une T4) :
+
+```
+[Critical · E001 · MemoryOverflow]
+  This model needs 3414.9 GB but the target GPU has 17.2 GB — 198.8x over.
+  It will not start.
+
+[Hint · H001 · MemoryOverflow]
+  Optimizer state is 41% of memory (1396.6 GB) — more than the weights.
+
+[Hint · H008 · Configuration]
+  Tokens-per-parameter ratio is 1.7 (3.00e11 tokens / 1.75e11 params); the
+  compute-optimal ratio from Chinchilla scaling laws (Hoffmann et al. 2022)
+  is ~20.
+```
+
+Le troisième mérite d'être souligné : le diagnostic ne dit pas seulement que le
+rapport est bas, il cite la loi d'échelle qui fonde le seuil. C'est la différence
+entre un avertissement et un conseil.
+
+Les catégories observées à ce jour : `MemoryOverflow`, `Configuration`.
+
+### 12.3 Recommandations — quoi faire, et ce que ça rapporte
+
+Une recommandation n'est pas un conseil générique : son champ `impact` est
+**calculé sur le design analysé**.
+
+```json
+{
+  "category": "MemoryOptimization",
+  "title": "Enable Gradient Checkpointing",
+  "description": "Reduce activation memory by recomputing during backward pass",
+  "impact": "Save ~558.2 GB VRAM (~90% of activation memory…)"
+}
+```
+
+« ~558,2 Go » n'est pas une fourchette de brochure : c'est 90 % des activations
+*de ce modèle-là*, sur *cette configuration-là*. Un test dédié
+(`recommendation_impact_is_computed.rs`) existe précisément pour empêcher qu'une
+recommandation reparte vers un texte fixe.
+
+### 12.4 Warnings et score de confiance
+
+`warnings` recense les **corrections automatiques** que le compilateur a
+appliquées à l'entrée pour pouvoir l'analyser — par exemple `Hardware auto-fixed
+to "RTX4090" (was "CPU")`. Elles ne signalent pas un problème du design, mais un
+écart entre ce que le client a envoyé et ce qui a réellement été mesuré : les
+ignorer, c'est lire un rapport sur un modèle légèrement différent de celui qu'on
+croit.
+
+`confidence_score` résume la fiabilité de la prédiction, alimenté par le système
+de confiance du §11.
+
+---
+
 **Sur le nombre de métriques** — la question « combien de métriques ? » a reçu
 cinq réponses différentes dans l'histoire du projet parce qu'elle en cache deux :
 un ensemble **fixe** d'environ 76 champs scalaires sur les neuf phases statiques,
@@ -779,14 +1029,29 @@ milliers de configurations est bon marché d'une façon qu'un entraînement rée
 sera jamais. Le sweep réutilise `run_analysis` comme évaluateur en boîte noire.
 
 ```mermaid
-flowchart LR
-    base["ModelConfig de base"] --> cand["Candidats<br/>batch_size × zero_stage<br/>× gpu_count × precision"]
-    cand --> loop["run_analysis<br/>une fois par candidat"]
-    loop --> best["Meilleure configuration<br/>selon l'objectif"]
+flowchart TB
+    base["ModelConfig de base"] --> gen["Produit cartésien des candidats<br/>batch_size × zero_stage<br/>× gpu_count × precision"]
+    gen --> next["Candidat suivant"]
+    next --> run["run_analysis<br/>pipeline complet, ~0-1 ms"]
+    run --> fit{"tient en VRAM ?"}
+    fit -->|non| skip["écarté"]
+    fit -->|oui| score["score selon l'objectif<br/>max_throughput · min_cost<br/>min_latency · max_batch_size"]
+    skip --> more
+    score --> more{"reste-t-il<br/>des candidats ?"}
+    more -->|oui| next
+    more -->|non| best["Meilleure configuration"]
+
+    style run fill:#e8f0fe,stroke:#4285f4
+    style best fill:#e6f4ea,stroke:#34a853
 ```
 
+Un champ laissé à un seul élément fige l'hyperparamètre correspondant à la valeur
+de la configuration de base — le balayage est donc aussi étroit ou large qu'on le
+veut.
+
 Il fait varier des paramètres de **déploiement**. Il ne touche jamais à
-l'architecture : ni largeur, ni profondeur, ni têtes.
+l'architecture : ni largeur, ni profondeur, ni têtes. NEURAX ne redimensionne pas
+un modèle ; il chiffre celui qu'on lui donne.
 
 ### 13.2 Analyse asynchrone et streaming
 
@@ -1077,7 +1342,7 @@ surprise.
 
 ---
 
-## Annexe — le chemin complet, d'un bout à l'autre
+## Annexe A — le chemin complet, d'un bout à l'autre
 
 ```mermaid
 flowchart TB
@@ -1128,7 +1393,30 @@ flowchart TB
 
 ---
 
-## Annexe B — inventaire des modules
+## Annexe B — glossaire
+
+Les termes que ce document emploie sans les définir ailleurs.
+
+| Terme | Définition |
+|---|---|
+| **Roofline** | Modèle qui situe une charge entre deux plafonds : la puissance de calcul du processeur et sa bande passante mémoire. Un design est dit *compute-bound* ou *memory-bound* selon celui qu'il atteint en premier. |
+| **Liveness** | Intervalle pendant lequel un tenseur doit rester en mémoire — de sa production à sa dernière consommation. La phase 6 en somme les tailles, parce qu'à l'entraînement toutes les activations restent vivantes jusqu'à la passe arrière. |
+| **Gradient checkpointing** | Ne conserver qu'une fraction des activations et recalculer les autres pendant la passe arrière. Échange du calcul contre de la mémoire ; l'ordre de grandeur retenu est √L couches conservées sur L. |
+| **TP** — parallélisme tensoriel | Découpe un même tenseur entre plusieurs GPU. Divise les activations par le degré. |
+| **PP** — parallélisme de pipeline | Découpe la pile de couches en étages successifs. Introduit des *bulles* : les étages inactifs en attente. |
+| **DP** — parallélisme de données | Réplique le modèle et découpe le batch. |
+| **EP** — parallélisme d'experts | Répartit les experts d'un MoE entre GPU. |
+| **ZeRO stage** | Degré de partitionnement des états d'optimiseur, gradients et poids entre GPU (DeepSpeed). Le stage 0 ne partitionne rien. |
+| **Fan-in** | Nombre d'arêtes entrantes d'un bloc. La plupart n'en acceptent qu'une ; fusionner deux chemins exige un bloc de merge. |
+| **Bloc opaque** | Type de bloc que le compilateur client ne sait pas traduire et qu'il transmet sans le décomposer. Il apparaît dans le graphe sans contribuer de formule propre. |
+| **Sentinelle zéro** | Convention où `0` signifie « non défini ». Dangereuse quand elle traverse une frontière : une clé *présente* à zéro bat le défaut du destinataire, là où une clé absente l'aurait laissé s'appliquer. |
+| **Chinchilla** | Loi d'échelle (Hoffmann et al., 2022) donnant un rapport optimal d'environ 20 tokens d'entraînement par paramètre. Fonde le diagnostic `H008`. |
+| **PUE** | *Power Usage Effectiveness* — rapport entre l'énergie totale d'un centre de données et celle consommée par le calcul seul. Entre dans le calcul énergétique de la phase 9. |
+| **OpSpec-IR** | Le registre de `neurax-opspec` : une définition unique par opération, portant à la fois sa formule de paramètres, celle de ses FLOPs et celle de sa mémoire d'activation. |
+
+---
+
+## Annexe C — inventaire des modules
 
 Tout module du compilateur figure dans ce tableau. Il sert de contrôle : si un
 fichier `.rs` d'un des huit crates n'y apparaît pas, le document est incomplet.
