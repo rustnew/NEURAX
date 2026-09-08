@@ -238,7 +238,7 @@ flowchart LR
     parser["neurax-parser<br/><i>2 460 lignes</i><br/>JSON → ModelConfig typé"]
     ir["neurax-ir<br/><i>13 520 lignes</i><br/>les 11 dialectes"]
     formulas["neurax-formulas<br/>formules analytiques pures"]
-    opspec["neurax-opspec<br/>1 définition par opération"]
+    opspec["neurax-opspec<br/>1 définition par opération<br/>60/61 types"]
     hwdb["neurax-hardware-db<br/>26 GPU · 2 CPU · 5 interconnexions"]
     core["neurax-core<br/>orchestration + API publique"]
     service["neurax-service<br/>API HTTP (actix-web)"]
@@ -263,7 +263,7 @@ flowchart LR
 | **neurax-parser** | Désérialise le JSON, le type (`ModelType`, `LayerType`), le valide. 61 variantes de couches, 176 chaînes acceptées avec leurs alias. | Porte d'entrée du moteur |
 | **neurax-ir** | Le cœur. Onze dialectes, chacun une passe : architecture, graphe, tenseurs, opérateurs, calcul, mémoire, parallélisme, matériel, coût, rapport, dynamique. | Moteur |
 | **neurax-formulas** | Les formules analytiques pures, par famille d'opération : attention, conv, mlp, embedding, normalisation, moe, ssm, rnn, diffusion, gnn, lora, cnn_blocks, activation, custom. Chemin chaud. | Bibliothèque de calcul |
-| **neurax-opspec** | **Une** définition par opération — paramètres, FLOPs, mémoire d'activation — au lieu de trois dispersées. 22 types migrés. | Registre d'opérations |
+| **neurax-opspec** | **Une** définition par opération — paramètres, FLOPs, mémoire d'activation — au lieu de trois dispersées. 60 des 61 types de couches y sont migrés ; seul `Custom` en est exclu, par nature. | Registre d'opérations |
 | **neurax-hardware-db** | Spécifications matérielles réelles, dans trois modules — `gpu.rs`, `cpu.rs`, `interconnect.rs` : 26 GPU servis, 2 CPU, 5 interconnexions. TFLOPS par précision, bande passante, NVLink, TDP, cache L2, nombre de SM. | Base de données |
 | **neurax-core** | Orchestre les passes, expose `run_analysis` / `analyze_json`, le sweep, le streaming, l'export ONNX, les newtypes d'unités. | Chef d'orchestre |
 | **neurax-service** | L'API HTTP : analyse, sweep, presets, projets, partages, facturation, mémoire d'agent. | Frontière réseau |
@@ -777,9 +777,20 @@ flowchart LR
 
 Tout tient dans `registry.rs`, qui porte à la fois la table `spec(LayerType, params_fn, flops_fn)` et les fonctions qu'elle référence.
 
-**22 types** y sont migrés. Un type enregistré est servi par une seule
-définition ; `operator/pass.rs` l'interroge en premier et sort immédiatement si
-elle existe.
+**60 des 61 types de couches** y sont migrés. Seul `Custom` en est exclu — et
+définitivement : ses formules sont fournies par le client dans
+`custom_equations`, il n'y a donc rien à y centraliser.
+
+Un type enregistré est servi par une seule définition ; `operator/pass.rs`
+l'interroge en premier et sort immédiatement si elle existe.
+
+La couverture n'est en revanche pas la même sur les trois axes. Paramètres et
+FLOPs sont renseignés pour les 60 types ; **la mémoire d'activation ne l'est que
+pour six** — `Embedding`, `Attention`, `Mlp`, `Dense`, `LoraLinear`,
+`DoraLinear`. Les 54 autres rendent `None`, ce qui reproduit fidèlement le zéro
+codé en dur d'avant la migration. C'est un choix conservateur assumé et testé
+(`most_migrated_types_have_no_activation_memory_fn`), pas un oubli — mais un
+consommateur d'OpSpec doit le savoir avant de s'appuyer sur cet axe.
 
 `extra_usize` y lit les paramètres globaux, et **traite une valeur non positive
 comme absente** : un zéro envoyé par un client est une sentinelle « non défini »,
@@ -1383,7 +1394,7 @@ flowchart TB
     fo[("neurax-formulas")] -.-> ph1
     fo -.-> ph5
     fo -.-> ph6
-    op[("neurax-opspec<br/>22 types")] -.-> ph4
+    op[("neurax-opspec<br/>60/61 types")] -.-> ph4
     op -.-> ph1
 
     style ir fill:#e8f0fe,stroke:#4285f4
@@ -1412,7 +1423,7 @@ Les termes que ce document emploie sans les définir ailleurs.
 | **Sentinelle zéro** | Convention où `0` signifie « non défini ». Dangereuse quand elle traverse une frontière : une clé *présente* à zéro bat le défaut du destinataire, là où une clé absente l'aurait laissé s'appliquer. |
 | **Chinchilla** | Loi d'échelle (Hoffmann et al., 2022) donnant un rapport optimal d'environ 20 tokens d'entraînement par paramètre. Fonde le diagnostic `H008`. |
 | **PUE** | *Power Usage Effectiveness* — rapport entre l'énergie totale d'un centre de données et celle consommée par le calcul seul. Entre dans le calcul énergétique de la phase 9. |
-| **OpSpec-IR** | Le registre de `neurax-opspec` : une définition unique par opération, portant à la fois sa formule de paramètres, celle de ses FLOPs et celle de sa mémoire d'activation. |
+| **OpSpec-IR** | Le registre de `neurax-opspec` : une définition unique par opération, portant sa formule de paramètres, celle de ses FLOPs et — pour six types — celle de sa mémoire d'activation. |
 
 ---
 
@@ -1444,7 +1455,7 @@ fichier `.rs` d'un des huit crates n'y apparaît pas, le document est incomplet.
 | ir | `precision/` + `confidence.rs` + `backward.rs` | Niveaux de confiance par métrique | §11 |
 | ir | `error.rs` · `lib.rs` | `NeuraxError` · API du crate | §7 |
 | formulas | 14 modules par famille + `lib.rs` | Formules analytiques · `dtype_bytes` | §9.1 |
-| opspec | `registry.rs` · `lib.rs` | Une définition par opération | §9.2 |
+| opspec | `registry.rs` · `lib.rs` | Une définition par opération, 60/61 types | §9.2 |
 | hardware-db | `gpu.rs` · `cpu.rs` · `interconnect.rs` · `lib.rs` | Spécifications matérielles | §9.3 |
 | core | `lib.rs` | `run_analysis` · les 11 phases | §8 · §13.3 |
 | core | `engine.rs` | Chronométrage et `MetricsStore` | §7 · §13.3 |
@@ -1462,7 +1473,7 @@ fichier `.rs` d'un des huit crates n'y apparaît pas, le document est incomplet.
 
 ---
 
-*Document généré à partir du code du dépôt. Les chiffres cités (26 GPU, 22 types
-migrés, 61 variantes de couches, 176 chaînes acceptées, 8 familles, 444 blocs de
+*Document généré à partir du code du dépôt. Les chiffres cités (26 GPU, 60 des 61 types
+migrés vers OpSpec-IR, 61 variantes de couches, 176 chaînes acceptées, 8 familles, 444 blocs de
 palette, 106 templates) ont été relevés par inspection directe des sources et par
 appels au service en cours d'exécution.*
