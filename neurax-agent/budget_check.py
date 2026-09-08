@@ -40,6 +40,22 @@ NEURAX_SERVICE_URL = os.environ.get("NEURAX_SERVICE_URL", "http://127.0.0.1:9098
 #   * `custom` again for parameter-free element-wise steps (activations,
 #     dropout, reshapes), which contribute no weights and whose cost is folded
 #     into the layer they follow.
+#: Blocks that declare the design's boundary shapes rather than compute
+#: anything. They carry no weights.
+#:
+#: `input` used to map onto `embedding` and `output` onto `dense`, both with
+#: empty params — so the compiler applied its *defaults* to them and every
+#: analysis the agent ran carried 25,600,000 phantom parameters from a default
+#: 50,000-token vocabulary at width 512, plus 262,656 from a default dense
+#: layer. A CNN whose real weight count is 2,442 was reported at 25,865,098.
+#:
+#: It was on every design, without exception: `input` and `output` are in
+#: `requiredBlocks` for all eight families, so `validate_arch_spec` refuses to
+#: let the agent call `done` without them. The studio's own compiler already
+#: drops these nodes before building its IR; this brings the agent's
+#: pre-flight check to the same graph.
+SHAPE_ONLY_TYPES = frozenset({"input", "output"})
+
 LAYER_TYPE_MAP = {
     # ── Sequence / attention ──────────────────────────────────────────────
     "token_embedding": "embedding",
@@ -66,8 +82,6 @@ LAYER_TYPE_MAP = {
     "linear": "dense",
     "linear_projection": "dense",
     "dense": "dense",
-    "output": "dense",
-    "input": "embedding",
 
     # ── Normalisation (carries scale/shift parameters) ────────────────────
     "layer_norm": "normalization",
@@ -328,11 +342,18 @@ def spec_to_topology(
     # the frontend would compute post-materialization, before that instead
     # of after it.
     layers = []
+    dropped_ids: set[str] = set()
     for node in spec.nodes:
         raw_type = str(getattr(node, "type", "")).lower()
+        node_id = getattr(node, "id", f"layer_{len(layers)}")
+
+        if raw_type in SHAPE_ONLY_TYPES:
+            dropped_ids.add(node_id)
+            continue
+
         params = dict(getattr(node, "params", {}) or {})
         layer = {
-            "id": getattr(node, "id", f"layer_{len(layers)}"),
+            "id": node_id,
             "layer_type": LAYER_TYPE_MAP.get(raw_type, raw_type),
             "params": params,
         }
@@ -341,10 +362,30 @@ def spec_to_topology(
             layer["custom_equations"] = equations
         layers.append(layer)
 
-    connections = [
-        {"from": getattr(edge, "from_id", ""), "to": getattr(edge, "to_id", "")}
+    edges = [
+        (str(getattr(edge, "from_id", "")), str(getattr(edge, "to_id", "")))
         for edge in getattr(spec, "edges", None) or []
     ]
+
+    # Bridge across every dropped node so the graph the compiler walks stays
+    # connected: each predecessor is joined to each successor, then the edges
+    # touching the dropped node go. For `input` and `output` — which sit at the
+    # boundary and so have no predecessor or no successor respectively — that
+    # reduces to removing their edges, which is what dropping a boundary marker
+    # should do. Written generally rather than special-cased so it stays
+    # correct if another shape-only type is ever added.
+    for dropped in dropped_ids:
+        preds = [a for a, b in edges if b == dropped and a not in dropped_ids]
+        succs = [b for a, b in edges if a == dropped and b not in dropped_ids]
+        edges = [(a, b) for a, b in edges if a != dropped and b != dropped]
+        edges.extend((a, b) for a in preds for b in succs)
+
+    seen: set[tuple[str, str]] = set()
+    connections = []
+    for a, b in edges:
+        if a and b and (a, b) not in seen:
+            seen.add((a, b))
+            connections.append({"from": a, "to": b})
 
     global_params: dict[str, Any] = {}
     for key, source in (

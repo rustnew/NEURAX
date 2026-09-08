@@ -93,12 +93,23 @@ REFERENCE_MODELS = {
 
 
 def test_every_catalogue_block_maps_to_a_compiler_type():
-    """A block the agent can place must be one the compiler can read."""
+    """A block the agent can place must be one the compiler can read.
+
+    `SHAPE_ONLY_TYPES` are excluded because they are never sent: `input` and
+    `output` declare the design's boundary shapes and carry no weights, so
+    `spec_to_topology` drops them rather than mapping them onto a layer. They
+    used to map onto `embedding` and `dense`, which is exactly how every
+    analysis gained 25,862,656 parameters that were not in the design.
+    """
+    from budget_check import SHAPE_ONLY_TYPES
+
     accepted = _accepted_layer_types()
     unmapped = []
     for family, entry in CATALOGUE.items():
         for block in entry.get("blocks", []):
             kind = block.get("type", "")
+            if kind in SHAPE_ONLY_TYPES:
+                continue
             if LAYER_TYPE_MAP.get(kind, kind) not in accepted:
                 unmapped.append(f"{family}:{kind}")
     assert unmapped == [], f"blocks with no compiler equivalent: {unmapped}"
