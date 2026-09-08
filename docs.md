@@ -137,10 +137,10 @@ flowchart LR
 | **neurax-ir** | Le cœur. Onze dialectes, chacun une passe : architecture, graphe, tenseurs, opérateurs, calcul, mémoire, parallélisme, matériel, coût, rapport, dynamique. | Moteur |
 | **neurax-formulas** | Les formules analytiques pures, par famille d'opération : attention, conv, mlp, embedding, normalisation, moe, ssm, rnn, diffusion, gnn, lora, cnn_blocks, activation, custom. Chemin chaud. | Bibliothèque de calcul |
 | **neurax-opspec** | **Une** définition par opération — paramètres, FLOPs, mémoire d'activation — au lieu de trois dispersées. 22 types migrés. | Registre d'opérations |
-| **neurax-hardware-db** | Spécifications matérielles réelles : 26 GPU servis, 2 CPU, 5 interconnexions. TFLOPS par précision, bande passante, NVLink, TDP, cache L2, nombre de SM. | Base de données |
+| **neurax-hardware-db** | Spécifications matérielles réelles, dans trois modules — `gpu.rs`, `cpu.rs`, `interconnect.rs` : 26 GPU servis, 2 CPU, 5 interconnexions. TFLOPS par précision, bande passante, NVLink, TDP, cache L2, nombre de SM. | Base de données |
 | **neurax-core** | Orchestre les passes, expose `run_analysis` / `analyze_json`, le sweep, le streaming, l'export ONNX, les newtypes d'unités. | Chef d'orchestre |
 | **neurax-service** | L'API HTTP : analyse, sweep, presets, projets, partages, facturation, mémoire d'agent. | Frontière réseau |
-| **neurax-tui** | Interface terminal sur le même moteur. | Client |
+| **neurax-tui** | Interface terminal sur le même moteur : sélection de modèle, affichage des métriques, comparaison au réel. Voir [§14.3](#143-le-client-terminal--neurax-tui). | Client |
 
 Deux crates Rust sont **hors du workspace** et ne sont pas construits par la CI :
 `neurax-desktop` (il lie la webview de la plateforme, et embarque
@@ -634,6 +634,8 @@ flowchart LR
     style apres fill:#e6f4ea,stroke:#34a853
 ```
 
+Tout tient dans `registry.rs`, qui porte à la fois la table `spec(LayerType, params_fn, flops_fn)` et les fonctions qu'elle référence.
+
 **22 types** y sont migrés. Un type enregistré est servi par une seule
 définition ; `operator/pass.rs` l'interroge en premier et sort immédiatement si
 elle existe.
@@ -652,7 +654,26 @@ Les sources sont les fiches techniques officielles des fabricants, recoupées av
 une seconde source indépendante par famille quand le PDF n'est pas lisible par
 machine — c'est écrit dans `add_builtin_gpus`.
 
-`get_gpu_or_fallback` garantit qu'un nom inconnu ne fait pas tomber l'analyse.
+```mermaid
+flowchart TB
+    q["Nom de GPU<br/>venant de training.hardware"] --> look["get_gpu(name)"]
+    look --> found{"connu ?"}
+    found -->|oui| spec["GpuSpec"]
+    found -->|non| fb["get_gpu_or_fallback<br/>profil générique"]
+    fb --> spec
+    spec --> s1["TFLOPS par précision<br/>fp64 · fp32 · fp16 · bf16 · int8 · fp8"]
+    spec --> s2["bande passante · capacité<br/>NVLink · TDP · cache L2 · SM"]
+    s1 --> use["Phase 8 · Hardware"]
+    s2 --> use
+    ic[("interconnect.rs<br/>5 liens")] --> par["Phase 7 · Parallelism"]
+    cpu[("cpu.rs<br/>2 processeurs")] --> use
+
+    style fb fill:#fff3cd,stroke:#d39e00
+```
+
+`get_gpu_or_fallback` garantit qu'un nom inconnu ne fait pas tomber l'analyse :
+le rapport sort avec un profil générique plutôt qu'avec une erreur. C'est un
+choix assumé — mais il rend un GPU mal orthographié invisible dans le résultat.
 
 ---
 
@@ -677,9 +698,11 @@ flowchart TB
 
 | Sous-passe | Rôle |
 |---|---|
-| **VirtualMemory** | Que se passe-t-il quand le modèle dépasse la VRAM : pagination, offload CPU, coût de la stratégie. |
+| **VirtualMemory** (`virtual_memory.rs`) | Que se passe-t-il quand le modèle dépasse la VRAM : pagination, offload CPU, coût de la stratégie. |
 | **StabilityAnalysis** | Risque numérique en fonction de la précision choisie et de la structure du graphe. |
 | **BehavioralSynthesis** | Comportement prédit à l'inférence, à partir du profil de calcul. |
+
+Un quatrième module, `evaluation.rs`, n'est pas une passe : c'est la suite de validation du système dynamique, qui vérifie les trois autres contre les objectifs qu'elles se donnent.
 
 Le **dialecte Inference** (`neurax-ir/src/inference/`) est distinct : il simule le
 comportement d'inférence à la demande (endpoint `/inference/simulate`), avec un
@@ -765,16 +788,74 @@ flowchart LR
 Il fait varier des paramètres de **déploiement**. Il ne touche jamais à
 l'architecture : ni largeur, ni profondeur, ni têtes.
 
-### 13.2 Streaming — `neurax-core/src/streaming.rs`
+### 13.2 Analyse asynchrone et streaming
 
-Émission d'événements en temps réel pendant l'analyse, pour le SSE et la
-progression côté client (`/analyze/stream`).
+Une analyse peut être lancée en tâche de fond et suivie par identifiant de job.
+`neurax-core/src/streaming.rs` émet les événements au fil des phases ; le service
+les expose en trois temps.
 
-### 13.3 Comparaison et Time Machine
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant S as neurax-service
+    participant E as neurax-core
+
+    C->>S: POST /analyze/stream
+    S->>S: crée job_id · state.jobs
+    S-->>C: job_id
+    S->>E: run_analysis (tâche de fond)
+    E-->>S: événements de phase (streaming.rs)
+
+    loop tant que le job tourne
+        C->>S: GET /analyze/status/:job_id
+        S-->>C: phase courante · progression
+    end
+
+    E-->>S: AnalysisResult
+    S->>S: state.results[job_id]
+    C->>S: GET /analyze/result/:job_id
+    S-->>C: rapport complet
+```
+
+Les entrées `state.jobs` et `state.results` sont balayées après expiration : sans
+cela, chaque analyse en streaming laissait derrière elle un rapport JSON complet
+pour toute la durée de vie du processus — ce qu'un service de longue durée, ou une
+application de bureau laissée ouverte plusieurs jours, accumule sans borne.
+
+### 13.3 Le reste de `neurax-core`
+
+| Module | Rôle |
+|---|---|
+| `lib.rs` | `run_analysis` — l'enchaînement des onze phases — et `AnalysisResult` avec ses sérialisations (`to_json`, `to_json_bytes`, `save_json`). |
+| `engine.rs` | `IrPasserEngine` : le chronométrage par passe (`PassTiming`, `EngineStats`) et le `MetricsStore`, canal latéral partagé entre passes. |
+| `runner.rs` | Les commodités d'appel : analyse depuis une chaîne JSON (`analyze_json`) ou depuis un fichier. |
+| `units.rs` | Des newtypes qui empêchent de confondre des grandeurs physiques : `FLOPs`, `Bytes`, `ParamCount`, `LatencyMs`, `TokensPerSec`. Le compilateur Rust garantit qu'on n'additionne pas des FLOPs et des octets. |
+| `sweep.rs` | Le balayage de configurations, §13.1. |
+| `streaming.rs` | L'émission d'événements, ci-dessus. |
+| `export/onnx.rs` | La sérialisation protobuf ONNX, §12. |
+
+### 13.4 Comparaison et Time Machine
 
 `/analyze/compare` met deux designs côte à côte avec l'écart en pourcentage par
-métrique. `time_machine.rs` projette coût, carbone et scaling sur plusieurs
-années, et vérifie les obligations réglementaires datées (EU AI Act, CSRD).
+métrique — comparer une valeur obtenue sous une précision avec une valeur obtenue
+sous une autre n'est pas faux, mais répond à une question différente, et le
+module le signale plutôt que de mélanger.
+
+`time_machine.rs` projette le design dans le temps.
+
+```mermaid
+flowchart LR
+    r["ReportIR<br/>coût · énergie · CO₂"] --> t1["projection pluriannuelle<br/>coût · carbone · scaling"]
+    t1 --> t2["seuils réglementaires datés<br/>EU AI Act · CSRD"]
+    t2 --> t3{"le modèle franchit<br/>un seuil ?"}
+    t3 -->|oui| ob["obligations déclenchées<br/>avec leur date"]
+    t3 -->|non| ok["sous les seuils"]
+
+    style ob fill:#fff3cd,stroke:#d39e00
+```
+
+Ce n'est pas une liste générique : les seuils sont vérifiés contre des textes
+réglementaires réels et datés.
 
 ---
 
@@ -822,6 +903,79 @@ Deux remarques de position :
   `neurax-agent` ne possède aucune clé de service à présenter.
 - Les huit endpoints `/agent/*` n'ont **aucun client** dans le dépôt : ils
   exigent une clé à portée `agent` que rien ne détient.
+
+### 14.1 Persistance — `persistence.rs`
+
+`AppState` garde les projets dans une `DashMap` : sans persistance, chaque projet
+enregistré disparaissait à l'arrêt du processus. Sur le service hébergé c'est
+survivable — c'est un processus parmi plusieurs — mais l'application de bureau
+*est* le produit, et le module lit les projets depuis le disque au démarrage puis
+les réécrit à chaque changement.
+
+```mermaid
+flowchart LR
+    start["Démarrage"] --> load["persistence::attach<br/>lecture depuis le disque"]
+    load --> mem["AppState · DashMap"]
+    mem --> api["/projects (CRUD)"]
+    api --> save["écriture à chaque changement"]
+    save --> disk[("projects_path")]
+    disk -.-> load
+```
+
+Le même appel sert le service autonome et l'application de bureau, pour que les
+deux ne puissent pas diverger sur la façon de charger, sauvegarder ou récupérer.
+
+### 14.2 Mémoire d'agent — `agent_memory.rs`
+
+Trois tables Supabase, portées par `project_id` seul. Le choix est délibéré et
+documenté : `neurax-ui` n'a aucune intégration d'authentification Supabase réelle,
+donc une table indexée par `user_id` serait de la mémoire que rien ne pourrait
+relire correctement. `project_id` est réel — `Index.tsx` le suit déjà comme état
+vivant.
+
+```mermaid
+flowchart TB
+    a["neurax-agent"] --> core["/memory/core<br/>préférences durables"]
+    a --> arch["/memory/archival<br/>rationnel des designs passés"]
+    a --> conv["/memory/conversation<br/>continuité des échanges"]
+    core --> db[("Supabase<br/>agent_core_memory<br/>agent_archival_memory<br/>agent_conversation_log")]
+    arch --> db
+    conv --> db
+
+    style db fill:#f3e8fd,stroke:#9334e6
+```
+
+La recherche archivistique est un filtrage par mots-clés (`ilike` via PostgREST),
+pas une recherche sémantique : c'est le repli assumé pour une instance Supabase
+sans `pgvector`.
+
+### 14.3 Le client terminal — `neurax-tui`
+
+Une interface terminal complète sur le même moteur, sans passer par le service.
+
+```mermaid
+flowchart LR
+    ms["model_selector.rs<br/>modèles JSON embarqués"] --> app["app.rs<br/>état de l'application"]
+    app --> core["neurax-core::run_analysis"]
+    core --> md["metrics_display.rs<br/>rendu des métriques"]
+    core --> cmp["comparison.rs<br/>calculé vs réel"]
+    rw["real_world_data.rs<br/>mesures publiées"] --> cmp
+    md --> ui["ui.rs<br/>rendu ratatui"]
+    cmp --> ui
+```
+
+| Module | Rôle |
+|---|---|
+| `main.rs` | Point d'entrée du binaire. |
+| `app.rs` | L'état de l'application et sa logique. |
+| `model_selector.rs` | Le choix du modèle, avec des définitions JSON embarquées dans le binaire. |
+| `metrics_display.rs` | Les composants d'affichage des métriques. |
+| `comparison.rs` | La vue de comparaison entre le calculé et le réel. |
+| `real_world_data.rs` | Les mesures publiées servant de référence à cette comparaison. |
+| `ui.rs` | Le rendu. |
+
+C'est aussi le chemin le plus court pour vérifier le moteur à la main : il appelle
+`run_analysis` directement, sans HTTP ni sérialisation intermédiaire.
 
 ---
 
@@ -971,6 +1125,52 @@ flowchart TB
     style par fill:#fff,stroke:#999,stroke-dasharray: 3 3
     style res fill:#e6f4ea,stroke:#34a853
 ```
+
+---
+
+## Annexe B — inventaire des modules
+
+Tout module du compilateur figure dans ce tableau. Il sert de contrôle : si un
+fichier `.rs` d'un des huit crates n'y apparaît pas, le document est incomplet.
+
+| Crate | Module | Rôle | Section |
+|---|---|---|---|
+| parser | `schema.rs` | Structures serde du document IR | §6 |
+| parser | `model_config.rs` | `ModelType` · `LayerType` · résolution des alias | §6 |
+| parser | `validator.rs` | Règles de cohérence du document | §6 |
+| parser | `error.rs` | `ParserError` | §6 |
+| parser | `lib.rs` | API du crate | §6 |
+| ir | `traits.rs` | Le contrat `IrPass` | §7 |
+| ir | `architecture/` | Phase 1 — structure et paramètres | §8.1 |
+| ir | `graph/` | Phase 2 — topologie, cycles, chemins | §8.2 |
+| ir | `tensor/` + `shape_inference.rs` | Phase 3 — formes et tailles | §8.3 |
+| ir | `operator/` + `fusion.rs` + `formulas.rs` | Phase 4 — décomposition et fusion | §8.4 |
+| ir | `compute/` | Phase 5 — FLOPs, débit, roofline | §8.5 |
+| ir | `memory/` + `liveness.rs` + `fragmentation.rs` | Phase 6 — mémoire complète | §8.6 |
+| ir | `parallelism/` | Phase 7 — TP · PP · DP · EP | §8.7 |
+| ir | `hardware/` + `calibration.rs` | Phase 8 — matériel réel et efficacité | §8.8 |
+| ir | `cost/` + `pricing.rs` | Phase 9 — coût, énergie, CO₂ | §8.9 |
+| ir | `report/` + `json_output.rs` + `format.rs` + `time_machine.rs` | Phase 10 — agrégation et sorties | §8.10 · §12 · §13.4 |
+| ir | `dynamic/` + `virtual_memory.rs` + `stability.rs` + `behavioral.rs` + `evaluation.rs` | Phase 11 — système dynamique | §10 |
+| ir | `inference/` | Dialecte d'inférence, à la demande | §10 |
+| ir | `precision/` + `confidence.rs` + `backward.rs` | Niveaux de confiance par métrique | §11 |
+| ir | `error.rs` · `lib.rs` | `NeuraxError` · API du crate | §7 |
+| formulas | 14 modules par famille + `lib.rs` | Formules analytiques · `dtype_bytes` | §9.1 |
+| opspec | `registry.rs` · `lib.rs` | Une définition par opération | §9.2 |
+| hardware-db | `gpu.rs` · `cpu.rs` · `interconnect.rs` · `lib.rs` | Spécifications matérielles | §9.3 |
+| core | `lib.rs` | `run_analysis` · les 11 phases | §8 · §13.3 |
+| core | `engine.rs` | Chronométrage et `MetricsStore` | §7 · §13.3 |
+| core | `runner.rs` | `analyze_json`, analyse depuis un fichier | §13.3 |
+| core | `units.rs` | Newtypes d'unités physiques | §13.3 |
+| core | `sweep.rs` | Balayage de configurations | §13.1 |
+| core | `streaming.rs` | Événements de progression | §13.2 |
+| core | `export/onnx.rs` | Sérialisation protobuf ONNX | §12 |
+| service | `lib.rs` | L'API HTTP et son routage | §14 |
+| service | `persistence.rs` | Projets à travers les redémarrages | §14.1 |
+| service | `agent_memory.rs` | Les trois niveaux de mémoire d'agent | §14.2 |
+| service | `presets.rs` | 24 presets sur les 8 familles | §14 |
+| service | `main.rs` | Point d'entrée du binaire | §14 |
+| tui | `main.rs` · `app.rs` · `ui.rs` · `model_selector.rs` · `metrics_display.rs` · `comparison.rs` · `real_world_data.rs` | Client terminal | §14.3 |
 
 ---
 
