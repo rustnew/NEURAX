@@ -60,7 +60,7 @@ const TimeMachineWorkspace = lazy(() =>
 
 import { IS_MOCK, mockHardware, mockImageDataset, profileForSelection } from '@/services/mockRuntime.ts';
 import { detectHardware, measureHardware } from '@/services/neuraxApi.ts';
-import { primaryGpu } from '@/types/runtime.ts';
+import { isCpuOnly, primaryGpu } from '@/types/runtime.ts';
 import type { DatasetProfile, HardwareProfile } from '@/types/runtime.ts';
 
 import { ArchitectureFamily } from '@/types/plugins.ts';
@@ -2087,6 +2087,46 @@ params: params as Record<string, ParameterValue>,
       hw_config: hwConfig as any,
       analysis_warnings: warnings,
       active_tab: activeWorkspaceTab,
+      /**
+       * The machine and the data, so the agent designs for what exists.
+       *
+       * It received neither, and could not: `hw_config` carries the target's
+       * name and memory budget, which is what the *analysis* needs, but says
+       * nothing about whether a run could start here — no runtime, no usable
+       * precisions, no measured throughput, and no idea whether the machine
+       * has an accelerator at all. An assistant asked to size a model for
+       * "your hardware" was working from a name.
+       *
+       * Trimmed rather than sent whole: the agent needs what constrains a
+       * design, not telemetry that changes between two of its own steps.
+       */
+      machine: hardwareProfile
+        ? {
+            cpu: `${hardwareProfile.cpu.model} (${hardwareProfile.cpu.cores}c/${hardwareProfile.cpu.threads}t)`,
+            cpu_features: hardwareProfile.cpu.features ?? [],
+            ram_available_gb: Math.round(hardwareProfile.ramAvailableBytes / 1024 ** 3),
+            disk_available_gb: Math.round(hardwareProfile.diskAvailableBytes / 1024 ** 3),
+            accelerators: hardwareProfile.gpus.map((g) => ({
+              name: g.name,
+              integrated: g.integrated,
+              recognised: g.recognised,
+              vram_free_gb: g.vramFreeBytes != null ? Math.round(g.vramFreeBytes / 1024 ** 3) : null,
+            })),
+            cpu_only: isCpuOnly(hardwareProfile),
+            measured_gflops: hardwareProfile.compute?.gflopsF32 ?? null,
+            measured_bandwidth_gbs: hardwareProfile.compute?.memoryBandwidthGbs ?? null,
+            is_example: isExampleHardware,
+          }
+        : null,
+      dataset: datasetProfile
+        ? {
+            kind: datasetProfile.kind,
+            samples: datasetProfile.samples,
+            sample_shape: datasetProfile.sampleShape ?? null,
+            num_classes: datasetProfile.suggested.numClasses ?? null,
+            family_hint: datasetProfile.suggested.familyHint ?? null,
+          }
+        : null,
     };
   }, [selectedArchitecture, nodes, connections, groups, hwConfig, warnings, toHwFamily]);
 

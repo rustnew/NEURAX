@@ -543,6 +543,88 @@ ALL_TOOL_DESCRIPTIONS: dict[str, str] = {
 }
 
 
+def _describe_machine(machine: Optional[dict[str, Any]]) -> str:
+    """The detected machine, as a constraint the model can act on.
+
+    Prose rather than JSON, on purpose. A language model reasons better about
+    "no accelerator: this trains on the CPU, so keep it small" than about
+    ``{"cpu_only": true}`` — and the only reason to send this at all is to
+    change what the agent proposes.
+    """
+    if not machine:
+        return "  Not detected. Design conservatively and do not assume a GPU."
+
+    lines: list[str] = []
+    if machine.get("is_example"):
+        lines.append(
+            "  WARNING: example figures, not this machine — the local NEURAX "
+            "service did not answer."
+        )
+
+    lines.append(f"  Processor: {machine.get('cpu', 'unknown')}")
+    features = machine.get("cpu_features") or []
+    if features:
+        lines.append(f"  Instruction sets: {', '.join(features)}")
+    lines.append(f"  Memory available: {machine.get('ram_available_gb', '?')} GB")
+    lines.append(f"  Disk available: {machine.get('disk_available_gb', '?')} GB")
+
+    accelerators = machine.get("accelerators") or []
+    if machine.get("cpu_only") or not accelerators:
+        lines.append(
+            "  No usable accelerator. Anything designed here trains on the CPU, "
+            "which is far slower: prefer a small model, a small batch and few "
+            "epochs, and say so plainly rather than proposing something that "
+            "would take days."
+        )
+    else:
+        for acc in accelerators:
+            vram = acc.get("vram_free_gb")
+            budget = f"{vram} GB free" if vram is not None else "shared system memory"
+            note = (
+                ""
+                if acc.get("recognised")
+                else " (no published specification — figures are approximate)"
+            )
+            lines.append(f"  Accelerator: {acc.get('name')} - {budget}{note}")
+
+    gflops = machine.get("measured_gflops")
+    if gflops:
+        bandwidth = machine.get("measured_bandwidth_gbs") or 0
+        lines.append(
+            f"  Measured: {gflops:.1f} GFLOP/s, {bandwidth:.1f} GB/s "
+            "(NEURAX reference kernel, not the chip's peak)"
+        )
+
+    lines.append(
+        "  Size the design against these figures. A model that does not fit is "
+        "not a design, it is a plan that fails at step one."
+    )
+    return "\n".join(lines)
+
+
+def _describe_dataset(dataset: Optional[dict[str, Any]]) -> str:
+    """The data the model has to consume, when one has been chosen."""
+    if not dataset:
+        return "  None chosen. Ask before assuming a shape, a class count or a task."
+
+    samples = dataset.get("samples")
+    lines = [
+        f"  Kind: {dataset.get('kind', 'unknown')}",
+        f"  Samples: {samples:,}" if isinstance(samples, int) else f"  Samples: {samples}",
+    ]
+    if dataset.get("sample_shape"):
+        lines.append(f"  Shape per sample: {dataset['sample_shape']}")
+    if dataset.get("num_classes") is not None:
+        lines.append(f"  Classes: {dataset['num_classes']}")
+    if dataset.get("family_hint"):
+        lines.append(f"  Suggests family: {dataset['family_hint']}")
+    lines.append(
+        "  The model's input and output must match these, or it cannot be "
+        "trained on this data."
+    )
+    return "\n".join(lines)
+
+
 def _build_tools_section(allowed_tools: Optional[frozenset[str]], has_plan: bool = False) -> str:
     """The '## Available Tools' block, filtered to what this call may
     actually use. Token efficiency, not just prompt hygiene: a mode with a
@@ -650,6 +732,15 @@ async def run_controller_step(
     nodes = snapshot.get("nodes") or []
     connections = snapshot.get("connections") or []
     hw_config = snapshot.get("hw_config") or {}
+
+    #: What the design has to fit.
+    #:
+    #: The snapshot carried `hw_config` — a target name and a memory budget,
+    #: which is what the analysis needs — and nothing about whether a run could
+    #: start here. An assistant asked to size a model "for your hardware" was
+    #: working from a name.
+    machine_desc = _describe_machine(snapshot.get("machine"))
+    dataset_desc = _describe_dataset(snapshot.get("dataset"))
     active_tab = snapshot.get("active_tab") or "architecture"
 
     # Build detailed catalogue with all parameters
@@ -924,6 +1015,12 @@ Connections: {connection_count}
 ## Global Config
 {hw_config}
 
+## The machine this will run on
+{machine_desc}
+
+## The data it will be trained on
+{dataset_desc}
+
 ## Analysis Warnings
 {warnings_desc}
 
@@ -974,6 +1071,8 @@ What is the next step to progress toward a complete architecture?"""
                 connection_summary=connection_summary,
                 input_status_desc=input_status_desc,
                 hw_config=json.dumps(hw_config, indent=2) if hw_config else "  (empty)",
+                machine_desc=machine_desc,
+                dataset_desc=dataset_desc,
                 missing_fields=", ".join(str(f) for f in missing_fields[:8]) if missing_fields else "none",
                 warnings_desc=warnings_desc,
                 history_text=history_text or "(no history)",

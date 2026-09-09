@@ -76,6 +76,10 @@ export interface CpuInfo {
   threads: number;
   architecture: string;
   baseMhz?: number | null;
+  /** Instruction sets the chip advertises — `avx2`, `fma`, `avx512f`. Most of
+   *  the gap between a fast kernel and a slow one, and the reason a measured
+   *  throughput is worth reading beside them. */
+  features?: string[];
 }
 
 /**
