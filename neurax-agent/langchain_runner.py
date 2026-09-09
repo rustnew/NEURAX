@@ -439,9 +439,35 @@ CANVAS_TOOL_DESCRIPTIONS: dict[str, str] = {
     "set_hw_config": "Set global config (args: updates) - use for batchSize, numClasses, seqLen, etc.",
     "initialize_hyperparams": "Initialize default training hyperparameters from the current design (no args)",
     "set_hyperparams": "Set specific training hyperparameters (args: updates)",
-    "navigate_to": "Switch the active workspace tab (args: tab) - tab is one of: architecture, simulation, production, inference, timemachine",
+    "navigate_to": (
+        "Switch the active workspace tab (args: tab) - one of: architecture, "
+        "simulation, production, training, timemachine"
+    ),
     "run_analysis": "Trigger the compiler to analyse the current canvas (no args)",
     "select_node": "Focus/highlight a specific block (args: node_id)",
+    "load_preset": (
+        "Replace the canvas with a reference architecture (args: preset_id). "
+        "Use get_presets first to see what exists. Far faster than building a "
+        "known model block by block."
+    ),
+    "use_dataset": (
+        "Point NEURAX at a dataset (args: path). It reads the shape - samples, "
+        "classes, image size - and fills in the fields the design needs. "
+        "Structure only; the contents are never read."
+    ),
+    "measure_machine": (
+        "Measure what this machine actually sustains (no args). Takes about "
+        "half a second and is remembered. Do this when the accelerator has no "
+        "published specification, or before quoting a latency you care about."
+    ),
+    "start_training": (
+        "Start a real training run on this machine (no args). Requires an "
+        "analysed design the generator can express faithfully. The run "
+        "survives the studio closing."
+    ),
+    "pause_training": "Pause the open run at the next step boundary (no args). A checkpoint is written.",
+    "resume_training": "Resume a paused or interrupted run from its last checkpoint (no args).",
+    "stop_training": "Stop the open run (no args). It writes a checkpoint and stops; nothing is lost.",
 }
 
 ANALYSIS_TOOL_DESCRIPTIONS: dict[str, str] = {
@@ -625,6 +651,39 @@ def _describe_dataset(dataset: Optional[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+def _describe_run(run: Optional[dict[str, Any]]) -> str:
+    """The run in flight, so the assistant can watch what it started.
+
+    Being able to launch a run without being able to see it is worse than not
+    being able to launch one: the agent would report success and then have no
+    idea whether the thing had failed at step one.
+    """
+    if not run:
+        return "  None open."
+
+    status = run.get("status", "unknown")
+    step, total = run.get("step", 0), run.get("total_steps", 0)
+    progress = f"{step}/{total}" if total else str(step)
+    lines = [f"  {run.get('id', 'run')} - {status}, step {progress}"]
+
+    if status == "failed":
+        reason = (run.get("error") or "").strip().splitlines()
+        lines.append(f"  It failed: {reason[-1] if reason else 'no reason recorded'}")
+        lines.append(
+            "  Read the reason before restarting. Starting it again unchanged "
+            "will fail the same way."
+        )
+    elif status == "interrupted":
+        lines.append(
+            "  Its process is gone but the directory is intact; resume_training "
+            "picks it up from the last checkpoint."
+        )
+    elif status == "running":
+        lines.append("  Do not start another. Wait, or stop this one first.")
+
+    return "\n".join(lines)
+
+
 def _build_tools_section(allowed_tools: Optional[frozenset[str]], has_plan: bool = False) -> str:
     """The '## Available Tools' block, filtered to what this call may
     actually use. Token efficiency, not just prompt hygiene: a mode with a
@@ -741,6 +800,7 @@ async def run_controller_step(
     #: working from a name.
     machine_desc = _describe_machine(snapshot.get("machine"))
     dataset_desc = _describe_dataset(snapshot.get("dataset"))
+    run_desc = _describe_run(snapshot.get("run"))
     active_tab = snapshot.get("active_tab") or "architecture"
 
     # Build detailed catalogue with all parameters
@@ -1021,6 +1081,9 @@ Connections: {connection_count}
 ## The data it will be trained on
 {dataset_desc}
 
+## Training run
+{run_desc}
+
 ## Analysis Warnings
 {warnings_desc}
 
@@ -1073,6 +1136,7 @@ What is the next step to progress toward a complete architecture?"""
                 hw_config=json.dumps(hw_config, indent=2) if hw_config else "  (empty)",
                 machine_desc=machine_desc,
                 dataset_desc=dataset_desc,
+                run_desc=run_desc,
                 missing_fields=", ".join(str(f) for f in missing_fields[:8]) if missing_fields else "none",
                 warnings_desc=warnings_desc,
                 history_text=history_text or "(no history)",

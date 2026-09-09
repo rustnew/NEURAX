@@ -61,7 +61,7 @@ const TimeMachineWorkspace = lazy(() =>
 import { IS_MOCK, mockHardware, mockImageDataset, profileForSelection } from '@/services/mockRuntime.ts';
 import { detectHardware, measureHardware } from '@/services/neuraxApi.ts';
 import { isCpuOnly, primaryGpu } from '@/types/runtime.ts';
-import type { DatasetProfile, HardwareProfile } from '@/types/runtime.ts';
+import type { DatasetProfile, HardwareProfile, RunState } from '@/types/runtime.ts';
 
 import { ArchitectureFamily } from '@/types/plugins.ts';
 import { VariantPreset } from '@/types/catalog.ts';
@@ -69,6 +69,8 @@ import { AnalysisResult, CanvasNode, Connection, LayerConfig, NodeGroup, PerLaye
 import { ImportResult } from '@/utils/architectureImporter.ts';
 import { compileToNeuraxIR } from '@/utils/neuraxCompiler.ts';
 import { generateModelCode } from '@/utils/modelCodeGen.ts';
+import { MODEL_TEMPLATES } from '@/data/modelTemplates.ts';
+import { kindForFilename } from '@/components/layout/DatasetPicker.tsx';
 import {
   serializeDesign,
   parseNeuraxFile,
@@ -1019,6 +1021,21 @@ const Index = () => {
   const [hardwareProfile, setHardwareProfile] = useState<HardwareProfile | null>(null);
   const [isExampleHardware, setIsExampleHardware] = useState(false);
   const [isMeasuring, setIsMeasuring] = useState(false);
+
+  /**
+   * What the agent has asked the training workspace to do.
+   *
+   * A command rather than a call, because the run lives in the workspace and
+   * this component does not hold it. The timestamp makes each request
+   * distinct, so asking twice for the same thing is two requests rather than
+   * one that the workspace cannot tell apart.
+   */
+  const [agentTrainingCommand, setAgentTrainingCommand] = useState<
+    { command: 'start' | 'pause' | 'resume' | 'stop'; at: number } | null
+  >(null);
+  /** The open run, reported up by the Training workspace so the agent's
+   *  snapshot can carry it. */
+  const [openRun, setOpenRun] = useState<RunState | null>(null);
 
 
   const [datasetProfile, setDatasetProfile] = useState<DatasetProfile | null>(IS_MOCK ? mockImageDataset : null);
@@ -2118,6 +2135,16 @@ params: params as Record<string, ParameterValue>,
             is_example: isExampleHardware,
           }
         : null,
+      /** The run in flight, so the assistant can watch what it started. */
+      run: openRun
+        ? {
+            id: openRun.id,
+            status: openRun.status,
+            step: openRun.step,
+            total_steps: openRun.totalSteps,
+            error: openRun.error ?? null,
+          }
+        : null,
       dataset: datasetProfile
         ? {
             kind: datasetProfile.kind,
@@ -2511,6 +2538,69 @@ params: params as Record<string, ParameterValue>,
   const handleAgentToolEvent = useCallback((tool: { name: string; args?: Record<string, unknown> }) => {
     const name = tool?.name;
     const args = tool?.args ?? {};
+
+    /**
+     * The actions that were granted to the agent and executed by nobody.
+     *
+     * An audit of what a person can do in the studio against what the
+     * assistant could reach found ten capabilities covered out of roughly
+     * forty. The gap that mattered was the whole second half of the product:
+     * it could design a model and analyse it, and then could not point at a
+     * dataset, measure the machine, start a run, watch it, or stop it — the
+     * things the studio exists to do once a design is finished.
+     */
+    if (name === 'load_preset') {
+      const presetId = typeof args.preset_id === 'string' ? args.preset_id.trim() : null;
+      // Matched on id or on name: `get_presets` returns both, and an agent
+      // that read a list of names will say "BERT-base" rather than an id.
+      const wanted = presetId?.toLowerCase();
+      const preset = wanted
+        ? MODEL_TEMPLATES.find(
+            (t) => t.id.toLowerCase() === wanted || t.name.toLowerCase() === wanted,
+          ) ?? null
+        : null;
+      if (!preset) {
+        toast({
+          title: 'No such template',
+          description: presetId ? `Nothing in the catalogue is called "${presetId}".` : 'No template named.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      handleLoadPreset(preset);
+      return;
+    }
+
+    if (name === 'use_dataset') {
+      const path = typeof args.path === 'string' ? args.path.trim() : '';
+      if (!path) return;
+      // The agent names a path; the studio profiles it the same way the
+      // picker does, so both routes produce the same profile.
+      setDatasetProfile(
+        profileForSelection({ displayPath: path, kind: kindForFilename(path), fileCount: 1 }),
+      );
+      return;
+    }
+
+    if (name === 'measure_machine') {
+      void measureThisMachine();
+      return;
+    }
+
+    if (name === 'start_training') {
+      setActiveWorkspaceTab('training');
+      setAgentTrainingCommand({ command: 'start', at: Date.now() });
+      return;
+    }
+
+    if (name === 'pause_training' || name === 'resume_training' || name === 'stop_training') {
+      setActiveWorkspaceTab('training');
+      setAgentTrainingCommand({
+        command: name === 'pause_training' ? 'pause' : name === 'resume_training' ? 'resume' : 'stop',
+        at: Date.now(),
+      });
+      return;
+    }
 
     if (name === 'set_hw_config') {
       const updates = (args as any)?.updates;
@@ -3103,6 +3193,8 @@ params: params as Record<string, ParameterValue>,
                 hardware={hardwareProfile}
                 dataset={datasetProfile}
                 onChooseDataset={() => setDatasetProfile(mockImageDataset)}
+                agentCommand={agentTrainingCommand}
+                onRunChanged={setOpenRun}
               />
             </Suspense>
           }

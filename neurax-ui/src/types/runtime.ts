@@ -242,6 +242,9 @@ export interface RunState {
   stepsPerEpoch?: number;
   /** Directory that *is* the session. Reopening the studio reads this. */
   directory: string;
+  /** Why a run failed, when it did. Absent otherwise — an empty string here
+   *  would render as a failure with no explanation. */
+  error?: string | null;
 }
 
 /** One line of the training process's own output, one per step. */

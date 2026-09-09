@@ -104,6 +104,20 @@ interface TrainingWorkspaceProps {
   hardware: HardwareProfile | null;
   dataset: DatasetProfile | null;
   onChooseDataset: () => void;
+  /**
+   * What the assistant has asked for, if anything.
+   *
+   * The agent cannot hold a run — this workspace does — so it asks, and the
+   * request is carried here. The timestamp is what makes two identical
+   * requests distinct; without it, asking to stop twice would look like one
+   * request already handled.
+   */
+  agentCommand?: { command: 'start' | 'pause' | 'resume' | 'stop'; at: number } | null;
+  /** Reports the open run upward, so the assistant can see what it started.
+   *  Without it the agent could launch a run and then have no idea whether it
+   *  was running, finished or had failed — which is worse than not being able
+   *  to launch one. */
+  onRunChanged?: (run: RunState | null) => void;
 }
 
 /** How fast the mock clock advances. Fast enough to watch a curve form,
@@ -118,6 +132,8 @@ export function TrainingWorkspace({
   hardware,
   dataset,
   onChooseDataset,
+  agentCommand = null,
+  onRunChanged,
 }: TrainingWorkspaceProps) {
   const { toast } = useToast();
   const [activeCategory, setActiveCategory] = useState<TrainingCategoryId>('plan');
@@ -572,6 +588,48 @@ export function TrainingWorkspace({
     setExampleRun((r) => (r ? { ...r, status: 'finished' } : r));
     toast({ title: 'Stopped', description: 'The run directory and its checkpoints stay on disk.' });
   }, [liveRunId, send, toast]);
+
+  /**
+   * Carry out what the assistant asked.
+   *
+   * Keyed on the request's timestamp, so the effect fires once per request
+   * rather than once per render — and a second identical request is a second
+   * request, not a repeat of one already handled.
+   */
+  // The status and step are what change; reporting on every poll would push a
+  // new object up once a second for a value that has not moved.
+  const reportedRun = useRef<string>('');
+  useEffect(() => {
+    const key = run ? `${run.id}:${run.status}:${run.step}` : '';
+    if (key === reportedRun.current) return;
+    reportedRun.current = key;
+    onRunChanged?.(run);
+  }, [run, onRunChanged]);
+
+  const lastAgentCommand = useRef<number | null>(null);
+  useEffect(() => {
+    if (!agentCommand || agentCommand.at === lastAgentCommand.current) return;
+    lastAgentCommand.current = agentCommand.at;
+
+    switch (agentCommand.command) {
+      case 'start':
+        // Through the same check a person meets. The agent does not get a
+        // shortcut past the reason a design cannot be trained.
+        setLaunchBlocker(checkLaunchable());
+        if (checkLaunchable() === null) void start();
+        else setLaunchOpen(true);
+        break;
+      case 'pause':
+        pause();
+        break;
+      case 'resume':
+        resume();
+        break;
+      case 'stop':
+        stop();
+        break;
+    }
+  }, [agentCommand, checkLaunchable, pause, resume, start, stop]);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-background">

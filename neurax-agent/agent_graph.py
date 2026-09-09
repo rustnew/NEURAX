@@ -104,6 +104,22 @@ MODE_TOOL_GRANTS: dict[str, frozenset[str]] = {
         "navigate_to", "run_analysis", "select_node",
         "analyze_architecture", "check_budget",
         "remember_preference",
+        # Building a model means building it for something. A preset is a
+        # faster route to a known architecture than twenty `add_node` calls,
+        # and the dataset is what decides the input and output shapes.
+        "load_preset", "use_dataset",
+    }),
+    # Everything a run needs, granted to the modes that have a reason to run
+    # one. Deliberately not in `explanation`, which is read-only: starting a
+    # training run spends real hours and electricity, and an assistant asked to
+    # explain a design must not be able to launch one.
+    "training": frozenset({
+        "navigate_to", "select_node", "run_analysis",
+        "analyze_architecture", "check_budget", "estimate_training_cost",
+        "set_hw_config", "set_hyperparams",
+        "measure_machine", "use_dataset",
+        "start_training", "pause_training", "resume_training", "stop_training",
+        "remember_preference",
     }),
     "optimization": frozenset({
         # Deliberately no add_node/delete_node/connect/disconnect/set_family:
@@ -113,6 +129,9 @@ MODE_TOOL_GRANTS: dict[str, frozenset[str]] = {
         "analyze_architecture", "check_budget", "find_optimal_hyperparameters",
         "estimate_training_cost", "get_hardware_list",
         "remember_preference",
+        # Tuning a design against hardware means knowing what the hardware
+        # does, and confirming it by running.
+        "measure_machine", "start_training", "stop_training",
     }),
     "research": frozenset({
         "set_family", "add_node", "connect", "disconnect", "delete_node",
@@ -121,6 +140,7 @@ MODE_TOOL_GRANTS: dict[str, frozenset[str]] = {
         "analyze_architecture", "check_budget", "find_optimal_hyperparameters",
         "get_presets", "get_preset", "get_hardware_list", "estimate_training_cost",
         "remember_preference", "search_past_designs",
+        "load_preset", "use_dataset", "measure_machine",
         # "web_search" is NOT listed here — it's added dynamically in
         # run_agent_graph, only when the caller actually supplied a Tavily
         # key. Listing it unconditionally would grant a tool this run can't
