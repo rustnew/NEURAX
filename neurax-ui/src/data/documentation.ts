@@ -67,9 +67,18 @@ export const DOCUMENTATION: DocChapter[] = [
           {
             kind: 'list',
             items: [
-              '{-It never runs your model.-} Training is PyTorch and JAX; NEURAX works before there is anything to run.',
-              '{-It does not measure.-} A profiler reports a model that ran. NEURAX predicts one that has not.',
-              '{-It does not export runnable code.-} See Exporting for what does leave the tool.',
+              '{-It will not answer by running your model.-} Every figure in Simulation is computed from the graph. Nothing is sampled, nothing is executed, and the same design always gives the same numbers.',
+              '{-It will not guess at your hardware.-} If it cannot read a specification for the card it found, it measures the machine instead, and says which figures are approximate.',
+              '{-It will not train a design it cannot generate faithfully.-} Where the generated model would not match the one that was analysed, it refuses and names why, rather than training something else.',
+            ],
+          },
+          { kind: 'heading', text: 'What it does beyond the analysis' },
+          {
+            kind: 'list',
+            items: [
+              '{+It reads the machine it runs on.+} Processor, memory, disk and any accelerator, and it measures what that hardware actually sustains.',
+              '{+It generates the design as PyTorch.+} A real `nn.Module`, checked against the analysis before anything is run.',
+              '{+It trains, and checks itself.+} A run on your own machine reports its real parameter count, memory and speed beside what was predicted.',
             ],
           },
           {
@@ -132,6 +141,100 @@ export const DOCUMENTATION: DocChapter[] = [
             kind: 'text',
             text:
               'The **?** button at the top right opens this guide, and the theme toggle beside it switches between light and dark.',
+          },
+        ],
+      },
+    ],
+  },
+
+  // ═══════════════════════════════════════════════════════════════════════
+  {
+    id: 'machine',
+    title: 'Your machine and your data',
+    sections: [
+      {
+        id: 'detection',
+        title: 'What NEURAX knows about this computer',
+        summary: 'Detected, not chosen from a list.',
+        blocks: [
+          {
+            kind: 'text',
+            text:
+              'NEURAX reads the machine it is installed on when the studio opens, and every figure is computed against what it finds. The toolbar names it, and {+Target+} shows it in full.',
+          },
+          {
+            kind: 'table',
+            columns: ['What it reads', 'Why it matters'],
+            rows: [
+              ['**Processor**', 'Model, physical cores, threads, and the instruction sets it supports — `avx2` and `fma` are most of the difference between a fast kernel and a slow one.'],
+              ['**Memory**', 'What is genuinely available, not what is unused. Most of what Linux reports as used is reclaimable cache, and sizing against the free figure refuses runs that would have been fine.'],
+              ['**Accelerators**', 'Every card, with the memory each has free right now. An integrated processor is reported as sharing system memory rather than as a card with nothing left.'],
+              ['**Disk**', 'Free space where a run would write its checkpoints.'],
+              ['**Runtimes**', 'Whether Python and PyTorch are there, whether a driver answered, and which precisions the runtime will actually accept.'],
+            ],
+          },
+          {
+            kind: 'note',
+            tone: 'warning',
+            title: 'Present is not the same as usable',
+            text:
+              'A driver can be installed and not respond; a card can be visible and unreachable. NEURAX reports four states — {-absent, installed, responsive, usable-} — and only the last is planned against. A degraded accelerator is named as a warning; it does not stop a run, because the work falls back to the processor.',
+          },
+          {
+            kind: 'heading',
+            text: 'Measuring',
+          },
+          {
+            kind: 'text',
+            text:
+              'The specification database covers datacenter accelerators. Most machines are not one, so NEURAX measures instead — a matrix multiply and a memory sweep, about half a second, remembered afterwards. Press {+Measure this machine+} in Target.',
+          },
+          {
+            kind: 'note',
+            tone: 'info',
+            title: 'Read the figure for what it is',
+            text:
+              'It is what a good ordinary kernel sustains on this hardware — {-not the chip\'s published peak, and not a tuned vendor library-}. A real run using one will exceed it, so treat a latency derived from this number as a conservative bound rather than a prediction to the percent.',
+          },
+        ],
+      },
+      {
+        id: 'dataset',
+        title: 'Pointing at your data',
+        summary: 'Structure and statistics, never content.',
+        blocks: [
+          {
+            kind: 'text',
+            text:
+              'The {+Dataset+} control sits beside Templates, because the two answer the same kind of question: what the design starts from, and what it has to fit. Choose a file or a folder, and NEURAX reads how it is shaped.',
+          },
+          {
+            kind: 'table',
+            columns: ['Kind', 'What it expects'],
+            rows: [
+              ['**Tabular**', '`.csv`, `.tsv`, `.parquet` — one row per sample. Column types and missing values are read from the header and a scan.'],
+              ['**Records**', '`.jsonl`, `.ndjson`, `.json` — one record per line.'],
+              ['**Images**', 'A folder per class. The subfolder names become the labels.'],
+            ],
+          },
+          {
+            kind: 'text',
+            text:
+              'What comes back is the shape of the data: how many samples, how they are split, how balanced the classes are, and what could not be read. Those figures fill in the fields the design needs — number of classes, channels, image size — that you would otherwise type by hand.',
+          },
+          {
+            kind: 'note',
+            tone: 'info',
+            title: 'Your data does not leave this machine',
+            text:
+              'NEURAX reads {+how a dataset is shaped+}, never what it contains. There is no preview, no sample rows, no thumbnails — not an oversight, a rule. The identifier it keeps is a digest, never a sample.',
+          },
+          {
+            kind: 'note',
+            tone: 'warning',
+            title: 'Integrity is stated, never fatal',
+            text:
+              'A few unreadable files, or images at the wrong size, do not block a profile — they are counted and named. {-Finding out at step 340 of a training run is the expensive way to learn it.-}',
           },
         ],
       },
@@ -313,14 +416,26 @@ export const DOCUMENTATION: DocChapter[] = [
           {
             kind: 'text',
             text:
-              'The chip every metric is computed for: which GPU, how many, and how they are connected. NEURAX ships specifications for {+more than twenty GPUs+} — A100, H100, V100, the RTX 40 series and others — with their memory, bandwidth and per-precision throughput.',
+              'What every metric is computed for. It opens on {+the machine you are running on+} — NEURAX detects it rather than asking you to pick from a list — with the memory it has free right now, and what it measured that hardware sustaining.',
+          },
+          {
+            kind: 'text',
+            text:
+              'A machine with no accelerator is a target, not a missing one: the CPU is what the work would run on, and NEURAX sizes against it. The specification database is still there for designing against hardware you do not have — a rented instance, a machine you intend to buy — behind {+Design for a machine you do not have+}.',
+          },
+          {
+            kind: 'note',
+            tone: 'info',
+            title: 'Measured, not looked up',
+            text:
+              'The database holds published figures for datacenter accelerators. For anything else — an integrated GPU, a laptop processor, a part newer than the database — NEURAX measures instead: a blocked matrix multiply and a memory sweep, taking about half a second, remembered afterwards. It is what a good ordinary kernel sustains, {-not the chip\'s theoretical peak-}, so latency derived from it is a conservative bound.',
           },
           {
             kind: 'note',
             tone: 'warning',
             title: 'Precision moves every memory figure at once',
             text:
-              'Switching between fp32, bf16 and fp8 changes weights, activations, gradients and optimizer state together. When comparing two designs, {-keep the precision the same-} or you are measuring the precision, not the architecture.',
+              'The five widths are fp32, fp16, bf16, int8 and int4. Switching between them changes weights, activations, gradients and optimizer state together. When comparing two designs, {-keep the precision the same-} or you are measuring the precision, not the architecture.',
           },
         ],
       },
@@ -495,6 +610,30 @@ export const DOCUMENTATION: DocChapter[] = [
               ['**TOML**', 'The same topology, in a format meant to be hand-edited and diffed.'],
               ['**GitHub**', 'Push the architecture straight to a repository.'],
             ],
+          },
+          { kind: 'heading', text: 'The PyTorch project' },
+          {
+            kind: 'text',
+            text:
+              'Beside those four, the export panel builds {+a working Python package+} from the design — not a skeleton, and not a diagram of one.',
+          },
+          {
+            kind: 'table',
+            columns: ['File', 'What it is'],
+            rows: [
+              ['`src/model.py`', 'The architecture as real `nn.Module` classes with a real forward pass. A package on its own, importable without the training loop.'],
+              ['`train.py`', 'The entry point: loads the model and the hyperparameters, and trains.'],
+              ['`hyperparameters.json`', 'Exactly what was set in the hyperparameter panel — nothing re-typed.'],
+              ['`requirements.txt`', 'What this architecture family needs.'],
+              ['`README.md`', 'The layout, how to run it, and the target it was sized for.'],
+            ],
+          },
+          {
+            kind: 'note',
+            tone: 'info',
+            title: 'Checked, not assumed',
+            text:
+              'The generated model is asked for its parameter count and {+compared against the analysis before the export is offered+}. Where the two disagree, or where a block has no faithful translation, the panel says so rather than handing over a file that quietly describes a different model. {-Running `python -m src.model` prints the same check on your own machine.-}',
           },
           {
             kind: 'text',
@@ -704,6 +843,20 @@ export const DOCUMENTATION: DocChapter[] = [
             text:
               'Closing NEURAX {+does not stop a run+}, and reopening it picks the session back up. If the studio is closed abruptly, the run is listed as {-interrupted-} and resumes from its last checkpoint — nothing is lost.',
           },
+          {
+            kind: 'note',
+            tone: 'warning',
+            title: 'Not every design can be trained yet',
+            text:
+              'Training needs the design as PyTorch, and NEURAX will {-refuse rather than generate something that is not your design-}. The case you are most likely to meet is a repeated block whose body is also drawn separately on the canvas: the analysis handles it, a generated `forward()` cannot, and training the wrong architecture would make every comparison meaningless. The launch dialog names the blocks responsible before anything is committed.',
+          },
+          {
+            kind: 'note',
+            tone: 'info',
+            title: 'What a run needs',
+            text:
+              'Python with PyTorch, on this machine. NEURAX checks for both when it reads the hardware and says so in {+Target+} if either is missing. No GPU is required — a processor is a compute target, and a great many people have nothing else.',
+          },
           { kind: 'heading', text: 'Time Machine' },
           {
             kind: 'text',
@@ -854,14 +1007,13 @@ export const DOCUMENTATION: DocChapter[] = [
             text:
               '{+Parameter counts for these models are verified on every build+}, together with four imported configs checked {+end to end through the real compiler+}. Seven models is what is measured; it is not a claim about every architecture that exists.',
           },
-          { kind: 'heading', text: 'Not checked against measurement' },
+          { kind: 'heading', text: 'Estimated, and now checkable' },
           {
             kind: 'list',
             items: [
-              '**Latency and throughput** are roofline estimates from the chip\'s specifications. {-No measured run has been compared against them.-}',
+              '**Latency and throughput** are roofline estimates from the chip\'s specifications, or from what NEURAX measured when it holds none. {+A real run in Training reports the observed figures beside them+}, which is the only way to know how far off they were on your hardware.',
               '**Training cost and time** follow from those estimates and inherit their uncertainty, plus whatever your cloud actually charges.',
-              '**Energy and CO₂** rest on published chip power figures and an assumed grid intensity.',
-              '**Inference Intelligence** widgets are analytical indicators, {-not measurements of a served model-}.',
+              '**Energy and CO₂** rest on published chip power figures and an assumed grid intensity. {-No run measures them, so they stay estimates even after training.-}',
             ],
           },
           { kind: 'heading', text: 'Known gaps' },
@@ -870,7 +1022,8 @@ export const DOCUMENTATION: DocChapter[] = [
             items: [
               '**Mixture of experts.** Routed models drawn or imported in the studio {-under-count by roughly 22 %-} against their published size. {-Treat MoE numbers from the canvas as a lower bound.-}',
               '**Multimodal models.** Only the language tower is imported, so {-totals cover the text side alone-}.',
-              '**No calibration.** {-NEURAX does not learn from your measured runs.-} Every prediction is the formula\'s, not your cluster\'s.',
+              '**No calibration.** A run shows you where the prediction was wrong, but {-NEURAX does not yet adjust the next one because of it-}. Every prediction is the formula\'s, not your cluster\'s.',
+              '**Not every design trains.** A repeated block whose body is also drawn separately {-cannot be generated faithfully-}, and NEURAX refuses rather than train a different architecture.',
             ],
           },
           {
@@ -878,7 +1031,7 @@ export const DOCUMENTATION: DocChapter[] = [
             tone: 'info',
             title: 'The short version',
             text:
-              '{+Trust parameters, memory and FLOPs for dense models, within a few percent.+} {-Treat latency, cost and carbon as estimates for comparing designs against each other, not as forecasts of your invoice.-}',
+              '{+Trust parameters, memory and FLOPs for dense models, within a few percent.+} {-Treat latency, cost and carbon as estimates for comparing designs against each other, not as forecasts of your invoice.-} When a figure matters enough, train and read the error yourself.',
           },
         ],
       },

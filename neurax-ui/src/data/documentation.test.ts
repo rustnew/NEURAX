@@ -311,4 +311,50 @@ describe('the user guide', () => {
       expect(searchDocs('LLAMA').length).toBe(searchDocs('llama').length);
     });
   });
+
+    it('names no workspace the application does not have', () => {
+      // The drift this catches: Inference Intelligence was removed and the
+      // guide went on describing its widgets in the accuracy section, where
+      // no test was looking. Any workspace named in prose has to be a tab
+      // that exists.
+      const tabs = source('components/layout/WorkspaceTabs.tsx');
+      const labels = new Set([...tabs.matchAll(/label: '([^']+)'/g)].map((m) => m[1]));
+      const guide = JSON.stringify(DOCUMENTATION);
+      for (const removed of ['Inference Intelligence', 'Comparison workspace']) {
+        if (!labels.has(removed)) {
+          expect(
+            guide.includes(removed),
+            `the guide names "${removed}", which the application no longer has`,
+          ).toBe(false);
+        }
+      }
+    });
+
+    it('lists only the numeric precisions the target panel offers', () => {
+      // `fp8` was documented and never offered — a width a reader would go
+      // looking for and not find.
+      const panel = source('components/panels/SimulationTargetPanel.tsx');
+      const offered = new Set(
+        [...panel.matchAll(/value: '(fp\d+|bf\d+|int\d+)'/g)].map((m) => m[1]),
+      );
+      expect(offered.size, 'no precisions were found in the target panel').toBeGreaterThan(0);
+
+      const guide = JSON.stringify(DOCUMENTATION);
+      for (const width of ['fp8', 'fp64', 'int2']) {
+        if (!offered.has(width)) {
+          expect(
+            guide.includes(width),
+            `the guide names "${width}", which the target panel does not offer`,
+          ).toBe(false);
+        }
+      }
+    });
+
+    it('does not claim the analysis is never checked against a run', () => {
+      // True while NEURAX only predicted. The Training workspace exists to do
+      // exactly this, so the claim now reads as a missing feature.
+      const guide = JSON.stringify(DOCUMENTATION);
+      expect(guide).not.toContain('No measured run has been compared');
+      expect(guide).not.toContain('It never runs your model');
+    });
 });
