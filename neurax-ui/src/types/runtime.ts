@@ -207,6 +207,18 @@ export interface DatasetProfile {
   suggested: SuggestedConfig;
   /** A digest, never a sample. Identifies the dataset in a run record. */
   fingerprint: string;
+  /**
+   * Whether these figures were read from the file, or are an example.
+   *
+   * There is no dataset profiler yet: choosing a path records the path and
+   * fills the statistics from a worked example. That is visible in the studio,
+   * which stamps the panel `EXAMPLE` — but the assistant reads this profile as
+   * text and would otherwise size a model and a training budget against a
+   * sample count that does not exist. A fabricated number acted on is worse
+   * than no number, so it is flagged in the data rather than only in the
+   * rendering.
+   */
+  verified: boolean;
 }
 
 // ─── Training ──────────────────────────────────────────────────────────────

@@ -170,6 +170,7 @@ export const mockImageDataset: DatasetProfile = {
     familyHint: 'cnn',
   },
   fingerprint: 'sha256:3f7a…c91d',
+  verified: false,
 };
 
 export const mockCsvDataset: DatasetProfile = {
@@ -202,6 +203,7 @@ export const mockCsvDataset: DatasetProfile = {
     familyHint: 'transformer',
   },
   fingerprint: 'sha256:8b2e…41af',
+  verified: false,
 };
 
 /**
@@ -244,6 +246,7 @@ export function profileForSelection(selection: {
       },
       suggested: {},
       fingerprint: 'not profiled',
+      verified: false,
     };
   }
 
@@ -268,6 +271,9 @@ export function profileForSelection(selection: {
         }
       : undefined,
     suggested: { ...base.suggested, datasetSize: samples },
+    // Nothing read the file. The path is real; the statistics are the worked
+    // example's, scaled.
+    verified: false,
   };
 }
 

@@ -1101,7 +1101,20 @@ const Index = () => {
    * cached by the service, so a second call is free.
    */
   const measureThisMachine = useCallback(async () => {
-    if (isExampleHardware || isMeasuring) return;
+    // Two silent returns sat here. A person pressing the button would notice
+    // nothing happening and press it again; the assistant, whose only feedback
+    // is the next snapshot, would see no measurement appear and call the tool
+    // again, and again. A refusal has to say it refused.
+    if (isExampleHardware) {
+      toast({
+        title: 'Nothing to measure',
+        description:
+          'This is the example machine — the local NEURAX service is not answering, so nothing was detected.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (isMeasuring) return;
     setIsMeasuring(true);
     const measured = await measureHardware();
     if (measured) {
@@ -2152,6 +2165,7 @@ params: params as Record<string, ParameterValue>,
             sample_shape: datasetProfile.sampleShape ?? null,
             num_classes: datasetProfile.suggested.numClasses ?? null,
             family_hint: datasetProfile.suggested.familyHint ?? null,
+            verified: datasetProfile.verified,
           }
         : null,
     };

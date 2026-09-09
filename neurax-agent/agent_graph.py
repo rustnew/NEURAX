@@ -107,19 +107,11 @@ MODE_TOOL_GRANTS: dict[str, frozenset[str]] = {
         # Building a model means building it for something. A preset is a
         # faster route to a known architecture than twenty `add_node` calls,
         # and the dataset is what decides the input and output shapes.
-        "load_preset", "use_dataset",
-    }),
-    # Everything a run needs, granted to the modes that have a reason to run
-    # one. Deliberately not in `explanation`, which is read-only: starting a
-    # training run spends real hours and electricity, and an assistant asked to
-    # explain a design must not be able to launch one.
-    "training": frozenset({
-        "navigate_to", "select_node", "run_analysis",
-        "analyze_architecture", "check_budget", "estimate_training_cost",
-        "set_hw_config", "set_hyperparams",
-        "measure_machine", "use_dataset",
+        "load_preset", "use_dataset", "measure_machine",
+        # And a design is finished when it has been run. These were briefly
+        # granted to a `training` mode that the studio has no way to select —
+        # a grant nothing could ever use, which looks done and is not.
         "start_training", "pause_training", "resume_training", "stop_training",
-        "remember_preference",
     }),
     "optimization": frozenset({
         # Deliberately no add_node/delete_node/connect/disconnect/set_family:
@@ -131,7 +123,8 @@ MODE_TOOL_GRANTS: dict[str, frozenset[str]] = {
         "remember_preference",
         # Tuning a design against hardware means knowing what the hardware
         # does, and confirming it by running.
-        "measure_machine", "start_training", "stop_training",
+        "measure_machine",
+        "start_training", "pause_training", "resume_training", "stop_training",
     }),
     "research": frozenset({
         "set_family", "add_node", "connect", "disconnect", "delete_node",

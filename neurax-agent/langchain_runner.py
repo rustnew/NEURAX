@@ -634,7 +634,20 @@ def _describe_dataset(dataset: Optional[dict[str, Any]]) -> str:
         return "  None chosen. Ask before assuming a shape, a class count or a task."
 
     samples = dataset.get("samples")
-    lines = [
+    lines: list[str] = []
+    if not dataset.get("verified", False):
+        # The path is real; the statistics are a worked example, because there
+        # is no dataset profiler yet. Said first and plainly: an assistant that
+        # sizes a model and a budget against a sample count that does not
+        # exist is worse than one that asks.
+        lines.append(
+            "  WARNING: these figures were NOT read from the file. NEURAX "
+            "records the path and fills the statistics from an example. Do not "
+            "quote the sample count, the class balance or a training duration "
+            "derived from them as if they described this data - say they are "
+            "provisional, and ask the user to confirm the real shape."
+        )
+    lines += [
         f"  Kind: {dataset.get('kind', 'unknown')}",
         f"  Samples: {samples:,}" if isinstance(samples, int) else f"  Samples: {samples}",
     ]
