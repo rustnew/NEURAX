@@ -45,6 +45,8 @@ fn request(name: &str, epochs: u64, steps_per_epoch: u64) -> StartRequest {
         // Eight features per sample, matching TinyNet's first layer. This is
         // the field whose absence the first run of these tests exposed.
         input_shape: vec![8],
+        input_kind: "features".into(),
+        vocab_size: None,
         num_classes: 4,
         epochs,
         batch_size: 4,

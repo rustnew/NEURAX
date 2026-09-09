@@ -263,6 +263,13 @@ const SUPPORTED_TYPES = new Set<LayerType>([
   'gcn_conv', 'gat_conv', 'gat_v2_conv', 'gat_attention', 'message_passing', 'rgcn_conv',
   'lstm_cell', 'gru_cell', 'bilstm', 'bigru',
   'unet_block', 'unet_mid', 'unet_latent', 'unet_eff',
+  // Structural and positional blocks. Every template in the catalogue opens
+  // with `input` and closes with `output`, and most transformers carry a
+  // `layer_stack` and a positional embedding — so while these four were
+  // missing, no design from the Templates catalogue could be generated at
+  // all, and therefore none could be trained. The four charts and the whole
+  // Training workspace were reachable only through a hand-written model.
+  'input', 'output', 'layer_stack', 'pos_absolute',
 ]);
 
 /** GNN layers need `torch_geometric` and an `edge_index` (plus `edge_type`
@@ -290,6 +297,17 @@ function genNode(node: CanvasNode, ctx: GenContext): GeneratedLayer {
   const bias = readBool(p, ['bias', 'use_bias', 'useBias'], hw.useBias ?? true);
   const hidden = readNum(p, ['hidden_size', 'hiddenSize', 'd_model', 'dModel'], hw.hiddenDim) ?? 0;
 
+  /** A node that occupies a place in the graph and emits no module. */
+  const passthrough = (why: string): GeneratedLayer => ({
+    nodeId: node.id,
+    layerType: node.type,
+    supported: true,
+    paramCount: 0,
+    varName,
+    initCode: `nn.Identity()  # ${why}`,
+    forwardLines: [],
+  });
+
   const unsupported = (note: string): GeneratedLayer => ({
     nodeId: node.id, layerType: node.type, supported: false, paramCount: 0, varName,
     initCode: `None  # ${node.type}: ${note}`,
@@ -303,6 +321,74 @@ function genNode(node: CanvasNode, ctx: GenContext): GeneratedLayer {
   });
 
   switch (node.type) {
+    // Structural markers. They declare a shape and stand at the ends of the
+    // graph; they are not operations, and generating anything for them would
+    // insert a layer the analysis never costed.
+    case 'input':
+      return passthrough('input: declares the sample shape, computes nothing');
+    case 'output':
+      return passthrough('output: marks the end of the graph');
+
+    /**
+     * Learned absolute positional embedding.
+     *
+     * A `[max_len, hidden]` table added to the token embeddings — the
+     * original Transformer's and BERT's scheme, not a rotary or sinusoidal
+     * one, which carry no parameters and would price differently.
+     */
+    case 'pos_absolute': {
+      const maxLen =
+        readNum(p, ['max_position_embeddings', 'maxPositions', 'seq_len', 'seqLen'], hw.seqLen) ?? 512;
+      return {
+        nodeId: node.id, layerType: node.type, supported: true,
+        paramCount: maxLen * hidden, varName,
+        initCode: `nn.Embedding(${maxLen}, ${hidden})`,
+        forwardLines: [
+          `x = x + self.${varName}(torch.arange(x.shape[1], device=x.device))`,
+        ],
+      };
+    }
+
+    /**
+     * The repeated block a template compiles to.
+     *
+     * `decoderStackParamsAndFlops` in the compiler prices this node as N
+     * transformer blocks — attention, feed-forward, two norms, no biases —
+     * and `NeuraxStack` is built to that same shape, so the parameter count
+     * the studio predicted is the one PyTorch reports. That agreement is
+     * checked before a run starts, and a mismatch is the cheapest possible
+     * signal that a formula is wrong.
+     */
+    case 'layer_stack': {
+      const depth = readNum(p, ['num_layers', 'numLayers', 'depth', 'repeat'], hw.numLayers) ?? 0;
+      const heads = readNum(p, ['num_heads', 'numHeads', 'heads'], hw.numHeads) ?? 8;
+      const kvHeads = readNum(p, ['num_kv_heads', 'numKvHeads', 'kv_heads', 'kvHeads'], hw.kvHeads) ?? heads;
+      const ffn = readNum(p, ['ffn_dim', 'ffnDim', 'intermediate_size'], hw.ffnDim) ?? hidden * 4;
+      const gated = readBool(p, ['gated', 'swiglu', 'use_gated'], false);
+      const rms = readBool(p, ['rms_norm', 'rmsNorm', 'use_rmsnorm'], false);
+
+      if (depth <= 0 || hidden <= 0) {
+        return unsupported('a repeated block needs a depth and a hidden size, and neither was set');
+      }
+
+      // Mirrors the compiler's own arithmetic: per block, attention is 4·h²
+      // (or fewer for grouped-query), the feed-forward is 2·h·f (3·h·f when
+      // gated), and two norms contribute 2·h.
+      const attnParams =
+        kvHeads && kvHeads !== heads
+          ? hidden * hidden + 2 * hidden * (hidden * (kvHeads / heads)) + hidden * hidden
+          : 4 * hidden * hidden;
+      const ffnParams = (gated ? 3 : 2) * hidden * ffn;
+      const perBlock = attnParams + ffnParams + 2 * hidden;
+
+      return {
+        nodeId: node.id, layerType: node.type, supported: true,
+        paramCount: Math.round(perBlock * depth), varName,
+        initCode: `NeuraxStack(${depth}, ${hidden}, ${heads}, ${kvHeads}, ${ffn}, ${gated ? 'True' : 'False'}, ${rms ? 'True' : 'False'})`,
+        forwardLines: [`x = self.${varName}(x)`],
+      };
+    }
+
     case 'token_embedding':
     case 'embedding': {
       const vocab = readNum(p, ['vocab_size', 'vocabSize'], hw.vocabSize) ?? 0;
@@ -677,6 +763,22 @@ function topoOrder(nodes: CanvasNode[], connections: Connection[]): CanvasNode[]
 
 // ─── Public API ─────────────────────────────────────────────────────────────
 
+/**
+ * What the generated model expects to be fed.
+ *
+ * Derived from the first layer that actually consumes the input, because that
+ * is the only thing that knows. The studio previously guessed it from the
+ * hardware config — if an image size was set anywhere, the input was assumed
+ * to be an image — so loading BERT while an image dataset was selected fed
+ * `[3, 224, 224]` floats into a token embedding, and the run died in the first
+ * attention block with `not enough values to unpack (expected 3, got 2)`.
+ *
+ * `kind` matters as much as the shape: an embedding takes integer indices, and
+ * a random float tensor is not merely the wrong shape for it, it is the wrong
+ * dtype.
+ */
+export type ModelInputKind = 'tokens' | 'image' | 'features';
+
 export interface ModelCodegenResult {
   modelClassName: string;
   code: string;
@@ -684,6 +786,11 @@ export interface ModelCodegenResult {
   layers: GeneratedLayer[];
   unsupportedTypes: string[];
   fullySupported: boolean;
+  /** One sample, without the batch dimension. */
+  inputShape: number[];
+  inputKind: ModelInputKind;
+  /** The vocabulary token indices must stay inside. Only for `tokens`. */
+  vocabSize?: number;
 }
 
 function pyClassName(modelName: string): string {
@@ -734,6 +841,55 @@ class NeuraxGatedMLP(nn.Module):
 
     def forward(self, x):
         return self.down(self.act(self.gate(x)) * self.up(x))
+
+
+class NeuraxDecoderBlock(nn.Module):
+    """One transformer block: pre-norm attention, pre-norm feed-forward, both
+    residual.
+
+    This is what a \`layer_stack\` node stands for. The Templates catalogue
+    compiles a repeated block down to that single node rather than to N
+    individual Attention/Mlp/Normalization nodes, and NEURAX prices it with
+    \`decoderStackParamsAndFlops\` — standard or grouped-query attention, plain
+    or gated FFN, two norms per block, no biases. This module is built to the
+    same shape so the parameter count the studio predicted is the parameter
+    count PyTorch reports."""
+
+    def __init__(self, hidden_size, num_heads, num_kv_heads, ffn_dim, gated, rms):
+        super().__init__()
+        norm = NeuraxRMSNorm if rms else nn.LayerNorm
+        self.norm1 = norm(hidden_size)
+        self.attn = (
+            NeuraxGQA(hidden_size, num_heads, num_kv_heads, bias=False)
+            if num_kv_heads and num_kv_heads != num_heads
+            else NeuraxMHA(hidden_size, num_heads, bias=False)
+        )
+        self.norm2 = norm(hidden_size)
+        self.mlp = (
+            NeuraxGatedMLP(hidden_size, ffn_dim, bias=False)
+            if gated
+            else NeuraxMLP(hidden_size, ffn_dim, bias=False)
+        )
+
+    def forward(self, x):
+        x = x + self.attn(self.norm1(x))
+        return x + self.mlp(self.norm2(x))
+
+
+class NeuraxStack(nn.Module):
+    """N decoder blocks, applied in order."""
+
+    def __init__(self, depth, hidden_size, num_heads, num_kv_heads, ffn_dim, gated, rms):
+        super().__init__()
+        self.blocks = nn.ModuleList(
+            NeuraxDecoderBlock(hidden_size, num_heads, num_kv_heads, ffn_dim, gated, rms)
+            for _ in range(depth)
+        )
+
+    def forward(self, x):
+        for block in self.blocks:
+            x = block(x)
+        return x
 
 
 class NeuraxMHA(nn.Module):
@@ -921,6 +1077,43 @@ export function generateModelCode(
   const layers = ordered.map((n) => genNode(n, ctx));
 
   const totalParams = layers.reduce((sum, l) => sum + l.paramCount, 0);
+
+  /**
+   * What this model eats, read off its own first consuming layer.
+   *
+   * `input` and `output` are markers that consume nothing, so they are
+   * skipped: the first layer that transforms the tensor is the one whose
+   * expectations define the input.
+   */
+  const firstReal = ordered.find((n) => n.type !== 'input' && n.type !== 'output');
+  const firstType = firstReal?.type;
+  const firstParams = (firstReal?.params ?? {}) as Record<string, unknown>;
+
+  let inputKind: ModelInputKind = 'features';
+  let inputShape: number[] = [hw.hiddenDim ?? 128];
+  let vocabSize: number | undefined;
+
+  if (firstType === 'token_embedding' || firstType === 'embedding') {
+    inputKind = 'tokens';
+    inputShape = [readNum(firstParams, ['seq_len', 'seqLen', 'max_position_embeddings'], hw.seqLen) ?? 128];
+    vocabSize = readNum(firstParams, ['vocab_size', 'vocabSize'], hw.vocabSize) ?? 30522;
+  } else if (
+    firstType === 'conv2d' ||
+    firstType === 'basic_block' ||
+    firstType === 'bottleneck_block' ||
+    firstType === 'unet_block' ||
+    firstType === 'dcgan_discriminator_block'
+  ) {
+    inputKind = 'image';
+    inputShape = [hw.inChannels ?? 3, hw.imgHeight ?? 224, hw.imgWidth ?? 224];
+  } else if (
+    hw.seqLen &&
+    (firstType === 'mha_attention' || firstType === 'attention' || firstType === 'layer_stack')
+  ) {
+    // A stack fed directly, with no embedding in front of it, takes vectors
+    // rather than indices.
+    inputShape = [hw.seqLen, hw.hiddenDim ?? 768];
+  }
   const unsupportedTypes = [...new Set(layers.filter((l) => !l.supported).map((l) => l.layerType))];
   const className = pyClassName(modelName);
 
@@ -986,6 +1179,9 @@ if __name__ == "__main__":
     layers,
     unsupportedTypes,
     fullySupported: unsupportedTypes.length === 0,
+    inputShape,
+    inputKind,
+    vocabSize,
   };
 }
 

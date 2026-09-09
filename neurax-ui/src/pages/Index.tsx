@@ -3048,12 +3048,14 @@ params: params as Record<string, ParameterValue>,
                     totalParams: generated.totalParams,
                     fullySupported: generated.fullySupported,
                     unsupportedTypes: generated.unsupportedTypes,
-                    // One sample's shape, from the same hardware config the
-                    // analysis used — so the tensor the run feeds the model is
-                    // the tensor the analysis costed.
-                    inputShape: hwConfig.imgHeight && hwConfig.imgWidth
-                      ? [hwConfig.inChannels ?? 3, hwConfig.imgHeight, hwConfig.imgWidth]
-                      : [hwConfig.seqLen ?? 128],
+                    // The shape and the dtype come from the model, not from
+                    // the config. Guessing them here — image size set
+                    // anywhere means images — fed `[3, 224, 224]` floats to
+                    // BERT's token embedding and killed the run in its first
+                    // attention block.
+                    inputShape: generated.inputShape,
+                    inputKind: generated.inputKind,
+                    vocabSize: generated.vocabSize,
                     numClasses: hwConfig.numClasses ?? 10,
                   };
                 }}

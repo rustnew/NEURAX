@@ -168,8 +168,17 @@ def load_batches(req, input_shape, device, torch):
                 yield features[idx].to(device), targets[idx].to(device)
 
     else:
+        # No dataset: synthetic tensors of the shape *and dtype* the model
+        # declared. A token embedding takes integer indices, not floats — feed
+        # it `randn` and it fails inside the first attention block with a shape
+        # error that points nowhere near the real cause.
+        kind = req.get("inputKind", "features")
+        vocab = int(req.get("vocabSize") or 1)
         while True:
-            x = torch.randn(batch, *input_shape[1:], device=device)
+            if kind == "tokens":
+                x = torch.randint(0, max(1, vocab), (batch, *input_shape[1:]), device=device)
+            else:
+                x = torch.randn(batch, *input_shape[1:], device=device)
             y = torch.randint(0, num_classes, (batch,), device=device)
             yield x, y
 

@@ -87,6 +87,10 @@ export interface GeneratedModel {
   unsupportedTypes: string[];
   /** One sample's shape, without the batch dimension. */
   inputShape: number[];
+  /** What the first layer consumes: token indices, an image, or a vector. */
+  inputKind: 'tokens' | 'image' | 'features';
+  /** The vocabulary token indices must stay inside, for `tokens`. */
+  vocabSize?: number;
   numClasses: number;
 }
 
@@ -439,6 +443,8 @@ export function TrainingWorkspace({
       modelCode: generated.code,
       modelClass: generated.modelClassName,
       inputShape: generated.inputShape,
+      inputKind: generated.inputKind,
+      vocabSize: generated.vocabSize,
       numClasses: generated.numClasses,
       datasetPath: dataset?.displayPath ?? null,
       epochs: plan.epochs,

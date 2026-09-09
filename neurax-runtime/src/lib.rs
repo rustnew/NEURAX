@@ -142,6 +142,18 @@ pub struct StartRequest {
     /// found it on the first run; nothing else would have, because the
     /// bookkeeping was all correct.
     pub input_shape: Vec<u64>,
+    /// What the first layer consumes.
+    ///
+    /// `tokens` for an embedding, which takes integer indices in `[0,
+    /// vocab)`; `image` for `[C, H, W]` floats; `features` for a plain
+    /// vector. The shape alone is not enough: feeding a float tensor to an
+    /// embedding is the wrong *dtype*, and fails in a way that reads like a
+    /// shape bug.
+    #[serde(default = "default_input_kind")]
+    pub input_kind: String,
+    /// The vocabulary token indices must stay inside. Only for `tokens`.
+    #[serde(default)]
+    pub vocab_size: Option<u64>,
     /// Classes the model predicts. Used to generate synthetic targets, and to
     /// check a folder dataset has the number of classes the design expects.
     pub num_classes: u64,
@@ -158,6 +170,10 @@ pub struct StartRequest {
     /// compare without the studio having to still be open.
     #[serde(default)]
     pub predictions: serde_json::Value,
+}
+
+fn default_input_kind() -> String {
+    "features".to_string()
 }
 
 #[derive(Debug)]
@@ -553,6 +569,8 @@ mod tests {
             model_class: "M".into(),
             dataset_path: None,
             input_shape: vec![8],
+            input_kind: "features".into(),
+            vocab_size: None,
             num_classes: 4,
             epochs: 2,
             batch_size: 4,

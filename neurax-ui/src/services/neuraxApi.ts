@@ -480,6 +480,10 @@ export interface StartRunRequest {
   /** One sample's shape, without the batch dimension. Required: a wrong
    *  input shape does not degrade a run, it kills it in the first layer. */
   inputShape: number[];
+  /** What the first layer consumes. An embedding takes integer indices; a
+   *  float tensor is the wrong dtype for it, not just the wrong shape. */
+  inputKind: 'tokens' | 'image' | 'features';
+  vocabSize?: number;
   numClasses: number;
   datasetPath?: string | null;
   epochs: number;

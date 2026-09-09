@@ -14,7 +14,7 @@
 
 use std::process::Command;
 
-use crate::{ComputeBackend, CpuInfo, GpuInfo};
+use crate::{ComputeBackend, CpuInfo, GpuInfo, MemoryState};
 
 // ─── CPU ────────────────────────────────────────────────────────────────────
 
@@ -27,6 +27,7 @@ pub(crate) fn cpu(notes: &mut Vec<String>) -> CpuInfo {
     let mut vendor = String::new();
     let mut base_mhz = None;
     let mut cores = 0usize;
+    let mut features: Vec<String> = Vec::new();
 
     #[cfg(target_os = "linux")]
     {
@@ -55,6 +56,20 @@ pub(crate) fn cpu(notes: &mut Vec<String>) -> CpuInfo {
                     "core id" => core_id = value.parse::<u32>().ok(),
                     "cpu MHz" if base_mhz.is_none() => {
                         base_mhz = value.parse::<f64>().ok().map(|v| v.round() as u32)
+                    }
+                    // Only the sets that change how fast a kernel can go. The
+                    // full flags line is over a hundred entries, almost none
+                    // of which anything here would act on.
+                    "flags" | "Features" if features.is_empty() => {
+                        const INTERESTING: &[&str] = &[
+                            "sse4_2", "avx", "avx2", "fma", "avx512f", "avx512bw", "avx512vnni",
+                            "amx_bf16", "amx_int8", "neon", "asimd", "sve",
+                        ];
+                        features = value
+                            .split_whitespace()
+                            .filter(|f| INTERESTING.contains(f))
+                            .map(str::to_string)
+                            .collect();
                     }
                     _ => {}
                 }
@@ -88,6 +103,7 @@ pub(crate) fn cpu(notes: &mut Vec<String>) -> CpuInfo {
 
     CpuInfo {
         model,
+        features,
         vendor: if vendor.is_empty() { "unknown".into() } else { vendor },
         cores,
         threads,
@@ -98,37 +114,58 @@ pub(crate) fn cpu(notes: &mut Vec<String>) -> CpuInfo {
 
 // ─── Memory ─────────────────────────────────────────────────────────────────
 
-/// `(total, available)` in bytes.
+/// Memory as the kernel reports it.
 ///
-/// On Linux this reads `MemAvailable`, not `MemFree`. The difference matters:
-/// `MemFree` excludes reclaimable page cache and routinely reads as a few
-/// hundred megabytes on a machine with tens of gigabytes genuinely usable.
-/// Sizing a design against `MemFree` would refuse runs that would have been
-/// fine.
-pub(crate) fn memory(notes: &mut Vec<String>) -> (u64, u64) {
+/// `MemAvailable` rather than `MemTotal - used`: most of what Linux counts as
+/// used is reclaimable page cache, and subtracting it refuses runs that would
+/// have been fine. On the machine this was written on the difference is
+/// 3.2 GB free against 5.9 GB available — a run sized on the first number
+/// would be turned away with nearly three gigabytes going spare.
+pub(crate) fn memory(notes: &mut Vec<String>) -> MemoryState {
+    let empty = MemoryState {
+        total_bytes: 0,
+        available_bytes: 0,
+        free_bytes: 0,
+        reclaimable_bytes: 0,
+        swap_total_bytes: 0,
+        swap_used_bytes: 0,
+    };
+
     #[cfg(target_os = "linux")]
     {
-        match std::fs::read_to_string("/proc/meminfo") {
-            Ok(text) => {
-                let read = |key: &str| -> Option<u64> {
-                    text.lines()
-                        .find(|l| l.starts_with(key))
-                        .and_then(|l| l.split_whitespace().nth(1))
-                        .and_then(|v| v.parse::<u64>().ok())
-                        .map(|kb| kb * 1024)
-                };
-                let total = read("MemTotal:").unwrap_or(0);
-                let available = read("MemAvailable:").or_else(|| read("MemFree:")).unwrap_or(0);
-                return (total, available.min(total.max(available)));
-            }
-            Err(_) => notes.push("/proc/meminfo could not be read; memory is unknown.".into()),
-        }
+        let Ok(text) = std::fs::read_to_string("/proc/meminfo") else {
+            notes.push("/proc/meminfo could not be read; memory is unknown.".into());
+            return empty;
+        };
+        let read = |key: &str| -> u64 {
+            text.lines()
+                .find(|l| l.starts_with(key))
+                .and_then(|l| l.split_whitespace().nth(1))
+                .and_then(|v| v.parse::<u64>().ok())
+                .map(|kb| kb * 1024)
+                .unwrap_or(0)
+        };
+        let total = read("MemTotal:");
+        let free = read("MemFree:");
+        let available = {
+            let a = read("MemAvailable:");
+            if a > 0 { a } else { free }
+        };
+        let swap_total = read("SwapTotal:");
+        return MemoryState {
+            total_bytes: total,
+            available_bytes: available.min(total.max(available)),
+            free_bytes: free,
+            reclaimable_bytes: read("Cached:") + read("SReclaimable:"),
+            swap_total_bytes: swap_total,
+            swap_used_bytes: swap_total.saturating_sub(read("SwapFree:")),
+        };
     }
     #[cfg(not(target_os = "linux"))]
     {
         notes.push("Memory detection is not implemented for this platform yet.".into());
+        empty
     }
-    (0, 0)
 }
 
 // ─── Disk ───────────────────────────────────────────────────────────────────

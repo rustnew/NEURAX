@@ -41,8 +41,10 @@ use serde::{Deserialize, Serialize};
 
 pub mod bench;
 mod platform;
+pub mod software;
 
 pub use bench::{measure_cached, measure_compute, ComputeMeasurement};
+pub use software::{SoftwareEnvironment, Support};
 
 /// How a figure came to be known. Travels with the numbers so nothing
 /// downstream has to guess how much to trust them.
@@ -64,6 +66,12 @@ pub enum Provenance {
 pub struct CpuInfo {
     pub model: String,
     pub vendor: String,
+    /// Instruction sets the chip advertises — `avx2`, `fma`, `avx512f` and so
+    /// on. Not decoration: they are the difference between a kernel issuing
+    /// eight floats per instruction and four, which is most of the gap
+    /// between a measured figure and a plausible one.
+    #[serde(default)]
+    pub features: Vec<String>,
     /// Physical cores. Falls back to the thread count when the machine does
     /// not expose the topology — better an equal number than a zero.
     pub cores: usize,
@@ -113,6 +121,24 @@ pub struct GpuInfo {
     pub power_watts: Option<f32>,
 }
 
+/// Memory as the kernel sees it.
+///
+/// `available` is not `total - used`, and treating it as though it were is the
+/// classic way to refuse a run that would have been fine: most of what Linux
+/// reports as used is reclaimable page cache. `MemAvailable` is the kernel's
+/// own estimate of what a new allocation could actually get.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemoryState {
+    pub total_bytes: u64,
+    pub available_bytes: u64,
+    pub free_bytes: u64,
+    /// Page cache and slab the kernel would hand back under pressure.
+    pub reclaimable_bytes: u64,
+    pub swap_total_bytes: u64,
+    pub swap_used_bytes: u64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MachineProfile {
@@ -122,6 +148,9 @@ pub struct MachineProfile {
     pub cpu: CpuInfo,
     pub ram_total_bytes: u64,
     pub ram_available_bytes: u64,
+    /// The full picture, beside the two headline figures kept above for the
+    /// surfaces that only need them.
+    pub memory: MemoryState,
     pub disk_available_bytes: u64,
     /// Empty on a machine with no accelerator — a normal state, and the one
     /// this crate was first tested on.
@@ -130,6 +159,11 @@ pub struct MachineProfile {
     /// one has; the studio asks for it explicitly rather than paying the cost
     /// on every page load.
     pub compute: Option<ComputeMeasurement>,
+    /// What can actually run here: drivers, runtimes, usable precisions.
+    ///
+    /// Separate from the hardware on purpose. A machine can hold an
+    /// accelerator it cannot use, and only this half can say so.
+    pub software: SoftwareEnvironment,
     /// Anything the probe could not read, named. A profile is never rejected
     /// for being partial, but the gaps are stated rather than hidden behind a
     /// plausible default.
@@ -161,7 +195,7 @@ impl MachineProfile {
 pub fn detect() -> MachineProfile {
     let mut notes = Vec::new();
     let cpu = platform::cpu(&mut notes);
-    let (ram_total, ram_available) = platform::memory(&mut notes);
+    let memory = platform::memory(&mut notes);
     let disk_available = platform::disk_available(&mut notes);
     let gpus = platform::gpus(&mut notes);
 
@@ -170,11 +204,13 @@ pub fn detect() -> MachineProfile {
         os: platform::os_name(),
         hostname: platform::hostname(),
         cpu,
-        ram_total_bytes: ram_total,
-        ram_available_bytes: ram_available,
+        ram_total_bytes: memory.total_bytes,
+        ram_available_bytes: memory.available_bytes,
+        memory,
         disk_available_bytes: disk_available,
         gpus,
         compute: None,
+        software: software::detect(platform::os_name()),
         notes,
     }
 }
