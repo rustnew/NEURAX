@@ -23,3 +23,5 @@ export type { ChartTooltipContentProps } from './ChartTooltip';
 
 export { ChartContainer, CHART_MARGINS } from './ChartContainer';
 export type { ChartVariant } from './ChartContainer';
+
+export { AXIS, CHART_GRID, XA, YA, StatStrip, ChartGrid, ChartSlot, ViewNote } from './ViewShell';

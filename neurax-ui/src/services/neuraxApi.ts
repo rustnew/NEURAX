@@ -66,6 +66,14 @@ async function getAccessToken(): Promise<string | null> {
   return accessToken ?? 'dev-token';
 }
 
+import type {
+  Checkpoint,
+  HardwareProfile,
+  ModelBuiltEvent,
+  RunState,
+  TrainingStep,
+} from '@/types/runtime.ts';
+
 // ─── Types (from OpenAPI schemas) ─────────────────────────────────
 
 export interface AnalyzeEnvOverrides {
@@ -413,6 +421,139 @@ export async function getMe(): Promise<MeResponse> {
 /** GET /hardware — List all supported hardware with full specs */
 export async function listHardware(): Promise<HardwareDetail[]> {
   return request<HardwareDetail[]>('/hardware');
+}
+
+/**
+ * GET /hardware/detect — what machine is this?
+ *
+ * Free enough to call on load: the service reads `/proc`, asks the graphics
+ * driver, and answers in microseconds. Nothing is measured and nothing leaves
+ * the machine.
+ *
+ * Returns `null` rather than throwing when the service is not running. A
+ * studio with no backend is a normal state — the whole design surface works
+ * without one — and refusing to render because detection failed would make a
+ * missing service look like a broken application.
+ */
+export async function detectHardware(): Promise<HardwareProfile | null> {
+  try {
+    return await request<HardwareProfile>('/hardware/detect');
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * POST /hardware/measure — what can this machine sustain?
+ *
+ * Runs a matrix multiply and a memory sweep, about half a second, and caches
+ * the result on the machine. Separate from detection precisely because of
+ * that cost: it is asked for, never implied.
+ *
+ * This is the only figure available for hardware the specification database
+ * does not cover — an integrated GPU, a laptop CPU, a part newer than the
+ * database — which is most machines that are not datacenter cards.
+ */
+export async function measureHardware(): Promise<HardwareProfile | null> {
+  try {
+    return await request<HardwareProfile>('/hardware/measure', { method: 'POST' });
+  } catch {
+    return null;
+  }
+}
+
+// ─── Training runs ──────────────────────────────────────────────────────────
+
+/**
+ * What the studio sends to start a run.
+ *
+ * The model travels as generated PyTorch. The studio is the only side that
+ * can produce it — `modelCodeGen` reads the canvas and is checked against the
+ * analysis by `verifyCodegenAgainstAnalysis` — and regenerating it in Rust
+ * would put a second source of truth behind the very number the Accuracy view
+ * exists to confront.
+ */
+export interface StartRunRequest {
+  name: string;
+  modelCode: string;
+  modelClass: string;
+  /** One sample's shape, without the batch dimension. Required: a wrong
+   *  input shape does not degrade a run, it kills it in the first layer. */
+  inputShape: number[];
+  numClasses: number;
+  datasetPath?: string | null;
+  epochs: number;
+  batchSize: number;
+  learningRate: number;
+  precision: string;
+  stepsPerEpoch: number;
+  checkpointEverySteps: number;
+  keepCheckpoints?: number;
+  predictions?: Record<string, unknown>;
+}
+
+/** What `GET /training/runs/{id}` returns. */
+export interface RunSnapshot {
+  state: RunState;
+  model: ModelBuiltEvent | null;
+  steps: TrainingStep[];
+  /** Where to resume reading from. Sent straight back on the next poll — the
+   *  studio never interprets it, the same contract as tailing a log. */
+  nextOffset: number;
+  checkpoints: Checkpoint[];
+}
+
+/** POST /training/runs — create a run directory and start training in it. */
+export async function startTrainingRun(body: StartRunRequest): Promise<RunState> {
+  return request<RunState>('/training/runs', { method: 'POST', body: JSON.stringify(body) });
+}
+
+/** GET /training/runs — every run on this machine, newest first.
+ *
+ *  Returns an empty list rather than throwing when no service is running: a
+ *  studio with no backend has no runs, which is a true answer, not an error. */
+export async function listTrainingRuns(): Promise<RunState[]> {
+  try {
+    return await request<RunState[]>('/training/runs');
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * GET /training/runs/{id} — one run, from a byte offset onward.
+ *
+ * `offset` is what makes live views cheap: the service seeks past what this
+ * studio already holds instead of re-sending a hundred thousand steps every
+ * second.
+ */
+export async function getTrainingRun(id: string, offset = 0): Promise<RunSnapshot | null> {
+  try {
+    return await request<RunSnapshot>(`/training/runs/${encodeURIComponent(id)}?offset=${offset}`);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * POST /training/runs/{id}/control — pause, resume or stop.
+ *
+ * `run` on an interrupted run does more than lift a pause: nothing is
+ * listening, so the service starts the process again, and it picks up from
+ * its last checkpoint.
+ */
+export async function controlTrainingRun(
+  id: string,
+  command: 'run' | 'pause' | 'stop',
+): Promise<RunState | null> {
+  try {
+    return await request<RunState>(`/training/runs/${encodeURIComponent(id)}/control`, {
+      method: 'POST',
+      body: JSON.stringify({ command }),
+    });
+  } catch {
+    return null;
+  }
 }
 
 /** POST /analyze — Run analysis synchronously */

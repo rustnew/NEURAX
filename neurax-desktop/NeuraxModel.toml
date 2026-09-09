@@ -1,0 +1,121 @@
+schema_version = "1.0"
+_warnings = [ "Input block \"n1\" had empty params; auto-fixed to seq mode dim=2048.", "Block \"n8\" (LMHead) missing params.in_features.", "Block \"n8\" (LMHead) missing params.out_features." ]
+
+[model]
+name = "NeuraxModel"
+type = "ssm"
+
+[model.global_params]
+hidden_size = 1024
+num_layers = 48
+vocab_size = 50280
+sequence_length = 2048
+
+[[model.layers]]
+id = "n4"
+layer_type = "normalization"
+input_shape = [ 66, 2048, 1024 ]
+output_shape = [ 66, 2048, 1024 ]
+
+[model.layers.params]
+normalized_shape = 1024
+eps = 0.00001
+elementwise_affine = true
+position = "pre"
+hidden_size = 1024
+
+[[model.layers]]
+id = "n2"
+layer_type = "embedding"
+input_shape = [ 66, 2048 ]
+output_shape = [ 66, 2048, 1024 ]
+
+[model.layers.params]
+vocab_size = 50280
+d_model = 1024
+padding_idx = 0
+hidden_size = 1024
+
+[[model.layers]]
+id = "n5"
+layer_type = "mamba_block"
+input_shape = [ 66, 2048, 1024 ]
+output_shape = [ 66, 2048, 1024 ]
+
+[model.layers.params]
+hidden_size = 1024
+state_dim = 16
+expansion_factor = 2
+conv_kernel_size = 4
+
+[[model.layers]]
+id = "n6"
+layer_type = "custom"
+input_shape = [ 66, 2048, 1024 ]
+output_shape = [ 66, 2048, 1024 ]
+
+[model.layers.params]
+dropout = 0
+pre_norm = true
+
+[[model.layers]]
+id = "n3"
+layer_type = "custom"
+input_shape = [ 66, 2048, 1024 ]
+output_shape = [ 66, 2048, 1024 ]
+
+[model.layers.params]
+num_layers = 48
+share_parameters = false
+param_count = 604176384
+
+[model.layers.custom_equations]
+flops_forward = "190955453939712"
+
+[[model.layers]]
+id = "n7"
+layer_type = "normalization"
+input_shape = [ 66, 2048, 1024 ]
+output_shape = [ 66, 2048, 1024 ]
+
+[model.layers.params]
+normalized_shape = 1024
+eps = 0.00001
+elementwise_affine = true
+position = "pre"
+hidden_size = 1024
+
+[[model.layers]]
+id = "n8"
+layer_type = "dense"
+input_shape = [ 66, 2048, 1024 ]
+output_shape = [ 66, 2048, 50280 ]
+
+[model.layers.params]
+d_model = 1024
+vocab_size = 50280
+bias = false
+tie_weights = true
+hidden_size = 1024
+
+[training]
+batch_size = 66
+precision = "fp16"
+learning_rate = 3.0003
+num_epochs = 100
+sequence_length = 2048
+warmup_steps = 2
+
+[training.parallelism]
+data_parallel = 1
+tensor_parallel = 3
+pipeline_parallel = 1
+
+[[hardware.gpus]]
+name = "RTX4090"
+count = 1
+memory_gb = 80
+
+[data]
+dataset_size = 10000000000
+vocab_size = 50280

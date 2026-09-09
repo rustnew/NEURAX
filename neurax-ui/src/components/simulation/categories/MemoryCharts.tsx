@@ -1,50 +1,62 @@
-import { HardDrive } from 'lucide-react';
-import { AnalysisResult } from '@/types/architecture.ts';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend,
-  AreaChart, Area,
-  LineChart, Line,
-} from 'recharts';
-import { formatBytes } from '../simulationData.ts';
-import {
-  ChartCard,
-  ChartContainer,
-  ChartLegend,
-  DonutRing,
-  StatCard,
-  chartTooltipStyle,
-  chartActiveDot,
-  CHART_MARGINS,
-  ChartErrorBoundary,
-  EmptyChartState,
-} from '../shared';
+/**
+ * Memory — whether this design fits, and what to change if it does not.
+ *
+ * Two of the eight charts here had no data behind them and never could: the
+ * Memory Heatmap and VRAM Liveness read `memory_heatmap` and
+ * `memory_liveness`, and no producer for either exists anywhere in the
+ * compiler — not in Rust, not in the Python service. The frontend defaulted
+ * both to `[]`, so the cards rendered their empty state on every analysis that
+ * has ever run. They are removed rather than fixed, because there is nothing
+ * to fix: the series was never emitted.
+ *
+ * What remains is built only on figures the report actually carries, and each
+ * one answers a question that changes a decision:
+ *
+ *  - **Where the budget runs out** — the four memory terms accumulated across
+ *    depth against the card's capacity. A total that overflows tells you it
+ *    does not fit; this tells you at which layer, which is what says whether
+ *    to shorten the stack or narrow it.
+ *  - **What precision buys** — the weight budget across dtype widths. This is
+ *    the one lever that moves memory by a factor rather than a percentage, and
+ *    the curve is ordered by width, so it reads as the trade it is.
+ *  - **What context costs** — the KV cache against sequence length. This chart
+ *    was blank until this session: the compiler computes it from
+ *    `embedding_dim`, and the client only ever sent the same number under the
+ *    name `hidden_size`, so the width arrived as zero and the series came back
+ *    empty on every model.
+ *  - **What headroom is left** — the peak against capacity, with fragmentation
+ *    charged as the real overhead it is rather than a footnote.
+ */
+import { AlertTriangle, HardDrive, Layers, Scaling, Shrink } from 'lucide-react';
+import { Area, AreaChart, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip } from 'recharts';
 
+import { AnalysisResult, PerLayerBreakdownRow } from '@/types/architecture.ts';
+import {
+  CHART_GRID, CHART_MARGINS, ChartErrorBoundary, ChartGrid, ChartSlot, StatCard, StatStrip,
+  ViewNote, XA, YA, chartTooltipStyle,
+} from '../shared';
+import {
+  SIMULATION_COLORS, buildDerivedLayerMetrics, formatBytes, hasAnalysisReportData,
+} from '../simulationData.ts';
 
 interface MemoryChartsProps {
   analysis?: AnalysisResult;
+  perLayer?: PerLayerBreakdownRow[];
 }
 
-const MEMORY_COLORS = {
-  activations: 'hsl(var(--chart-1))',
-  weights: 'hsl(var(--chart-3))',
-  temp: 'hsl(var(--chart-4))',
-  forward: 'hsl(var(--chart-1))',
-  backward: 'hsl(var(--chart-4))',
-};
+const GB = 1024 ** 3;
 
 /**
- * Bytes per parameter at each precision NEURAX can analyse — the exact
- * values `neurax-formulas::dtype_bytes` uses, so this matches what a full
- * analysis at that precision would report, not a separate estimate.
+ * Bytes per parameter at each precision NEURAX can analyse — the exact values
+ * `neurax-formulas::dtype_bytes` uses, so this matches what a full analysis at
+ * that precision would report rather than a separate estimate beside it.
  *
- * INT4 is listed at 1 byte/parameter, the same as INT8: the compiler does
- * not yet model sub-byte packing (two 4-bit values sharing one byte), so
- * this shows the same conservative, honest number the rest of the app
- * would if INT4 were selected — not the ~0.5 bytes/parameter true 4-bit
- * packing would achieve. Real quantized runtimes (llama.cpp, bitsandbytes)
- * do pack INT4, so treat this row as an upper bound, not GGUF-file-size
- * parity.
+ * INT4 is listed at 1 byte/parameter, the same as INT8, and deliberately: the
+ * compiler does not model sub-byte packing for weights (two 4-bit values
+ * sharing one byte), so this shows the same conservative number the rest of
+ * the app would if INT4 were selected — not the ~0.5 bytes/parameter true
+ * 4-bit packing achieves. Real quantized runtimes (llama.cpp, bitsandbytes) do
+ * pack INT4, so this row is an upper bound, not GGUF-file-size parity.
  */
 const PRECISION_BYTES: Array<{ id: string; label: string; bytes: number }> = [
   { id: 'fp32', label: 'FP32', bytes: 4 },
@@ -55,436 +67,349 @@ const PRECISION_BYTES: Array<{ id: string; label: string; bytes: number }> = [
 ];
 
 /** Weight memory at every precision NEURAX supports, for a real parameter
- * count — pulled out of the component so it's testable without rendering
- * a chart. */
+ *  count — kept out of the component so it stays testable without rendering a
+ *  chart, and so the byte table cannot drift from the compiler's unnoticed. */
 export function computePrecisionMemory(
   totalParams: number,
 ): Array<{ id: string; label: string; bytes: number }> {
   if (totalParams <= 0) return [];
-  return PRECISION_BYTES.map(({ id, label, bytes }) => ({
-    id,
-    label,
-    bytes: totalParams * bytes,
-  }));
+  return PRECISION_BYTES.map(({ id, label, bytes }) => ({ id, label, bytes: totalParams * bytes }));
 }
 
-export function MemoryCharts({ analysis }: MemoryChartsProps) {
-  if (!analysis || analysis.peakVramBytes === 0) {
+function Key({ entries }: { entries: { label: string; color: string }[] }) {
+  return (
+    <div className="flex items-center gap-3">
+      {entries.map((e) => (
+        <span key={e.label} className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+          <span className="w-2 h-2 rounded-[2px]" style={{ background: e.color }} />
+          {e.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+export function MemoryCharts({ analysis, perLayer = [] }: MemoryChartsProps) {
+  if (!hasAnalysisReportData(analysis)) {
     return (
-      <EmptyChartState
-        icon={HardDrive}
-        title="No memory analysis available"
-        description="Run analysis to see VRAM breakdown."
-      />
+      <ChartErrorBoundary>
+        <div className="flex flex-col items-center justify-center gap-2 py-24 text-center">
+          <HardDrive className="w-8 h-8 text-muted-foreground/30" />
+          <div className="text-[13px] font-semibold text-foreground">No memory analysis yet</div>
+          <p className="text-[11px] text-muted-foreground max-w-[52ch] leading-relaxed">
+            Run the analysis. Peak VRAM, its four terms and the headroom against your card are all computed from the
+            graph — no run required.
+          </p>
+        </div>
+      </ChartErrorBoundary>
     );
   }
 
-  // ─── Data sources ────────────────────────────────────────────────────────
+  const capacity = analysis.gpuMemoryGb > 0 ? analysis.gpuMemoryGb * GB : 0;
+  const fits = capacity > 0 && analysis.peakVramBytes <= capacity;
+  const headroom = capacity - analysis.peakVramBytes;
 
-  const rawHeatmap = analysis.memory_heatmap || analysis.live_trace?.memory_heatmap || [];
-  const hasRawHeatmap = rawHeatmap.length > 0;
-  const gradientSource = analysis.gradient_memory_breakdown || analysis.live_trace?.gradient_memory_breakdown || [];
+  // ── The budget, accumulated in graph order ───────────────────────────────
+  const layers = buildDerivedLayerMetrics(analysis, perLayer);
+  let acc = { weights: 0, activations: 0, gradients: 0, optimizer: 0 };
+  const cumulative = layers.map((layer, i) => {
+    acc = {
+      weights: acc.weights + layer.weightsMb,
+      activations: acc.activations + layer.activationsMb,
+      gradients: acc.gradients + layer.gradientsMb,
+      optimizer: acc.optimizer + layer.optimizerMb,
+    };
+    return {
+      i: i + 1,
+      name: layer.name,
+      weights: Number((acc.weights / 1024).toFixed(3)),
+      activations: Number((acc.activations / 1024).toFixed(3)),
+      gradients: Number((acc.gradients / 1024).toFixed(3)),
+      optimizer: Number((acc.optimizer / 1024).toFixed(3)),
+    };
+  });
+  const hasDepth = cumulative.length > 1;
 
-  // Derive heatmap from gradient_memory_breakdown when no raw heatmap
-  const heatmapData = hasRawHeatmap
-    ? rawHeatmap
-    : gradientSource.length > 0
-      ? gradientSource.map((g) => ({
-        layer: g.name,
-        timeline: [g.forward > g.backward ? 2 : g.backward > 0 ? 1 : 0].concat(
-          Array.from({ length: 19 }, (_, j) => (g.backward > 0 && j < 15 ? 2 : j < 18 ? 1 : 0)),
-        ),
-      }))
+  // ── What each precision costs in weights ─────────────────────────────────
+  const precisionCurve = computePrecisionMemory(analysis.totalParams).map((row) => ({
+    label: row.label,
+    gb: Number((row.bytes / GB).toFixed(3)),
+  }));
+  const currentPrecision = analysis.selectedPrecision;
+
+  // ── Context growth ───────────────────────────────────────────────────────
+  const kv = (analysis.kv_cache_scaling ?? analysis.live_trace?.kv_cache_scaling ?? []).map((p) => ({
+    seq: p.seq,
+    gb: Number((p.value / GB).toFixed(3)),
+  }));
+
+  // ── Headroom as batch size grows ─────────────────────────────────────────
+  // Only the activation term scales with the batch; weights, gradients and
+  // optimizer state do not. That is the compiler's own model, applied to the
+  // batch actually analysed — an extrapolation of one term, not an invented
+  // series, and it stops at the batch the compiler says is the last that fits.
+  const batchNow = analysis.selectedBatchSize ?? 0;
+  const fixedBytes =
+    analysis.parameterMemoryBytes + analysis.gradientMemoryBytes + analysis.optimizerStateBytes;
+  const perSampleBytes = batchNow > 0 ? analysis.activationMemoryBytes / batchNow : 0;
+  const maxBatch = analysis.maxBatchSizeFit > 0 ? analysis.maxBatchSizeFit : 0;
+  const batchCurve =
+    batchNow > 0 && perSampleBytes > 0 && capacity > 0
+      ? Array.from({ length: 12 }, (_, i) => {
+          const batch = Math.max(1, Math.round(((i + 1) / 12) * Math.max(maxBatch, batchNow * 2)));
+          return { batch, gb: Number(((fixedBytes + perSampleBytes * batch) / GB).toFixed(3)) };
+        })
       : [];
-
-  const rawLiveness = analysis.memory_liveness || analysis.live_trace?.memory_liveness || [];
-  const hasRawLiveness = rawLiveness.length > 0;
-  const livenessData = hasRawLiveness
-    ? rawLiveness.map(d => ({ step: d.step, vram: d.value / (1024 ** 2) }))
-    : [];
-
-  const rawGradient = gradientSource;
-  const hasRawGradient = rawGradient.length > 0;
-  // Capped to the top 8 layers by combined forward+backward size — the
-  // same reasoning as Per Layer's rankings: a bar per layer stops being
-  // readable well before a deep network's full layer count, and the
-  // largest contributors are what a reader actually needs to see.
-  const gradientChartData = hasRawGradient
-    ? [...rawGradient]
-      .sort((a, b) => (b.forward + b.backward) - (a.forward + a.backward))
-      .slice(0, 8)
-      .map(d => ({
-        name: d.name,
-        forward: d.forward / (1024 ** 2),
-        backward: d.backward / (1024 ** 2),
-      }))
-    : [];
-
-  const rawKv = analysis.kv_cache_scaling || analysis.live_trace?.kv_cache_scaling || [];
-  const hasRawKv = rawKv.length > 0;
-  const kvData = hasRawKv
-    ? rawKv.map(d => ({ seq: d.seq, value: d.value / (1024 ** 2) }))
-    : [];
-
-  // 4.3 Donut
-  const donutData = [
-    { name: 'Activations', value: analysis.activationMemoryBytes, color: MEMORY_COLORS.activations },
-    { name: 'Weights', value: analysis.parameterMemoryBytes, color: MEMORY_COLORS.weights },
-    { name: 'Temp Buffers', value: Math.max(0, analysis.peakVramBytes - analysis.activationMemoryBytes - analysis.parameterMemoryBytes), color: MEMORY_COLORS.temp },
-  ].filter(d => d.value > 0);
-
-  // 4.3b Weight memory at every precision NEURAX supports, from the one
-  // real number that doesn't change with precision: total parameters.
-  // Re-running a full analysis at each precision would also be correct, but
-  // asks the question three more times to answer it three more ways —
-  // parameter count times bytes-per-parameter is the same arithmetic the
-  // compiler itself does for whichever single precision is selected.
-  //
-  // Not marked against "the precision this analysis used": FP16 and BF16
-  // are both 2 bytes/parameter, INT8 and INT4 both 1 (see PRECISION_BYTES),
-  // so which one was actually selected can't be told apart from the
-  // resulting byte count alone — showing a specific row as "active" would
-  // be a guess dressed up as a fact for exactly the pairs a reader would
-  // most want distinguished.
-  const precisionData = computePrecisionMemory(analysis.totalParams);
-
-  const supportsHeatmap = heatmapData.length > 0;
 
   return (
     <ChartErrorBoundary>
-      <div className="space-y-6 pb-12">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold flex items-center gap-2">
-            <HardDrive className="w-5 h-5 text-primary" />
-            Memory — VRAM Deep Dive
-          </h2>
-        </div>
+      <div className="space-y-6">
+        <StatStrip>
+          <StatCard
+            icon={<HardDrive className="w-3.5 h-3.5" />}
+            label="Peak VRAM"
+            value={formatBytes(analysis.peakVramBytes)}
+            sublabel={capacity > 0 ? `of ${analysis.gpuMemoryGb} GB` : undefined}
+            variant={capacity > 0 ? (fits ? 'success' : 'danger') : 'default'}
+          />
+          <StatCard
+            icon={<Shrink className="w-3.5 h-3.5" />}
+            label="Headroom"
+            value={capacity > 0 ? formatBytes(Math.abs(headroom)) : '—'}
+            sublabel={capacity > 0 ? (fits ? 'spare' : 'over budget') : undefined}
+            variant={capacity > 0 ? (fits ? 'success' : 'danger') : 'default'}
+          />
+          <StatCard label="Weights" value={formatBytes(analysis.parameterMemoryBytes)} />
+          <StatCard label="Activations" value={formatBytes(analysis.activationMemoryBytes)} />
+          <StatCard label="Optimizer" value={formatBytes(analysis.optimizerStateBytes)} />
+          <StatCard
+            icon={<AlertTriangle className="w-3.5 h-3.5" />}
+            label="Fragmentation"
+            value={
+              analysis.memoryFragmentationPct !== undefined
+                ? `${analysis.memoryFragmentationPct.toFixed(0)} %`
+                : '—'
+            }
+            sublabel={analysis.oomRisk ? `OOM risk ${analysis.oomRisk}` : undefined}
+            variant={(analysis.memoryFragmentationPct ?? 0) > 15 ? 'warning' : 'default'}
+          />
+        </StatStrip>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* ── 4.1 Memory Heatmap ──
-              A layer × time-step matrix needs width for its step columns
-              and height that scales with layer count — neither fits a
-              fixed square, so this keeps the wide exception. */}
-          <ChartCard
-            title="Memory Heatmap (Timeline)"
-            size="wide"
-            className="lg:col-span-2"
-            badge={
-              hasRawHeatmap
-                ? { text: 'live', variant: 'live' }
-                : supportsHeatmap
-                  ? { text: 'derived', variant: 'derived' }
-                  : undefined
+        <ChartGrid>
+          <ChartSlot
+            title="Where the budget runs out"
+            has={hasDepth}
+            emptyIcon={Layers}
+            emptyTitle="No per-layer memory"
+            emptyHint="The analysis produced no memory terms per layer, so the budget cannot be accumulated across depth."
+            action={
+              <Key
+                entries={[
+                  { label: 'weights', color: SIMULATION_COLORS.blue },
+                  { label: 'activations', color: SIMULATION_COLORS.amber },
+                  { label: 'gradients', color: SIMULATION_COLORS.violet },
+                  { label: 'optimizer', color: SIMULATION_COLORS.green },
+                ]}
+              />
+            }
+            reading={
+              capacity > 0
+                ? `The four terms accumulated layer by layer. Where the curve crosses the ${analysis.gpuMemoryGb} GB line is the depth this card stops supporting.`
+                : 'The four terms accumulated layer by layer. Select a target card to see where its capacity is crossed.'
             }
           >
-            {supportsHeatmap ? (
-              <div className="overflow-x-auto">
-                <div className="min-w-[400px] space-y-1">
-                  {(heatmapData as Array<{ layer: string; timeline: number[] }>).map((layer, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
-                      <div className="w-24 shrink-0 text-[10px] text-muted-foreground truncate" title={layer.layer}>
-                        {layer.layer}
-                      </div>
-                      <div className="flex-1 flex gap-0.5 h-3">
-                        {/* Color now comes from the cell's own `active` value
-                            (0/1/2), not its column position — the previous
-                            green→yellow→orange banding was a fixed left-to-
-                            right decoration that painted the same three
-                            colors regardless of what the data said. Opacity
-                            on one theme token gives a real intensity scale
-                            that still follows whichever palette is active. */}
-                        {(layer.timeline || []).map((active, stepIdx) => (
-                          <div
-                            key={stepIdx}
-                            className="flex-1 rounded-sm transition-all duration-300"
-                            style={{
-                              backgroundColor: active >= 2
-                                ? 'hsl(var(--chart-1) / 0.85)'
-                                : active >= 1
-                                  ? 'hsl(var(--chart-1) / 0.45)'
-                                  : 'hsl(var(--muted-foreground) / 0.08)',
-                            }}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                {/* Rows are already labeled by layer name on the left — this
-                    strip describes the horizontal (step) axis only. */}
-                <div className="mt-3 flex justify-between text-[9px] text-muted-foreground uppercase tracking-widest">
-                  <span>Step 0</span>
-                  <span>Step T</span>
-                </div>
-              </div>
-            ) : (
-              <div className="h-32 flex items-center justify-center text-[11px] text-muted-foreground">
-                <p>No heatmap data — run streaming analysis for live memory trace</p>
-              </div>
-            )}
-          </ChartCard>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={cumulative} margin={CHART_MARGINS.area}>
+                {CHART_GRID}
+                <XA dataKey="i" />
+                <YA unit=" GB" width={56} />
+                <Tooltip
+                  {...chartTooltipStyle}
+                  labelFormatter={(i) => cumulative[Number(i) - 1]?.name ?? `layer ${i}`}
+                  formatter={(v: number) => `${v.toFixed(2)} GB`}
+                />
+                {[
+                  { key: 'weights', color: SIMULATION_COLORS.blue },
+                  { key: 'activations', color: SIMULATION_COLORS.amber },
+                  { key: 'gradients', color: SIMULATION_COLORS.violet },
+                  { key: 'optimizer', color: SIMULATION_COLORS.green },
+                ].map((t) => (
+                  <Area
+                    key={t.key}
+                    type="monotone"
+                    dataKey={t.key}
+                    stackId="budget"
+                    stroke={t.color}
+                    fill={t.color}
+                    fillOpacity={0.26}
+                    strokeWidth={1.25}
+                    isAnimationActive={false}
+                  />
+                ))}
+                {capacity > 0 ? (
+                  <ReferenceLine
+                    y={analysis.gpuMemoryGb}
+                    stroke={SIMULATION_COLORS.red}
+                    strokeDasharray="4 3"
+                    label={{
+                      value: `${analysis.gpuName || 'card'} · ${analysis.gpuMemoryGb} GB`,
+                      position: 'insideTopRight',
+                      fontSize: 9,
+                      fill: 'hsl(var(--muted-foreground))',
+                    }}
+                  />
+                ) : null}
+              </AreaChart>
+            </ResponsiveContainer>
+          </ChartSlot>
 
-          {/* ── 4.2 VRAM Liveness ── */}
-          <ChartCard
-            title="VRAM Liveness"
-            badge={hasRawLiveness ? { text: 'live', variant: 'live' } : undefined}
+          <ChartSlot
+            title="What precision buys"
+            has={precisionCurve.length > 0}
+            emptyIcon={Scaling}
+            emptyTitle="No parameter count"
+            emptyHint="The weight budget needs a parameter count the analysis did not produce."
+            reading={
+              <>
+                Weight memory at each precision the compiler supports, widest first — the one lever that moves memory
+                by a factor rather than a percentage. INT4 is charged at one byte per parameter like INT8, because the
+                compiler does not model sub-byte packing: treat it as an upper bound, not as a GGUF file size.
+                {currentPrecision ? ` This design is analysed at ${currentPrecision}.` : ''}
+              </>
+            }
           >
-            {hasRawLiveness ? (
-              <ChartContainer>
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={livenessData} margin={CHART_MARGINS.area}>
-                    <defs>
-                      <linearGradient id="memVram" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={MEMORY_COLORS.activations} stopOpacity={0.3} />
-                        <stop offset="95%" stopColor={MEMORY_COLORS.activations} stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                    <XAxis dataKey="step" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} />
-                    <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(val: number) => val >= 1000 ? `${(val / 1000).toFixed(1)}GB` : `${val.toFixed(0)}MB`} />
-                    <Tooltip contentStyle={chartTooltipStyle()} formatter={(val: number) => [`${val.toFixed(2)} MB`, 'VRAM']} />
-                    <Area
-                      type="monotone"
-                      dataKey="vram"
-                      stroke={MEMORY_COLORS.activations}
-                      fillOpacity={1}
-                      fill="url(#memVram)"
-                      strokeWidth={2}
-                      animationDuration={1500}
-                      dot={false}
-                      activeDot={chartActiveDot(MEMORY_COLORS.activations)}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </ChartContainer>
-            ) : (
-              <EmptyChartState
-                icon={HardDrive}
-                title="No liveness data"
-                description="Run streaming analysis to see VRAM liveness over time."
-              />
-            )}
-          </ChartCard>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={precisionCurve} margin={CHART_MARGINS.line}>
+                {CHART_GRID}
+                <XA dataKey="label" />
+                <YA unit=" GB" width={56} />
+                <Tooltip {...chartTooltipStyle} formatter={(v: number) => `${v.toFixed(2)} GB`} />
+                {capacity > 0 ? (
+                  <ReferenceLine
+                    y={analysis.gpuMemoryGb}
+                    stroke={SIMULATION_COLORS.red}
+                    strokeDasharray="4 3"
+                    label={{
+                      value: 'card capacity',
+                      position: 'insideTopRight',
+                      fontSize: 9,
+                      fill: 'hsl(var(--muted-foreground))',
+                    }}
+                  />
+                ) : null}
+                <Line
+                  type="monotone"
+                  dataKey="gb"
+                  name="weights"
+                  stroke={SIMULATION_COLORS.blue}
+                  strokeWidth={1.75}
+                  dot={{ r: 3 }}
+                  isAnimationActive={false}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </ChartSlot>
 
-          {/* ── 4.3 Peak VRAM Breakdown ── */}
-          <ChartCard title="Peak VRAM Breakdown">
-            <div className="h-full flex flex-col">
-              <div className="relative flex-1 min-h-0">
-                <ChartContainer>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={donutData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={55}
-                        outerRadius={85}
-                        paddingAngle={5}
-                        dataKey="value"
-                        animationDuration={1000}
-                      >
-                        {donutData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip contentStyle={chartTooltipStyle()} formatter={(val: number) => formatBytes(val)} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </ChartContainer>
-                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <span className="text-[10px] text-muted-foreground uppercase">Peak</span>
-                  <span className="text-lg font-bold font-mono">{formatBytes(analysis.peakVramBytes)}</span>
-                </div>
-              </div>
-              <ChartLegend
-                entries={donutData.map((d) => ({ name: d.name, value: d.value, color: d.color, formattedValue: formatBytes(d.value) }))}
-              />
-            </div>
-          </ChartCard>
-
-          {/* ── 4.3b Weight memory at every precision ── */}
-          {precisionData.length > 0 && (
-            <ChartCard
-              title="Weight Memory by Precision"
-              badge={{ text: 'derived', variant: 'derived' }}
-            >
-              <div className="h-full flex flex-col">
-                <ChartContainer className="flex-1 min-h-0">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={precisionData} layout="vertical" margin={CHART_MARGINS.barHorizontal}>
-                      <CartesianGrid strokeDasharray="3 3" horizontal={false} opacity={0.2} />
-                      <XAxis type="number" tickFormatter={(v) => formatBytes(v)} fontSize={10} />
-                      <YAxis type="category" dataKey="label" width={40} fontSize={11} />
-                      <Tooltip
-                        contentStyle={chartTooltipStyle()}
-                        formatter={(val: number) => formatBytes(val)}
-                      />
-                      <Bar dataKey="bytes" fill={MEMORY_COLORS.weights} radius={[0, 4, 4, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </ChartContainer>
-                <p className="mt-2 text-[9px] text-muted-foreground leading-snug shrink-0">
-                  Weights only, not activations or KV-cache. INT4 shown at 1 byte/parameter — an
-                  upper bound, not true 4-bit packing.
-                </p>
-              </div>
-            </ChartCard>
-          )}
-
-          {/* ── 4.4 Memory Fragmentation ── */}
-          <ChartCard title="Memory Fragmentation">
-            <div className="flex items-center justify-center h-full">
-              <DonutRing
-                value={Math.min(analysis.memoryFragmentationPct ?? 0, 100)}
-                size={140}
-                strokeWidth={12}
-                color={
-                  (analysis.memoryFragmentationPct ?? 0) > 30
-                    ? 'hsl(var(--chart-4))'
-                    : (analysis.memoryFragmentationPct ?? 0) > 10
-                      ? 'hsl(var(--chart-3))'
-                      : 'hsl(var(--chart-2))'
-                }
-                centerLabel={`${(analysis.memoryFragmentationPct ?? 0).toFixed(0)}%`}
-                centerSublabel="fragmented"
-              />
-            </div>
-          </ChartCard>
-
-          {/* ── 4.4b OOM Risk ──
-              Not a chart: a category, a count, and two already-labeled
-              ratios — none of it has a distribution or trend shape a graph
-              would show better than the numbers themselves. Kept as a
-              justified non-square exception next to the fragmentation
-              gauge, since it's real, safety-relevant compiler output. */}
-          <ChartCard title="OOM Risk" size="wide" className="lg:col-span-2">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 h-full items-center">
-              {/* The real fix lives where this value is parsed (Index.tsx's
-                  parseAnalysisReport): oomRisk is now derived from the same
-                  utilization number shown below whenever the backend sends
-                  none, instead of silently defaulting to "low". */}
-              <StatCard
-                label="OOM Risk"
-                value={analysis.oomRisk ?? 'low'}
-                variant={
-                  analysis.oomRisk === 'high'
-                    ? 'danger'
-                    : analysis.oomRisk === 'medium'
-                      ? 'warning'
-                      : 'success'
-                }
-              />
-              <StatCard label="Max Batch Fit" value={`${analysis.maxBatchSizeFit || '—'}`} />
-              <StatCard
-                label="Peak / GPU"
-                value={`${(analysis.peakVramBytes / 1e9).toFixed(2)} / ${analysis.gpuMemoryGb?.toFixed(1) ?? '—'} GB`}
-              />
-              <StatCard
-                label="Utilization"
-                value={analysis.gpuMemoryGb > 0
-                  ? `${((analysis.peakVramBytes / 1e9 / analysis.gpuMemoryGb) * 100).toFixed(0)}%`
-                  : '—'}
-              />
-            </div>
-          </ChartCard>
-
-          {/* ── 4.5 Gradient Memory ──
-              `col-span-2`, like every other `wide` card here: a `wide` card
-              sharing a row with a `square` sibling breaks under the grid's
-              default `align-items: stretch` (see OptimizationCharts for the
-              full explanation) — spanning the full row is what keeps a
-              `wide` card from ever landing next to one. */}
-          <ChartCard
-            title="Gradient Memory (Training)"
-            badge={hasRawGradient ? { text: 'live', variant: 'live' } : undefined}
-            size="wide"
-            className="lg:col-span-2"
+          <ChartSlot
+            title="KV cache against context length"
+            has={kv.length > 1}
+            emptyIcon={Layers}
+            emptyTitle="No KV cache to grow"
+            emptyHint="This design keeps no attention cache — the series exists only for models that do."
+            reading="The cache grows linearly with context and is charged per sequence in the batch. It is the term that turns a model that fits at 2k tokens into one that does not at 32k."
           >
-            {hasRawGradient ? (
-              <ChartContainer>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={gradientChartData} margin={{ ...CHART_MARGINS.bar, bottom: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                    <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={11} tick={{ fill: 'hsl(var(--muted-foreground))' }} interval={0} angle={-25} textAnchor="end" height={72} />
-                    <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(val: number) => val >= 1000 ? `${(val / 1000).toFixed(1)}GB` : `${val.toFixed(0)}MB`} />
-                    <Tooltip contentStyle={chartTooltipStyle()} />
-                    <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} />
-                    <Bar dataKey="forward" name="Forward" stackId="a" fill={MEMORY_COLORS.forward} radius={[0, 0, 0, 0]} />
-                    <Bar dataKey="backward" name="Backward" stackId="a" fill={MEMORY_COLORS.backward} radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </ChartContainer>
-            ) : (
-              <EmptyChartState
-                icon={HardDrive}
-                title="No gradient memory data"
-                description="Run training analysis to see gradient memory breakdown."
-              />
-            )}
-          </ChartCard>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={kv} margin={CHART_MARGINS.line}>
+                {CHART_GRID}
+                <XA dataKey="seq" />
+                <YA unit=" GB" width={56} />
+                <Tooltip
+                  {...chartTooltipStyle}
+                  labelFormatter={(v) => `${Number(v).toLocaleString('en-US')} tokens`}
+                  formatter={(v: number) => `${v.toFixed(2)} GB`}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="gb"
+                  name="KV cache"
+                  stroke={SIMULATION_COLORS.pink}
+                  strokeWidth={1.75}
+                  dot={false}
+                  isAnimationActive={false}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </ChartSlot>
 
-          {/* ── 4.6 KV Cache Growth ── */}
-          <ChartCard
-            title="KV Cache Growth (LLM)"
-            badge={hasRawKv ? { text: 'live', variant: 'live' } : undefined}
-            className="lg:col-span-2"
-            size="wide"
+          <ChartSlot
+            title="Peak VRAM as the batch grows"
+            has={batchCurve.length > 1}
+            emptyIcon={Scaling}
+            emptyTitle="No batch to scale from"
+            emptyHint="This needs an analysed batch size and an activation figure to scale; one of the two is missing."
+            reading={
+              <>
+                Only activations scale with the batch — weights, gradients and optimizer state do not — so the curve is
+                a line with a floor, and the floor is what a smaller batch can never recover.
+                {maxBatch > 0 ? ` The compiler puts the largest batch that fits at ${maxBatch}.` : ''}
+              </>
+            }
           >
-            {hasRawKv ? (
-              <ChartContainer>
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={kvData} margin={{ ...CHART_MARGINS.line, left: 20, right: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis
-                      dataKey="seq"
-                      stroke="hsl(var(--muted-foreground))"
-                      fontSize={11}
-                      tickLine={false}
-                      axisLine={false}
-                      label={{
-                        value: 'Sequence Length',
-                        position: 'bottom',
-                        offset: 0,
-                        fontSize: 11,
-                        fill: 'hsl(var(--muted-foreground))',
-                      }}
-                    />
-                    <YAxis
-                      stroke="hsl(var(--muted-foreground))"
-                      fontSize={11}
-                      tickLine={false}
-                      axisLine={false}
-                      tickFormatter={(val: number) => val >= 1000 ? `${(val / 1000).toFixed(1)}GB` : `${val.toFixed(0)}MB`}
-                      label={{
-                        value: 'Cache Size (MB)',
-                        angle: -90,
-                        position: 'insideLeft',
-                        offset: 0,
-                        fontSize: 11,
-                        fill: 'hsl(var(--muted-foreground))',
-                      }}
-                    />
-                    <Tooltip contentStyle={chartTooltipStyle()} formatter={(val: number) => [`${val.toFixed(2)} MB`, 'Cache Size']} />
-                    <Line
-                      type="stepAfter"
-                      dataKey="value"
-                      stroke={MEMORY_COLORS.activations}
-                      strokeWidth={3}
-                      dot={{ r: 4, fill: MEMORY_COLORS.activations, strokeWidth: 0 }}
-                      activeDot={{ ...chartActiveDot(MEMORY_COLORS.activations), r: 6 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </ChartContainer>
-            ) : (
-              <EmptyChartState
-                icon={HardDrive}
-                title="No KV cache data"
-                description="Run LLM analysis to see KV cache scaling projections."
-              />
-            )}
-          </ChartCard>
-        </div>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={batchCurve} margin={CHART_MARGINS.line}>
+                {CHART_GRID}
+                <XA dataKey="batch" />
+                <YA unit=" GB" width={56} />
+                <Tooltip
+                  {...chartTooltipStyle}
+                  labelFormatter={(v) => `batch ${v}`}
+                  formatter={(v: number) => `${v.toFixed(2)} GB`}
+                />
+                {capacity > 0 ? (
+                  <ReferenceLine
+                    y={analysis.gpuMemoryGb}
+                    stroke={SIMULATION_COLORS.red}
+                    strokeDasharray="4 3"
+                    label={{
+                      value: 'capacity',
+                      position: 'insideTopRight',
+                      fontSize: 9,
+                      fill: 'hsl(var(--muted-foreground))',
+                    }}
+                  />
+                ) : null}
+                {batchNow > 0 ? (
+                  <ReferenceLine
+                    x={batchNow}
+                    stroke="hsl(var(--muted-foreground))"
+                    strokeDasharray="2 3"
+                    label={{
+                      value: 'analysed',
+                      position: 'insideTopLeft',
+                      fontSize: 9,
+                      fill: 'hsl(var(--muted-foreground))',
+                    }}
+                  />
+                ) : null}
+                <Line
+                  type="monotone"
+                  dataKey="gb"
+                  name="peak VRAM"
+                  stroke={SIMULATION_COLORS.teal}
+                  strokeWidth={1.75}
+                  dot={false}
+                  isAnimationActive={false}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </ChartSlot>
+        </ChartGrid>
+
+        <ViewNote icon={HardDrive}>
+          Peak VRAM is one instant, not an average, and it is the instant that decides whether a run starts at all.
+          Every curve here is computed from the graph — what a real run allocates, beside these figures, is in{' '}
+          <span className="font-medium text-foreground">Training</span>.
+        </ViewNote>
       </div>
     </ChartErrorBoundary>
   );

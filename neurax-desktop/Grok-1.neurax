@@ -1,0 +1,807 @@
+{
+  "format": "neurax-design",
+  "version": 1,
+  "generator": "NEURAX Production",
+  "savedAt": "2026-09-08T15:52:05.663Z",
+  "name": "Grok-1",
+  "architecture": "moe",
+  "design": {
+    "connections": [
+      {
+        "from": "n1",
+        "id": "c1",
+        "to": "n2"
+      },
+      {
+        "from": "n2",
+        "id": "c2",
+        "to": "n3"
+      },
+      {
+        "from": "n3",
+        "id": "c3",
+        "to": "n4"
+      },
+      {
+        "from": "n4",
+        "id": "c4",
+        "to": "n13"
+      },
+      {
+        "from": "n13",
+        "id": "c5",
+        "to": "n14"
+      },
+      {
+        "from": "n14",
+        "id": "c6",
+        "to": "n15"
+      },
+      {
+        "from": "n5",
+        "id": "c7",
+        "to": "n6"
+      },
+      {
+        "from": "n6",
+        "id": "c8",
+        "to": "n7"
+      },
+      {
+        "from": "n8",
+        "id": "c9",
+        "to": "n9"
+      },
+      {
+        "from": "n9",
+        "id": "c10",
+        "to": "n10"
+      },
+      {
+        "from": "n10",
+        "id": "c11",
+        "to": "n11"
+      },
+      {
+        "from": "n11",
+        "id": "c12",
+        "to": "n12"
+      },
+      {
+        "from": "n7",
+        "id": "c13",
+        "to": "n4"
+      },
+      {
+        "from": "n12",
+        "id": "c14",
+        "to": "n4"
+      }
+    ],
+    "groups": [],
+    "nodes": [
+      {
+        "id": "n1",
+        "name": "Input",
+        "params": {
+          "sequence_length": 4096,
+          "shape": "[B, seq_len]"
+        },
+        "type": "input",
+        "x": 680,
+        "y": 40
+      },
+      {
+        "id": "n2",
+        "name": "Token Embedding",
+        "params": {
+          "d_model": 6144,
+          "dtype": "float32",
+          "hidden_size": 6144,
+          "padding_idx": 0,
+          "vocab_size": 131072
+        },
+        "type": "token_embedding",
+        "x": 1000,
+        "y": 40
+      },
+      {
+        "id": "n3",
+        "name": "RoPE",
+        "params": {
+          "base": 10000,
+          "d_model": 6144,
+          "hidden_size": 6144,
+          "max_len": 131072,
+          "partial_rotary_factor": 1,
+          "scaling_type": "none",
+          "theta": 10000
+        },
+        "type": "pos_rope",
+        "x": 1320,
+        "y": 40
+      },
+      {
+        "id": "n4",
+        "name": "64× MoE Layer",
+        "params": {
+          "num_layers": 64,
+          "share_parameters": false
+        },
+        "type": "layer_stack",
+        "x": 1640,
+        "y": 240
+      },
+      {
+        "id": "n5",
+        "name": "Pre-Attention RMSNorm",
+        "params": {
+          "elementwise_affine": true,
+          "eps": 0.00001,
+          "hidden_size": 6144,
+          "normalized_shape": 6144,
+          "position": "pre"
+        },
+        "type": "rmsnorm",
+        "x": 680,
+        "y": 240
+      },
+      {
+        "id": "n6",
+        "name": "GQA (48 heads, 8 KV)",
+        "params": {
+          "causal": true,
+          "d_model": 6144,
+          "dropout": 0,
+          "head_dim": 128,
+          "hidden_size": 6144,
+          "n_heads": 48,
+          "n_kv_heads": 8,
+          "num_heads": 48,
+          "num_kv_heads": 8
+        },
+        "type": "gqa_attention",
+        "x": 1000,
+        "y": 240
+      },
+      {
+        "id": "n7",
+        "name": "Residual Add",
+        "params": {
+          "dropout": 0,
+          "pre_norm": true
+        },
+        "type": "residual_add",
+        "x": 1320,
+        "y": 240
+      },
+      {
+        "id": "n8",
+        "name": "Pre-MoE RMSNorm",
+        "params": {
+          "elementwise_affine": true,
+          "eps": 0.00001,
+          "hidden_size": 6144,
+          "normalized_shape": 6144,
+          "position": "pre"
+        },
+        "type": "rmsnorm",
+        "x": 40,
+        "y": 440
+      },
+      {
+        "id": "n9",
+        "name": "Top-2 Router",
+        "params": {
+          "d_model": 768,
+          "hidden_size": 6144,
+          "noise_regularizer": 0.01,
+          "noise_std": 0.1,
+          "noise_type": "gaussian",
+          "num_experts": 8,
+          "router_bias": false,
+          "top_k": 2
+        },
+        "type": "noisy_topk_router",
+        "x": 360,
+        "y": 440
+      },
+      {
+        "id": "n10",
+        "name": "8× GeGLU Experts",
+        "params": {
+          "activation": "geglu",
+          "aux_loss_coef": 0.01,
+          "capacity_factor": 1.25,
+          "d_model": 6144,
+          "dropout": 0,
+          "expert_d_ff": 14336,
+          "expert_type": "gated_ffn",
+          "hidden_size": 6144,
+          "intermediate_size": 32768,
+          "num_experts": 8,
+          "router_type": "top_k",
+          "shared_experts": 0,
+          "top_k": 2,
+          "z_loss_coef": 0.0001
+        },
+        "type": "moe_layer",
+        "x": 680,
+        "y": 440
+      },
+      {
+        "id": "n11",
+        "name": "Expert Combine",
+        "params": {
+          "combination_type": "weighted_sum"
+        },
+        "type": "expert_combine",
+        "x": 1000,
+        "y": 440
+      },
+      {
+        "id": "n12",
+        "name": "Residual Add",
+        "params": {
+          "dropout": 0,
+          "pre_norm": true
+        },
+        "type": "residual_add",
+        "x": 1320,
+        "y": 440
+      },
+      {
+        "id": "n13",
+        "name": "Final RMSNorm",
+        "params": {
+          "elementwise_affine": true,
+          "eps": 0.00001,
+          "hidden_size": 6144,
+          "normalized_shape": 6144,
+          "position": "pre"
+        },
+        "type": "rmsnorm",
+        "x": 1960,
+        "y": 240
+      },
+      {
+        "id": "n14",
+        "name": "LM Head",
+        "params": {
+          "bias": false,
+          "d_model": 6144,
+          "hidden_size": 6144,
+          "tie_weights": true,
+          "vocab_size": 131072
+        },
+        "type": "lm_head",
+        "x": 2280,
+        "y": 240
+      },
+      {
+        "id": "n15",
+        "name": "Output",
+        "params": {
+          "shape": "[B, output_dim]"
+        },
+        "type": "output",
+        "x": 2600,
+        "y": 240
+      }
+    ]
+  },
+  "hardware": {
+    "actionDim": 0,
+    "batchSize": 64,
+    "dState": 0,
+    "datasetSize": 10000000000,
+    "device": "cuda",
+    "dropout": 0,
+    "dtRank": 0,
+    "ffnDim": 14336,
+    "gpuCount": 1,
+    "gpuMemoryGb": 80,
+    "guidanceScale": 0,
+    "hardware": "RTX4090",
+    "hiddenDim": 6144,
+    "imgHeight": 0,
+    "imgWidth": 0,
+    "inChannels": 0,
+    "learningRate": 0.0003,
+    "nodeFeatDim": 0,
+    "numDenoisingSteps": 0,
+    "numEdges": 0,
+    "numEpochs": 100,
+    "numExperts": 8,
+    "numHeads": 48,
+    "numLayers": 64,
+    "numNodes": 0,
+    "precision": "bf16",
+    "seed": 0,
+    "seqLen": 131072,
+    "spikeRate": 0,
+    "stateDim": 0,
+    "timesteps": 0,
+    "topK": 2,
+    "useBias": false,
+    "useCompile": false,
+    "useFlash": false,
+    "vocabSize": 131072
+  },
+  "analysis": {
+    "activationMemoryBytes": 55405103284224,
+    "activeParams": 83810189312,
+    "arithmeticIntensity": 18323991.423500147,
+    "backwardFlops": 4514920405248508000,
+    "backwardFlopsHuman": "4514920.41 TFLOPs",
+    "bottleneck": "compute-bound",
+    "bytesAccessed": 123196968960,
+    "co2Kg": 116934.56444874912,
+    "communicationOverhead": 0,
+    "compilation": {
+      "current_phase": "Completed",
+      "phase_timeline": [
+        {
+          "duration_ms": 0,
+          "name": "Architecture",
+          "status": "completed"
+        },
+        {
+          "duration_ms": 0,
+          "name": "Graph",
+          "status": "completed"
+        },
+        {
+          "duration_ms": 0,
+          "name": "Tensor",
+          "status": "completed"
+        },
+        {
+          "duration_ms": 0,
+          "name": "Operator",
+          "status": "completed"
+        },
+        {
+          "duration_ms": 0,
+          "name": "Compute",
+          "status": "completed"
+        },
+        {
+          "duration_ms": 0,
+          "name": "Memory",
+          "status": "completed"
+        },
+        {
+          "duration_ms": 0,
+          "name": "Cost",
+          "status": "completed"
+        },
+        {
+          "duration_ms": 0,
+          "name": "Report",
+          "status": "completed"
+        }
+      ],
+      "total_progress": 1
+    },
+    "confidenceScore": 0.6,
+    "costPerMillionTokensUsd": 2.7881461248230033,
+    "criticalPathLength": 13,
+    "customLayerCount": 4,
+    "dataParallel": 1,
+    "dataParallelEfficiency": 1,
+    "depth": 1,
+    "diagnosticCount": 8,
+    "diagnostics": [
+      {
+        "category": "memoryoverflow",
+        "code": "E001",
+        "message": "This model needs 57931.3 GB but the target GPU has 85.9 GB — 674.4x over. It will not start.",
+        "precision_impact": 0,
+        "severity": "critical",
+        "suggestion": "Nothing short of a smaller model closes a gap this size — reduce depth or width, or move to a multi-node parallel strategy."
+      },
+      {
+        "category": "architectureinefficiency",
+        "code": "I001",
+        "layer_id": "n6",
+        "message": "Grouped Query Attention detected on layer 'n6' (48 query heads, 8 KV heads).",
+        "precision_impact": 0,
+        "severity": "info"
+      },
+      {
+        "category": "architectureinefficiency",
+        "code": "I002",
+        "message": "Mixture of Experts (MoE) layer(s) detected.",
+        "precision_impact": 0,
+        "severity": "info"
+      },
+      {
+        "category": "customlayerfallback",
+        "code": "W001",
+        "layer_id": "n3",
+        "message": "Custom layer 'n3' has no FLOP equation; it is costed as free.",
+        "precision_impact": 0.5,
+        "severity": "warning",
+        "suggestion": "Add `custom_equations.flops_forward` so the block is accounted for."
+      },
+      {
+        "category": "customlayerfallback",
+        "code": "W001",
+        "layer_id": "n7",
+        "message": "Custom layer 'n7' has no FLOP equation; it is costed as free.",
+        "precision_impact": 0.5,
+        "severity": "warning",
+        "suggestion": "Add `custom_equations.flops_forward` so the block is accounted for."
+      },
+      {
+        "category": "customlayerfallback",
+        "code": "W001",
+        "layer_id": "n12",
+        "message": "Custom layer 'n12' has no FLOP equation; it is costed as free.",
+        "precision_impact": 0.5,
+        "severity": "warning",
+        "suggestion": "Add `custom_equations.flops_forward` so the block is accounted for."
+      },
+      {
+        "category": "customlayerfallback",
+        "code": "W001",
+        "layer_id": "n4",
+        "message": "Custom layer 'n4' has no FLOP equation; it is costed as free.",
+        "precision_impact": 0.5,
+        "severity": "warning",
+        "suggestion": "Add `custom_equations.flops_forward` so the block is accounted for."
+      },
+      {
+        "category": "configuration",
+        "code": "H008",
+        "message": "Tokens-per-parameter ratio is 0.0 (1.00e10 tokens / 3.16e11 params); the compute-optimal ratio from Chinchilla scaling laws (Hoffmann et al. 2022) is ~20. This model looks under-trained for its size — more data would likely help more than a bigger model.",
+        "precision_impact": 0,
+        "severity": "hint"
+      }
+    ],
+    "dynamic": {},
+    "effectiveTflops": 80.43284405245069,
+    "energyKwh": 501865.0834710263,
+    "estimatedFlops": "2257460.20 TFLOPs",
+    "flopsIncrementalDecode": 10333832714649.6,
+    "flopsPerBatch": 2257460202624254000,
+    "flopsPerToken": 17223054524416,
+    "forwardFlops": 2257460202624254000,
+    "forwardFlopsHuman": "2257460.20 TFLOPs",
+    "gpuBandwidthGbs": 1008,
+    "gpuCount": 1,
+    "gpuHours": 0,
+    "gpuMemoryGb": 24,
+    "gpuName": "RTX4090",
+    "gpuTflops": 165,
+    "gpuUtilization": 0.9999421172021841,
+    "gradientMemoryBytes": 631552344064,
+    "gradient_memory_breakdown": [
+      {
+        "backward": 529516709368,
+        "forward": 46453676008070,
+        "name": "n10"
+      },
+      {
+        "backward": 88237525719,
+        "forward": 7740940671028,
+        "name": "n2"
+      },
+      {
+        "backward": 9652550173,
+        "forward": 846803189504,
+        "name": "n6"
+      },
+      {
+        "backward": 4136134018,
+        "forward": 362856593954,
+        "name": "n14"
+      },
+      {
+        "backward": 5385591,
+        "forward": 472469523,
+        "name": "n9"
+      },
+      {
+        "backward": 1346397,
+        "forward": 118117380,
+        "name": "n5"
+      },
+      {
+        "backward": 1346397,
+        "forward": 118117380,
+        "name": "n13"
+      },
+      {
+        "backward": 1346397,
+        "forward": 118117380,
+        "name": "n8"
+      },
+      {
+        "backward": 0,
+        "forward": 0,
+        "name": "n7"
+      },
+      {
+        "backward": 0,
+        "forward": 0,
+        "name": "n4"
+      },
+      {
+        "backward": 0,
+        "forward": 0,
+        "name": "n3"
+      },
+      {
+        "backward": 0,
+        "forward": 0,
+        "name": "n11"
+      },
+      {
+        "backward": 0,
+        "forward": 0,
+        "name": "n12"
+      }
+    ],
+    "graphDepth": 13,
+    "hiddenSize": 0,
+    "interconnect": "",
+    "interconnectBandwidthGbs": 64,
+    "isSequenceModel": true,
+    "kv_cache_scaling": [],
+    "largestTensorBytes": 2199023255552,
+    "latencyMs": 28066397.865431093,
+    "live_trace": {
+      "gradient_memory_breakdown": [
+        {
+          "backward": 529516709368,
+          "forward": 46453676008070,
+          "name": "n10"
+        },
+        {
+          "backward": 88237525719,
+          "forward": 7740940671028,
+          "name": "n2"
+        },
+        {
+          "backward": 9652550173,
+          "forward": 846803189504,
+          "name": "n6"
+        },
+        {
+          "backward": 4136134018,
+          "forward": 362856593954,
+          "name": "n14"
+        },
+        {
+          "backward": 5385591,
+          "forward": 472469523,
+          "name": "n9"
+        },
+        {
+          "backward": 1346397,
+          "forward": 118117380,
+          "name": "n5"
+        },
+        {
+          "backward": 1346397,
+          "forward": 118117380,
+          "name": "n13"
+        },
+        {
+          "backward": 1346397,
+          "forward": 118117380,
+          "name": "n8"
+        },
+        {
+          "backward": 0,
+          "forward": 0,
+          "name": "n7"
+        },
+        {
+          "backward": 0,
+          "forward": 0,
+          "name": "n4"
+        },
+        {
+          "backward": 0,
+          "forward": 0,
+          "name": "n3"
+        },
+        {
+          "backward": 0,
+          "forward": 0,
+          "name": "n11"
+        },
+        {
+          "backward": 0,
+          "forward": 0,
+          "name": "n12"
+        }
+      ],
+      "kv_cache_scaling": [],
+      "memory_heatmap": [],
+      "memory_liveness": [],
+      "partial_metrics": [],
+      "throughput_trace": []
+    },
+    "macs": 1128730101312127000,
+    "maxBatchSizeFit": 0,
+    "memoryFragmentation": 0.1,
+    "memoryFragmentationPct": 10,
+    "memoryUsage": "57931.3 GB",
+    "memory_heatmap": [],
+    "memory_liveness": [],
+    "modelType": "moe",
+    "numLayers": 64,
+    "oomRisk": "critical",
+    "opsDistribution": {
+      "attention": 1,
+      "custom": 4,
+      "embedding": 1,
+      "layer_norm": 3,
+      "matmul": 1,
+      "moe": 3,
+      "mul": 1
+    },
+    "optimalGpuCount": 675,
+    "optimizerStateBytes": 1263104688128,
+    "parameterMemoryBytes": 631552344064,
+    "peakVramBytes": 57931312660480,
+    "perLayerLatency": {
+      "n10": 12097683.23914764,
+      "n11": 10.251856669240095,
+      "n12": 0,
+      "n13": 51.25928334620047,
+      "n14": 5905.069441482294,
+      "n2": 103.85895619047619,
+      "n3": 0,
+      "n4": 0,
+      "n5": 51.25928334620047,
+      "n6": 123.02228003088112,
+      "n7": 0,
+      "n8": 51.25928334620047,
+      "n9": 492.28935169909556
+    },
+    "perLayerVram": {},
+    "pipelineParallel": 1,
+    "pipelineStages": 0,
+    "provider": "",
+    "recommendations": [
+      {
+        "category": "memoryoptimization",
+        "description": "Reduce activation memory by recomputing during backward pass",
+        "impact": "Save ~48479.5 GB VRAM (~88% of activation memory, checkpointing every ~8 of 64 layers)",
+        "priority": "high",
+        "title": "Enable Gradient Checkpointing"
+      },
+      {
+        "category": "cost",
+        "description": "Consider spot instances or reserved capacity for cost savings",
+        "impact": "Save ~$1672884 (~60% of this run's $2788139 estimated on-demand cost via spot capacity)",
+        "priority": "low",
+        "title": "Optimize Training Duration"
+      }
+    ],
+    "reportWarnings": [
+      "Model contains 4 custom operations with estimated FLOPs"
+    ],
+    "rooflinePosition": 1,
+    "samplesPerS": 0.00228030687467834,
+    "selectedBatchSize": 64,
+    "selectedPrecision": "bf16",
+    "tensorCoreUtilization": 0.15384615384615385,
+    "tensorParallel": 1,
+    "tensorParallelDegree": 1,
+    "tensorResolutionRatio": 1,
+    "throughputGraphsPerS": null,
+    "throughputTokensPerS": 298.88438267783937,
+    "totalFlops": 2257460202624254000,
+    "totalOperations": 13,
+    "totalParams": 315776172032,
+    "totalStepFlops": 6998126628135187000,
+    "totalTensorCount": 26,
+    "trainingCostUsd": 2788139.3526168126,
+    "trainingTimeHours": 929379.7842056042,
+    "unresolvedDimCount": 0,
+    "vocabSize": 131072
+  },
+  "initialization": {
+    "gain": 1,
+    "hyperparameters": {
+      "dropout": 0.1,
+      "gradientClipping": 1,
+      "learningRate": 0.0001,
+      "optimizer": "SGD",
+      "warmupSteps": 750,
+      "weightDecay": 0.01
+    },
+    "layers": [
+      {
+        "fanIn": 6144,
+        "fanOut": 131072,
+        "layerId": "n2",
+        "layerName": "Token Embedding",
+        "layerType": "token_embedding",
+        "shape": [
+          6144,
+          131072
+        ],
+        "variance": 0.000014575559701492537
+      },
+      {
+        "fanIn": 6144,
+        "fanOut": 6144,
+        "layerId": "n5",
+        "layerName": "Pre-Attention RMSNorm",
+        "layerType": "rmsnorm",
+        "shape": [
+          6144
+        ],
+        "variance": 0.00016276041666666666
+      },
+      {
+        "fanIn": 6144,
+        "fanOut": 18432,
+        "layerId": "n6",
+        "layerName": "GQA (48 heads, 8 KV)",
+        "layerType": "gqa_attention",
+        "shape": [
+          6144,
+          18432
+        ],
+        "variance": 0.00008138020833333333
+      },
+      {
+        "fanIn": 6144,
+        "fanOut": 6144,
+        "layerId": "n8",
+        "layerName": "Pre-MoE RMSNorm",
+        "layerType": "rmsnorm",
+        "shape": [
+          6144
+        ],
+        "variance": 0.00016276041666666666
+      },
+      {
+        "fanIn": 6144,
+        "fanOut": 6144,
+        "layerId": "n10",
+        "layerName": "8× GeGLU Experts",
+        "layerType": "moe_layer",
+        "shape": [
+          6144,
+          6144
+        ],
+        "variance": 0.00016276041666666666
+      },
+      {
+        "fanIn": 6144,
+        "fanOut": 6144,
+        "layerId": "n13",
+        "layerName": "Final RMSNorm",
+        "layerType": "rmsnorm",
+        "shape": [
+          6144
+        ],
+        "variance": 0.00016276041666666666
+      },
+      {
+        "fanIn": 6144,
+        "fanOut": 131072,
+        "layerId": "n14",
+        "layerName": "LM Head",
+        "layerType": "lm_head",
+        "shape": [
+          6144,
+          131072
+        ],
+        "variance": 0.000014575559701492537
+      }
+    ],
+    "method": "xavier_normal"
+  },
+  "inference": null,
+  "timeMachine": null
+}

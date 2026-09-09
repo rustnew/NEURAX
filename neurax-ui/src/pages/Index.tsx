@@ -45,24 +45,30 @@ const DocumentationPanel = lazy(() =>
 const ModelHyperparametersDialog = lazy(() =>
   import('@/components/panels/ModelHyperparametersPanel.tsx').then((m) => ({ default: m.ModelHyperparametersDialog }))
 );
-const InferenceIntelligence = lazy(() =>
-  import('@/components/inference').then((m) => ({ default: m.InferenceIntelligence }))
-);
 const ProductionWorkspace = lazy(() =>
   import('@/components/production/ProductionWorkspace.tsx').then((m) => ({ default: m.ProductionWorkspace }))
 );
 const SimulationWorkspace = lazy(() =>
   import('@/components/simulation/SimulationWorkspace.tsx').then((m) => ({ default: m.SimulationWorkspace }))
 );
+const TrainingWorkspace = lazy(() =>
+  import('@/components/training/TrainingWorkspace.tsx').then((m) => ({ default: m.TrainingWorkspace }))
+);
 const TimeMachineWorkspace = lazy(() =>
   import('@/components/timemachine/TimeMachineWorkspace.tsx').then((m) => ({ default: m.TimeMachineWorkspace }))
 );
+
+import { IS_MOCK, mockHardware, mockImageDataset, profileForSelection } from '@/services/mockRuntime.ts';
+import { detectHardware, measureHardware } from '@/services/neuraxApi.ts';
+import { primaryGpu } from '@/types/runtime.ts';
+import type { DatasetProfile, HardwareProfile } from '@/types/runtime.ts';
 
 import { ArchitectureFamily } from '@/types/plugins.ts';
 import { VariantPreset } from '@/types/catalog.ts';
 import { AnalysisResult, CanvasNode, Connection, LayerConfig, NodeGroup, PerLayerBreakdownRow, Warning, ParameterValue } from '@/types/architecture.ts';
 import { ImportResult } from '@/utils/architectureImporter.ts';
 import { compileToNeuraxIR } from '@/utils/neuraxCompiler.ts';
+import { generateModelCode } from '@/utils/modelCodeGen.ts';
 import {
   serializeDesign,
   parseNeuraxFile,
@@ -82,7 +88,7 @@ import { getBlockDefaults, normalizeBlockParams } from '@/utils/blockDefaults.ts
 import { DEFAULT_HARDWARE_CONFIG, HardwareConfig, useHardware, validateHardwareConfig, ArchitectureFamily as HwFamily } from '@/contexts/HardwareContext.tsx';
 import { useAuth } from '@/contexts/AuthContext.tsx';
 import { explainAnalysisFailure, failureAsWarnings } from '@/services/compilerErrors.ts';
-import { analyze, analyzeStream, listProjects, createProject, updateProject, deleteProject, getCredits, type Project, type CreditInfo, type InferenceParams } from '@/services/neuraxApi.ts';
+import { analyze, analyzeStream, listProjects, createProject, updateProject, deleteProject, getCredits, type Project, type CreditInfo } from '@/services/neuraxApi.ts';
 import { useToast } from '@/hooks/use-toast.ts';
 import { getPluginLayers } from '@/plugins/registry.ts';
 import { hasAnalysisReportData } from '@/components/simulation/simulationData.ts';
@@ -975,7 +981,6 @@ const Index = () => {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectionRevision, setSelectionRevision] = useState(0);
   const [analysis, setAnalysis] = useState<AnalysisResult>(initialAnalysis);
-  const [compiledTopology, setCompiledTopology] = useState<Record<string, unknown> | undefined>(undefined);
   const [warnings, setWarnings] = useState<Warning[]>(initialWarnings);
   const [perLayer, setPerLayer] = useState<PerLayerBreakdownRow[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -988,6 +993,35 @@ const Index = () => {
 
   const [selectedArchitecture, setSelectedArchitecture] = useState<ArchitectureFamily>('transformer');
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<WorkspaceTab>('architecture');
+  /**
+   * The machine, and the data the model is being built for.
+   *
+   * Both are seeded from `mockRuntime` while the detection and profiling
+   * endpoints do not exist. They are held here rather than inside the Training
+   * workspace because neither belongs to it: the hardware strip is on screen in
+   * every workspace, and the dataset is what fills in the shape fields the
+   * Architecture tab would otherwise ask the user to type.
+   */
+  /**
+   * The machine, detected rather than assumed.
+   *
+   * This used to be `mockHardware` unconditionally — an RTX 4090 with 22.6 GB
+   * free, shown on every machine including ones with no discrete GPU at all.
+   * Every memory verdict, every "this fits", was computed against a card the
+   * user may not own.
+   *
+   * Now the service is asked, and the example profile is a labelled fallback
+   * for when it is not running: the studio's design surface works with no
+   * backend, so a missing service must not blank the toolbar — but it must
+   * not be mistaken for a real reading either, which is what
+   * `isExampleHardware` is for.
+   */
+  const [hardwareProfile, setHardwareProfile] = useState<HardwareProfile | null>(null);
+  const [isExampleHardware, setIsExampleHardware] = useState(false);
+  const [isMeasuring, setIsMeasuring] = useState(false);
+
+
+  const [datasetProfile, setDatasetProfile] = useState<DatasetProfile | null>(IS_MOCK ? mockImageDataset : null);
   const [activeRightPanelTab, setActiveRightPanelTab] = useState<RightPanelTabId>('architecture');
   const [jumpToIssuesSignal, setJumpToIssuesSignal] = useState(0);
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -1017,7 +1051,6 @@ const Index = () => {
   // once — `panelLoadGeneration` below forces a remount when a file is
   // opened, so a saved value actually reaches the sliders rather than only
   // updating state nothing rereads.
-  const [inferenceParams, setInferenceParams] = useState<InferenceParams | null>(null);
   const [timeMachineConfig, setTimeMachineConfig] = useState<TimeMachineConfig | null>(null);
   const [panelLoadGeneration, setPanelLoadGeneration] = useState(0);
   const [savedProjects, setSavedProjects] = useState<Project[]>([]);
@@ -1041,7 +1074,96 @@ const Index = () => {
   const [showDocumentation, setShowDocumentation] = useState(false);
   const [docSectionId, setDocSectionId] = useState<string | undefined>(undefined);
   const { toast } = useToast();
+
+  /**
+   * Measure this machine's sustained throughput.
+   *
+   * Explicit rather than automatic: it costs about half a second of real
+   * compute, and a studio that quietly ran a benchmark on every page load
+   * would be spending the user's machine without being asked. The result is
+   * cached by the service, so a second call is free.
+   */
+  const measureThisMachine = useCallback(async () => {
+    if (isExampleHardware || isMeasuring) return;
+    setIsMeasuring(true);
+    const measured = await measureHardware();
+    if (measured) {
+      setHardwareProfile(measured);
+    } else {
+      toast({
+        title: 'Could not measure this machine',
+        description: 'The local NEURAX service did not answer.',
+        variant: 'destructive',
+      });
+    }
+    setIsMeasuring(false);
+  }, [isExampleHardware, isMeasuring, toast]);
   const { config: hwConfig, setConfig: setHwConfig, updateConfig: updateHwConfig, triggerAttempt } = useHardware();
+
+  /**
+   * Make the detected machine the machine the analysis computes for.
+   *
+   * Without this the studio detected a laptop and went on computing against
+   * `DEFAULT_HARDWARE_CONFIG` — an RTX 4090 with 80 GB, a card that does not
+   * exist (a 4090 has 24) on a machine that has no discrete GPU at all. The
+   * target panel said "Intel UHD 620, detected" and the footer said
+   * "Analysing for RTX4090". Detection that does not reach the analysis is
+   * decoration.
+   *
+   * The memory mapping is the part worth stating. `gpuMemoryGb` is the budget
+   * every fit check divides by, so on a machine with a discrete card it is
+   * that card's VRAM — and on a CPU-only machine it is *system RAM*, because
+   * that is genuinely the memory the work would run in. Leaving the default
+   * 80 GB there would tell a 24 GB laptop that anything fits.
+   */
+  const applyDetectedHardware = useCallback(
+    (profile: HardwareProfile) => {
+      const gpu = primaryGpu(profile);
+      const GB = 1024 ** 3;
+
+      if (gpu && !gpu.integrated && gpu.vramTotalBytes != null) {
+        updateHwConfig({
+          hardware: gpu.name,
+          gpuMemoryGb: Math.round(gpu.vramTotalBytes / GB),
+          gpuCount: profile.gpus.filter((g) => !g.integrated).length || 1,
+          device: gpu.backend === 'cuda' ? 'cuda' : gpu.backend === 'rocm' ? 'rocm' : 'cpu',
+        });
+        return;
+      }
+
+      // No usable accelerator: the CPU is the target, and system RAM is the
+      // budget. Rounded down, because a design that exactly fills available
+      // memory does not run.
+      updateHwConfig({
+        hardware: profile.cpu.model,
+        gpuMemoryGb: Math.max(1, Math.floor(profile.ramAvailableBytes / GB)),
+        gpuCount: 1,
+        device: 'cpu',
+      });
+    },
+    [updateHwConfig],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    void detectHardware().then((profile) => {
+      if (cancelled) return;
+      if (profile) {
+        setHardwareProfile(profile);
+        setIsExampleHardware(false);
+        applyDetectedHardware(profile);
+      } else {
+        setHardwareProfile(mockHardware);
+        setIsExampleHardware(true);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+    // `applyDetectedHardware` is stable for the life of the page and this
+    // must run exactly once, on load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const toHwFamily = useCallback((fam: ArchitectureFamily): HwFamily => {
     switch (fam) {
@@ -1161,7 +1283,6 @@ const Index = () => {
     setActiveWorkspaceTab('architecture');
     initializationSourceRef.current = null;
     setOpenedInitialization(null);
-    setInferenceParams(null);
     setTimeMachineConfig(null);
     setPanelLoadGeneration((g) => g + 1);
     pendingConnectionsRef.current.clear();
@@ -1597,7 +1718,6 @@ params: params as Record<string, ParameterValue>,
       }
 
       // Send to backend — topology IS the full IR (env already embedded)
-      setCompiledTopology(ir as unknown as Record<string, unknown>);
       const { report } = await analyze({
         topology: ir as unknown as Record<string, unknown>,
       });
@@ -1727,8 +1847,6 @@ params: params as Record<string, ParameterValue>,
           })),
         ]);
       }
-
-      setCompiledTopology(ir as unknown as Record<string, unknown>);
 
       // Set initial compilation state
       setAnalysis(prev => prev ? {
@@ -2112,12 +2230,11 @@ params: params as Record<string, ParameterValue>,
       hardware: hwConfig,
       analysis,
       initialization: openedInitialization,
-      inference: inferenceParams,
       timeMachine: timeMachineConfig,
     }),
     [
       documentBaseName, selectedArchitecture, nodes, connections, groups, hwConfig, analysis,
-      openedInitialization, inferenceParams, timeMachineConfig,
+      openedInitialization, timeMachineConfig,
     ],
   );
 
@@ -2222,10 +2339,9 @@ params: params as Record<string, ParameterValue>,
     setPerLayer([]);
     setAnalysis(initialAnalysis);
     setOpenedInitializationFor(doc.initialization ?? null, design.nodes, design.connections);
-    setInferenceParams(doc.inference ?? null);
     setTimeMachineConfig(doc.timeMachine ?? null);
-    // Forces Inference Intelligence and Time Machine to remount: both panels
-    // stay mounted across the whole session, so without this their sliders
+    // Forces Time Machine to remount: the panel stays mounted across the whole
+    // session, so without this its sliders
     // would keep showing whatever was there before this file was opened —
     // the state above would be correct and the screen would still be wrong.
     setPanelLoadGeneration((g) => g + 1);
@@ -2309,7 +2425,6 @@ params: params as Record<string, ParameterValue>,
     initializationSourceRef.current = null;
     setOpenedInitialization(null);
     // Same reasoning: the project store doesn't carry these either.
-    setInferenceParams(null);
     setTimeMachineConfig(null);
     setPanelLoadGeneration((g) => g + 1);
     toast({ title: 'Project loaded', description: `Loaded "${project.name}".` });
@@ -2495,7 +2610,13 @@ params: params as Record<string, ParameterValue>,
     }
 
     if (name === 'navigate_to') {
-      const validTabs: WorkspaceTab[] = ['architecture', 'simulation', 'production', 'inference', 'timemachine'];
+      const validTabs: WorkspaceTab[] = [
+        'architecture',
+        'simulation',
+        'production',
+        'training',
+        'timemachine',
+      ];
       const tab = String(args.tab ?? '') as WorkspaceTab;
       if (!validTabs.includes(tab)) {
         console.warn(`Agent navigate_to: unknown tab "${tab}", ignoring`);
@@ -2678,6 +2799,8 @@ params: params as Record<string, ParameterValue>,
                 getSnapshot={agentGetSnapshot}
                 onToolEvent={handleAgentToolEvent}
                 projectId={currentProjectId}
+                hardware={hardwareProfile}
+                dataset={datasetProfile}
                 className="h-full"
               />
             </Suspense>
@@ -2700,6 +2823,8 @@ params: params as Record<string, ParameterValue>,
                     getSnapshot={agentGetSnapshot}
                     onToolEvent={handleAgentToolEvent}
                     projectId={currentProjectId}
+                    hardware={hardwareProfile}
+                    dataset={datasetProfile}
                     className="h-full"
                   />
                 </Suspense>
@@ -2826,6 +2951,9 @@ params: params as Record<string, ParameterValue>,
   return (
     <div className="h-screen flex flex-col bg-background">
       <TopNav
+        datasetProfile={datasetProfile}
+        detectedHardware={hardwareProfile}
+        onPickDataset={(selection) => setDatasetProfile(profileForSelection(selection))}
         onRunAnalysis={handleRunAnalysisStream}
         isAnalyzing={isAnalyzing}
         onNewCanvas={handleCreateNewCanvas}
@@ -2879,7 +3007,7 @@ params: params as Record<string, ParameterValue>,
           architectureContent={architectureContent}
           simulationContent={
             <Suspense fallback={null}>
-              <SimulationWorkspace nodes={nodes} connections={connections} analysis={analysis} perLayer={perLayer} warnings={warnings} topology={compiledTopology} />
+              <SimulationWorkspace nodes={nodes} connections={connections} analysis={analysis} perLayer={perLayer} warnings={warnings} />
             </Suspense>
           }
           productionContent={
@@ -2899,15 +3027,40 @@ params: params as Record<string, ParameterValue>,
               />
             </Suspense>
           }
-          inferenceContent={
+          trainingContent={
             <Suspense fallback={null}>
-              <InferenceIntelligence
-                key={`inference-${panelLoadGeneration}`}
-                architectureType={selectedArchitecture}
-                nodes={nodes}
-                connections={connections}
-                initialParams={inferenceParams ?? undefined}
-                onParamsChange={setInferenceParams}
+              <TrainingWorkspace
+                modelName={documentBaseName}
+                /**
+                 * The design, as PyTorch, generated on demand.
+                 *
+                 * Passed as a function rather than a value so the canvas is
+                 * read at the moment a run starts, not on every render of a
+                 * workspace nobody is looking at — generating a large model's
+                 * source is not free.
+                 */
+                onGenerateModel={() => {
+                  if (nodes.length === 0) return null;
+                  const generated = generateModelCode(nodes, connections, hwConfig, documentBaseName);
+                  return {
+                    code: generated.code,
+                    modelClassName: generated.modelClassName,
+                    totalParams: generated.totalParams,
+                    fullySupported: generated.fullySupported,
+                    unsupportedTypes: generated.unsupportedTypes,
+                    // One sample's shape, from the same hardware config the
+                    // analysis used — so the tensor the run feeds the model is
+                    // the tensor the analysis costed.
+                    inputShape: hwConfig.imgHeight && hwConfig.imgWidth
+                      ? [hwConfig.inChannels ?? 3, hwConfig.imgHeight, hwConfig.imgWidth]
+                      : [hwConfig.seqLen ?? 128],
+                    numClasses: hwConfig.numClasses ?? 10,
+                  };
+                }}
+                analysis={analysis}
+                hardware={hardwareProfile}
+                dataset={datasetProfile}
+                onChooseDataset={() => setDatasetProfile(mockImageDataset)}
               />
             </Suspense>
           }
@@ -3011,6 +3164,10 @@ params: params as Record<string, ParameterValue>,
       </Suspense>
 
       <SimulationTargetPanel
+        detected={hardwareProfile}
+        isExample={isExampleHardware}
+        isMeasuring={isMeasuring}
+        onMeasure={() => void measureThisMachine()}
         isOpen={showTargetPanel}
         onClose={() => setShowTargetPanel(false)}
       />

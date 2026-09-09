@@ -5,6 +5,7 @@ import {
   SelectItem,
   SelectTrigger,
 } from '@/components/ui/select.tsx';
+import { FamilyGlyph } from '@/components/architecture/FamilyGlyph.tsx';
 import { cn } from '@/lib/utils.ts';
 
 interface ArchitectureSelectorProps {
@@ -38,33 +39,45 @@ export function ArchitectureSelector({ value, onChange, className }: Architectur
         */}
         <div className="flex items-center gap-2 min-w-0">
           <div
-            className="w-5 h-5 rounded flex items-center justify-center shrink-0 text-[13px] leading-none"
-            style={{ backgroundColor: `${currentFamily?.color}20` }}
+            className="w-6 h-6 rounded-[5px] flex items-center justify-center shrink-0"
+            style={{ backgroundColor: `${currentFamily?.color}1f` }}
           >
-            {currentFamily?.emoji ?? '🧠'}
+            {currentFamily ? (
+              <FamilyGlyph
+                family={currentFamily.id}
+                color={currentFamily.color}
+                className="w-[18px] h-[18px] text-foreground/70"
+              />
+            ) : null}
           </div>
           <span className="truncate text-sm font-medium">
             {currentFamily?.name ?? 'Select architecture'}
           </span>
         </div>
       </SelectTrigger>
-      <SelectContent className="bg-popover border-border z-50">
+      <SelectContent className="bg-popover border-border z-50 max-h-[70vh]">
         {ARCHITECTURE_FAMILIES.map((family) => (
           <SelectItem
             key={family.id}
             value={family.id}
             className="cursor-pointer focus:bg-secondary"
           >
-            <div className="flex items-center gap-3 py-0.5">
+            <div className="flex items-center gap-3 py-1">
+              {/* The glyph gets real room here — it is a diagram, and at the
+                  trigger's size only its silhouette survives. */}
               <div
-                className="w-6 h-6 rounded flex items-center justify-center text-[15px] leading-none"
-                style={{ backgroundColor: `${family.color}20` }}
+                className="w-9 h-9 rounded-[6px] flex items-center justify-center shrink-0"
+                style={{ backgroundColor: `${family.color}1f` }}
               >
-                {family.emoji}
+                <FamilyGlyph
+                  family={family.id}
+                  color={family.color}
+                  className="w-[26px] h-[26px] text-foreground/70"
+                />
               </div>
-              <div className="flex flex-col">
-                <span className="text-sm font-medium">{family.name}</span>
-                <span className="text-[10px] text-muted-foreground">{family.description}</span>
+              <div className="flex flex-col min-w-0">
+                <span className="text-sm font-medium leading-tight">{family.name}</span>
+                <span className="text-[10px] text-muted-foreground leading-tight mt-0.5">{family.description}</span>
               </div>
             </div>
           </SelectItem>

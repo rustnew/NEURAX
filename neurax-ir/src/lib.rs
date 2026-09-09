@@ -228,6 +228,7 @@ pub enum DiagnosticCode {
     W006, // Inefficient parallelism
     W007, // Cross-layer shape mismatch
     W008, // Orphaned layer — connected to nothing
+    W009, // Embedding table dominates the parameter count
 
     // Info (I001-I003) - Observations
     I001, // GQA detected
@@ -261,6 +262,7 @@ impl DiagnosticCode {
             Self::W006 => "W006",
             Self::W007 => "W007",
             Self::W008 => "W008",
+            Self::W009 => "W009",
             Self::I001 => "I001",
             Self::I002 => "I002",
             Self::I003 => "I003",
@@ -292,6 +294,7 @@ impl DiagnosticCode {
                 "A layer's declared input shape does not match the previous layer's output shape"
             }
             Self::W008 => "Layer is not connected to any other layer, but is still costed",
+            Self::W009 => "Most parameters sit in the embedding table rather than in the layers",
             Self::I001 => "Grouped Query Attention (GQA) detected",
             Self::I002 => "Mixture of Experts (MoE) detected",
             Self::I003 => "Flash Attention detected",

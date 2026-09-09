@@ -11,15 +11,15 @@ const MODULE_FOR: Record<string, string> = {
   overview: 'GlobalResultsCharts',
   perlayer: 'PerLayerCharts',
   memory: 'MemoryCharts',
-  training: 'TrainingCharts',
   optimization: 'OptimizationCharts',
-  comparison: 'ComparisonCharts',
   diagnostics: 'DebuggingCharts',
 };
 
+/** Views are being rewritten onto `ChartSlot`, which is a `ChartCard` that
+ *  also carries its own empty state; both spellings count as one chart. */
 function countChartCards(module: string): number {
   const source = readFileSync(join(here, 'categories', `${module}.tsx`), 'utf8');
-  return (source.match(/<ChartCard/g) ?? []).length;
+  return (source.match(/<ChartCard|<ChartSlot/g) ?? []).length;
 }
 
 describe('simulation category tabs', () => {

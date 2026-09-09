@@ -27,6 +27,10 @@ import { AuthControl } from '@/components/auth/AuthControl.tsx';
 import { NeuraxLogo } from '@/components/brand/NeuraxLogo.tsx';
 import { ThemeToggle } from '@/components/layout/ThemeToggle.tsx';
 import { VariantPresetsPanel } from '@/components/catalog/VariantPresetsPanel.tsx';
+import { DatasetPicker } from '@/components/layout/DatasetPicker.tsx';
+import { cn } from '@/lib/utils.ts';
+import { isCpuOnly, primaryGpu } from '@/types/runtime.ts';
+import type { DatasetKind, DatasetProfile, HardwareProfile } from '@/types/runtime.ts';
 import { ArchitectureFamily } from '@/types/plugins.ts';
 import { VariantPreset } from '@/types/catalog.ts';
 import { CanvasNode, Connection } from '@/types/architecture.ts';
@@ -43,6 +47,16 @@ import {
 } from '@/components/ui/sheet.tsx';
 
 interface TopNavProps {
+  /** The dataset the design is being built for, and how to change it. Sits
+   *  beside Templates because the two answer the same kind of question: what
+   *  the design starts from, and what it has to fit. */
+  datasetProfile?: DatasetProfile | null;
+  onPickDataset?: (selection: { displayPath: string; kind: DatasetKind; fileCount: number }) => void;
+  /** What was detected on this machine. When present, the Target control is
+   *  labelled with the real card instead of the word "Target" — the analysis
+   *  runs against the machine you have unless you say otherwise, and the
+   *  control should read that way. */
+  detectedHardware?: HardwareProfile | null;
   onRunAnalysis: () => void;
   isAnalyzing: boolean;
   onNewCanvas?: () => void;
@@ -169,6 +183,9 @@ export function DocumentNameField({
 }
 
 export function TopNav({
+  datasetProfile,
+  onPickDataset,
+  detectedHardware,
   onRunAnalysis,
   isAnalyzing,
   onNewCanvas,
@@ -209,12 +226,51 @@ export function TopNav({
 }: TopNavProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const canClearCanvas = nodes.length > 0 || connections.length > 0;
+  const detectedGpu = primaryGpu(detectedHardware ?? null);
+  const cpuOnly = isCpuOnly(detectedHardware ?? null);
+  const gb = (bytes: number) => `${(bytes / 1024 ** 3).toFixed(0)} GB`;
+
+  // Deliberately not a ternary chain inline in the markup: which of these
+  // three a machine is decides what the whole studio analyses against, and it
+  // should be readable in one place.
+  const { targetLabel, targetDetail, targetTitle } = (() => {
+    if (!detectedHardware) {
+      return {
+        targetLabel: 'Target',
+        targetDetail: null as string | null,
+        targetTitle: 'Detecting this machine…',
+      };
+    }
+    if (cpuOnly) {
+      return {
+        targetLabel: detectedHardware.cpu.model.replace(/\(R\)|\(TM\)|CPU|@.*$/g, '').trim(),
+        targetDetail: `${detectedHardware.cpu.cores}c · ${gb(detectedHardware.ramAvailableBytes)} free`,
+        targetTitle: `No accelerator detected — analysing for this CPU (${detectedHardware.cpu.model}, ${detectedHardware.cpu.cores} cores, ${detectedHardware.cpu.threads} threads).`,
+      };
+    }
+    if (detectedGpu?.integrated) {
+      return {
+        targetLabel: detectedGpu.name,
+        targetDetail: `shares ${gb(detectedHardware.ramAvailableBytes)}`,
+        targetTitle: `${detectedGpu.name} is integrated: it has no dedicated VRAM and borrows system memory.`,
+      };
+    }
+    const free = detectedGpu?.vramFreeBytes;
+    return {
+      targetLabel: detectedGpu?.name ?? 'Target',
+      targetDetail: free != null ? `${gb(free)} free` : null,
+      targetTitle:
+        free != null
+          ? `Analysing for ${detectedGpu?.name} — ${(free / 1024 ** 3).toFixed(1)} GB free.`
+          : `Analysing for ${detectedGpu?.name}. The driver did not report its memory.`,
+    };
+  })();
 
   return (
     <header className="h-12 bg-card border-b border-border flex items-center justify-between gap-2 px-2 sm:px-4">
       {/* Left - Logo & Name */}
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-        <NeuraxLogo size={20} variant="mark" showText={false} />
+        <NeuraxLogo size={30} variant="mark" showText={false} />
         <h1 className="text-xs sm:text-sm font-bold tracking-tight" style={{ color: 'hsl(var(--foreground))' }}>
           NEURAX
         </h1>
@@ -263,6 +319,41 @@ export function TopNav({
             />
           </PopoverContent>
         </Popover>
+
+        {onPickDataset ? (
+          <DatasetPicker profile={datasetProfile ?? null} onPick={onPickDataset} />
+        ) : null}
+
+        {/*
+          What the analysis is computed for, named on the toolbar.
+
+          Three states, because a machine really has three. A discrete card
+          shows its free VRAM, which is the figure that decides whether a
+          design starts. An integrated part has no VRAM of its own — it
+          borrows system memory — so showing "0 GB free" would be a lie in the
+          most alarming possible direction; it shows the shared-memory pool
+          instead. A machine with no accelerator names its CPU, because that
+          is genuinely what the work would run on, and pretending otherwise is
+          how a user ends up designing for hardware they do not have.
+        */}
+        <Button
+          variant="ghost"
+          size="sm"
+          className={cn(
+            'text-muted-foreground hover:text-foreground',
+            detectedHardware && 'text-foreground',
+          )}
+          onClick={onSelectTarget}
+          title={targetTitle}
+        >
+          <Cpu className={cn('w-4 h-4 mr-1.5', detectedHardware && 'text-primary')} />
+          <span className="max-w-[132px] truncate">{targetLabel}</span>
+          {targetDetail ? (
+            <span className="ml-1.5 font-mono text-[10px] text-muted-foreground tabular-nums shrink-0">
+              {targetDetail}
+            </span>
+          ) : null}
+        </Button>
 
         <div className="h-6 w-px bg-border" />
 
@@ -447,16 +538,6 @@ export function TopNav({
           >
             <SlidersHorizontal className="w-4 h-4 mr-1.5" />
             Hyperparameters
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-muted-foreground hover:text-foreground"
-            onClick={onSelectTarget}
-            title="Choose the chip every metric is computed for"
-          >
-            <Cpu className="w-4 h-4 mr-1.5" />
-            Target
           </Button>
           <Button
             variant="ghost"

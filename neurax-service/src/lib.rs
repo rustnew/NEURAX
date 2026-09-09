@@ -285,6 +285,185 @@ struct HardwareDetailEntry {
     launch_year: u32,
 }
 
+/// What machine is this, and — once measured — what can it do?
+///
+/// Two routes rather than one, because the two halves cost very differently.
+/// Detection reads `/proc` and asks the graphics driver: microseconds, safe to
+/// call on every page load. Measurement runs two compute kernels for about
+/// half a second, so it is a separate, explicit call — and it caches, so the
+/// second caller pays nothing.
+///
+/// The spec lookup happens here rather than in the probe. `neurax-probe`
+/// reads hardware and knows nothing about NEURAX's database; this handler owns
+/// the database, so it is the right place to decide whether a detected part is
+/// one we hold published figures for. That is what `recognised` means, and
+/// setting it is the whole reason the two are separate crates.
+async fn hardware_detect() -> impl Responder {
+    let mut profile = neurax_probe::detect();
+    resolve_against_database(&mut profile);
+    HttpResponse::Ok().json(profile)
+}
+
+/// Measure this machine's sustained throughput, and remember it.
+///
+/// Answers with the full profile rather than the measurement alone, so the
+/// caller ends up holding one object that describes the machine completely
+/// instead of having to merge two.
+async fn hardware_measure() -> impl Responder {
+    let mut profile = neurax_probe::detect();
+    resolve_against_database(&mut profile);
+    profile.compute = Some(neurax_probe::measure_cached(&profile.cpu.model));
+    HttpResponse::Ok().json(profile)
+}
+
+/// Mark the detected accelerators the database has published figures for.
+///
+/// Drivers report "NVIDIA GeForce RTX 4090" where the database says
+/// "RTX4090", so the comparison ignores spaces, punctuation and the vendor
+/// prefix — an exact match would declare every real card unknown and throw
+/// away the whole specification sheet.
+fn resolve_against_database(profile: &mut neurax_probe::MachineProfile) {
+    let db = neurax_hardware_db::HardwareDatabase::new();
+    let normalise = |name: &str| -> String {
+        name.to_lowercase()
+            .replace("nvidia", "")
+            .replace("geforce", "")
+            .replace("amd", "")
+            .replace("radeon", "")
+            .replace("intel", "")
+            .chars()
+            .filter(|c| c.is_ascii_alphanumeric())
+            .collect()
+    };
+    let known: Vec<String> = db.list_gpus().iter().map(|g| normalise(&g.name)).collect();
+    for gpu in &mut profile.gpus {
+        let wanted = normalise(&gpu.name);
+        gpu.recognised = known.iter().any(|k| *k == wanted);
+    }
+    if profile.gpus.iter().any(|g| !g.recognised) {
+        profile.notes.push(
+            "NEURAX holds no published specification for at least one detected accelerator, so its \
+             throughput has to be measured rather than looked up."
+                .into(),
+        );
+    }
+}
+
+use serde_json::json;
+
+// ─── Training runs ──────────────────────────────────────────────────────────
+//
+// The studio is a viewer onto a directory. Every handler below reads or
+// writes files under the runs root and holds no state of its own — which is
+// what lets a run survive the service being restarted, and lets two studios
+// look at the same run without either one owning it.
+
+/// POST /training/runs — create a run directory and start training in it.
+///
+/// The model arrives as generated PyTorch rather than being generated here.
+/// The studio's `modelCodeGen` is verified against the analysis
+/// (`verifyCodegenAgainstAnalysis`), and reimplementing it in Rust would put
+/// a second source of truth behind exactly the number the Accuracy view
+/// exists to check.
+async fn training_start(body: web::Json<neurax_runtime::StartRequest>) -> impl Responder {
+    let created = match neurax_runtime::create_run(&body) {
+        Ok(state) => state,
+        Err(e) => return HttpResponse::BadRequest().json(json!({ "error": e.to_string() })),
+    };
+    match neurax_runtime::start_run(&created) {
+        Ok(state) => HttpResponse::Ok().json(state),
+        // The directory survives a failed spawn on purpose: what was about to
+        // run is still on disk to look at, rather than vanishing with the
+        // error message.
+        Err(e) => HttpResponse::InternalServerError()
+            .json(json!({ "error": e.to_string(), "run": created })),
+    }
+}
+
+/// GET /training/runs — every run on this machine, newest first.
+async fn training_list() -> impl Responder {
+    HttpResponse::Ok().json(neurax_runtime::list_runs())
+}
+
+/// GET /training/runs/{id} — one run, with everything the studio draws.
+///
+/// `after` lets a reattaching studio ask only for steps it has not seen. A
+/// run of 100 000 steps would otherwise re-send its whole history on every
+/// poll, which is both slow and the reason live views stutter.
+/// Where the caller got to last time, in bytes.
+///
+/// Byte offset rather than step number: the service seeks past what the
+/// studio already has instead of re-reading and re-parsing the whole history
+/// on every poll. The studio does not interpret the number, it just sends
+/// back the `nextOffset` it was given — the same contract as tailing a log.
+#[derive(serde::Deserialize)]
+struct StepQuery {
+    #[serde(default)]
+    offset: u64,
+}
+
+async fn training_get(path: web::Path<String>, query: web::Query<StepQuery>) -> impl Responder {
+    let id = path.into_inner();
+    let dir = match neurax_runtime::run_dir(&id) {
+        Ok(dir) => dir,
+        Err(e) => return HttpResponse::NotFound().json(json!({ "error": e.to_string() })),
+    };
+    let state = match neurax_runtime::read_state_reconciled(&dir) {
+        Ok(state) => state,
+        Err(e) => return HttpResponse::InternalServerError().json(json!({ "error": e.to_string() })),
+    };
+    let (steps, next_offset) =
+        neurax_runtime::read_steps_from(&dir, query.offset).unwrap_or_default();
+    HttpResponse::Ok().json(json!({
+        "state": state,
+        "model": neurax_runtime::read_model_built(&dir),
+        "steps": steps,
+        "nextOffset": next_offset,
+        "checkpoints": neurax_runtime::list_checkpoints(&dir),
+    }))
+}
+
+#[derive(serde::Deserialize)]
+struct ControlBody {
+    command: neurax_runtime::Control,
+}
+
+/// POST /training/runs/{id}/control — pause, resume or stop.
+///
+/// Writes a file the training loop reads between steps, rather than signalling
+/// the process. A signal would freeze it mid-kernel with memory held and no
+/// checkpoint written; a file lets it stop at a step boundary, which is the
+/// only place stopping is clean.
+///
+/// Resuming an *interrupted* run is different from resuming a paused one:
+/// nothing is listening, so the process has to be started again. It picks up
+/// from its last checkpoint.
+async fn training_control(path: web::Path<String>, body: web::Json<ControlBody>) -> impl Responder {
+    let id = path.into_inner();
+    let dir = match neurax_runtime::run_dir(&id) {
+        Ok(dir) => dir,
+        Err(e) => return HttpResponse::NotFound().json(json!({ "error": e.to_string() })),
+    };
+    if let Err(e) = neurax_runtime::write_control(&dir, body.command) {
+        return HttpResponse::InternalServerError().json(json!({ "error": e.to_string() }));
+    }
+
+    let state = match neurax_runtime::read_state_reconciled(&dir) {
+        Ok(state) => state,
+        Err(e) => return HttpResponse::InternalServerError().json(json!({ "error": e.to_string() })),
+    };
+
+    if matches!(body.command, neurax_runtime::Control::Run)
+        && state.status == neurax_runtime::RunStatus::Interrupted
+    {
+        return match neurax_runtime::start_run(&state) {
+            Ok(restarted) => HttpResponse::Ok().json(restarted),
+            Err(e) => HttpResponse::InternalServerError().json(json!({ "error": e.to_string() })),
+        };
+    }
+    HttpResponse::Ok().json(state)
+}
+
 async fn hardware_list() -> impl Responder {
     let db = neurax_hardware_db::HardwareDatabase::new();
     let gpus = db.list_gpus();
@@ -4958,6 +5137,12 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
         .route("/stripe/webhook", web::post().to(stripe_webhook))
         .route("/health", web::get().to(health))
         .route("/hardware", web::get().to(hardware_list))
+        .route("/hardware/detect", web::get().to(hardware_detect))
+        .route("/hardware/measure", web::post().to(hardware_measure))
+        .route("/training/runs", web::get().to(training_list))
+        .route("/training/runs", web::post().to(training_start))
+        .route("/training/runs/{id}", web::get().to(training_get))
+        .route("/training/runs/{id}/control", web::post().to(training_control))
         .route("/plugin/validate", web::post().to(plugin_validate))
         .route("/presets", web::get().to(get_presets))
         .route("/presets/{id}", web::get().to(get_preset))

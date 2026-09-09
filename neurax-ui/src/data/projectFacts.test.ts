@@ -9,9 +9,23 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CATALOGUE, BLOCK_COUNT, FAMILY_COUNT, HERO_STATS, IR_PASS_COUNT } from './projectFacts';
+import {
+  CATALOGUE,
+  BLOCK_COUNT,
+  ENVIRONMENT,
+  FAMILY_COUNT,
+  HERO_STATS,
+  IR_PASS_COUNT,
+  ON_YOUR_MACHINE,
+  WORKSPACES,
+} from './projectFacts';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+/** A file from the studio's own source, so a claim can be checked against
+ *  the code that implements it rather than against a copy. */
+const source = (relative: string) =>
+  readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', relative), 'utf8');
+
 const catalogue = JSON.parse(
   readFileSync(join(repoRoot, 'neurax-agent', 'catalogue.json'), 'utf8'),
 );
@@ -57,5 +71,36 @@ describe('project facts', () => {
       expect(stat.label).toBeTruthy();
       expect(stat.detail.length).toBeGreaterThan(20);
     }
+  });
+
+  it('names exactly the workspaces the studio has, in the same order', () => {
+    // The claim that broke this page was "from transformers to spiking
+    // networks", advertising a family that had been deleted. The same drift
+    // is possible for workspaces — Inference Intelligence was removed and the
+    // page would have gone on listing it — so the list is checked against the
+    // component that draws the tabs rather than maintained by hand.
+    const tabs = source('components/layout/WorkspaceTabs.tsx');
+    const labels = [...tabs.matchAll(/label: '([^']+)'/g)].map((m) => m[1]);
+    expect(WORKSPACES.map((w) => w.name)).toEqual(labels);
+  });
+
+  it('describes every workspace and every part of the environment', () => {
+    for (const workspace of WORKSPACES) {
+      expect(workspace.does.length, `${workspace.name} has no description`).toBeGreaterThan(20);
+    }
+    for (const part of ENVIRONMENT) {
+      expect(part.detail.length, `${part.name} has no description`).toBeGreaterThan(20);
+    }
+    for (const item of ON_YOUR_MACHINE) {
+      expect(item.detail.length, `${item.title} has no description`).toBeGreaterThan(20);
+    }
+  });
+
+  it('claims no architecture family the catalogue does not define', () => {
+    // Any family named in prose has to exist. `spiking` is checked by name
+    // because it is the one that was advertised for real.
+    const landing = source('pages/Landing.tsx');
+    const prose = landing.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+    expect(prose.toLowerCase()).not.toContain('spiking');
   });
 });

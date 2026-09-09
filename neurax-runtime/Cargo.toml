@@ -1,0 +1,16 @@
+[package]
+name = "neurax-runtime"
+version = "0.15.0"
+edition = "2021"
+description = "Runs a design, and survives the studio that started it."
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[dev-dependencies]
+tempfile = { workspace = true }

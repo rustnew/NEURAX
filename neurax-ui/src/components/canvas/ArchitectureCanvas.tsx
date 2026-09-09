@@ -942,7 +942,30 @@ export function ArchitectureCanvas({
 
               return (
                 <g
-                  style={{ cursor: 'pointer' }}
+                  /**
+                   * `pointerEvents: 'all'` is load-bearing, not decoration.
+                   *
+                   * The whole `<svg>` layer is set to `pointer-events: none` so
+                   * that it never intercepts clicks meant for the blocks drawn
+                   * above it. Every element in here that *does* want clicks has
+                   * to turn them back on for itself — the connection's own
+                   * invisible hit-area path does exactly that with
+                   * `pointerEvents: 'stroke'`.
+                   *
+                   * This group did not, so it inherited `none` and received
+                   * nothing. That produced precisely the reported behaviour:
+                   * clicking a link selected it and turned it red, because the
+                   * hit-area path works, and then the delete button that
+                   * appeared could not be clicked at all, because it was inert.
+                   * The button was visible, correct, and dead.
+                   *
+                   * `all` rather than `auto`: `auto` resolves to
+                   * `visiblePainted`, which depends on the element being
+                   * painted, and the target below is a transparent circle.
+                   * `all` does not care about paint, so the hit ring works
+                   * whatever its fill.
+                   */
+                  style={{ cursor: 'pointer', pointerEvents: 'all' }}
                   onClick={(e) => {
                     e.stopPropagation();
                     handleDeleteConnection(conn.id);
@@ -952,7 +975,7 @@ export function ArchitectureCanvas({
                       own hit-area: a 14px circle is a small, precise target
                       at typical zoom levels, and a click a few pixels off
                       the visible edge should still register. */}
-                  <circle cx={cx} cy={cy} r={20} fill="transparent" />
+                  <circle cx={cx} cy={cy} r={20} fill="transparent" style={{ pointerEvents: 'all' }} />
                   <circle
                     cx={cx}
                     cy={cy}

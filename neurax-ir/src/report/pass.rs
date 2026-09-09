@@ -728,7 +728,7 @@ fn generate_diagnostics(metrics: &AllMetrics, memory: &MemoryIR) -> Vec<Diagnost
             diagnostics.push(Diagnostic {
                 category: DiagnosticCategory::ArchitectureInefficiency,
                 severity: Severity::Warning,
-                code: DiagnosticCode::W002,
+                code: DiagnosticCode::W009,
                 message: format!(
                     "The embedding table is {:.0}% of all parameters ({} x {}). \
                      Most capacity sits in lookup rather than computation.",

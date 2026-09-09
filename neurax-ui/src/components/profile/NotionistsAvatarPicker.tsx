@@ -96,22 +96,72 @@ export function resolveAvatar(stored: string | null | undefined): AvatarOption {
 interface AvatarPickerProps {
   selectedId?: string;
   onSelect: (avatarId: string) => void;
+  /**
+   * `strip` shows one scrollable row with no heading; `grid` shows all
+   * thirty-six with their names.
+   *
+   * The grid was the only mode, and in the sign-in dialog it was the largest
+   * thing on screen — thirty-six named tiles above the name and email fields
+   * that are the actual point of the form. Picking a pattern is a pleasant
+   * detail, not the task; it gets a row, and the full set stays one click
+   * away for anyone who wants to browse it.
+   */
+  variant?: 'grid' | 'strip';
 }
 
-export const NotionistsAvatarPicker = ({ selectedId, onSelect }: AvatarPickerProps) => {
+export const NotionistsAvatarPicker = ({
+  selectedId,
+  onSelect,
+  variant = 'grid',
+}: AvatarPickerProps) => {
   const selected = resolveAvatar(selectedId);
+
+  if (variant === 'strip') {
+    // The right edge fades instead of slicing a tile in half. A hard cut
+    // through the middle of an avatar looks like a layout fault; a fade says
+    // there is more and it scrolls.
+    return (
+      <div
+        className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin w-full min-w-0"
+        role="radiogroup"
+        aria-label="Avatar"
+        style={{
+          maskImage: 'linear-gradient(to right, black calc(100% - 32px), transparent)',
+          WebkitMaskImage: 'linear-gradient(to right, black calc(100% - 32px), transparent)',
+        }}
+      >
+        {AVATAR_OPTIONS.map((avatar) => {
+          const isSelected = selected.id === avatar.id;
+          return (
+            <button
+              key={avatar.id}
+              type="button"
+              role="radio"
+              aria-checked={isSelected}
+              aria-label={avatar.name}
+              title={avatar.name}
+              onClick={() => onSelect(avatar.id)}
+              className={cn(
+                'shrink-0 p-1 rounded-[7px] border transition-all duration-150',
+                isSelected
+                  ? 'border-primary bg-primary/10'
+                  : 'border-border/60 bg-card hover:border-border',
+              )}
+            >
+              <div className="text-foreground">
+                <Identicon seed={avatar.seed} size={28} />
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
-      <div className="mb-4">
-        <h3 className="text-[15px] font-semibold text-foreground">Choose your avatar</h3>
-        <p className="text-[12px] mt-0.5 text-muted-foreground">
-          {AVATAR_OPTIONS.length} generated patterns — each drawn from its own seed.
-        </p>
-      </div>
-
       <div
-        className="grid grid-cols-4 sm:grid-cols-6 gap-2.5 max-h-[320px] overflow-y-auto pr-1 scrollbar-thin"
+        className="grid grid-cols-4 sm:grid-cols-6 gap-2.5 max-h-[280px] overflow-y-auto pr-1 scrollbar-thin"
         role="radiogroup"
         aria-label="Avatar"
       >

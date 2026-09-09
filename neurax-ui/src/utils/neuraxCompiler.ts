@@ -3136,6 +3136,24 @@ export function compileToNeuraxIR(
   };
 
   putSize('hidden_size', hiddenDim);
+  /**
+   * The same width, under the name the compiler's own config actually reads.
+   *
+   * `GlobalParams` in `neurax-parser` declares `embedding_dim` and has no
+   * `hidden_size` field at all, so the key sent above lands in the flattened
+   * `extra` bag and never reaches the typed value. Everything keyed off the
+   * typed field therefore saw zero: `build_kv_cache_scaling(num_layers,
+   * hidden_size)` returns an empty vector on a zero width, which is why every
+   * report — every benchmark result in the repository included — carries
+   * `"kv_cache_scaling": []`, and why the KV-cache chart was blank for models
+   * that plainly have a KV cache.
+   *
+   * Sending both names is the fix that belongs on this side: the client knows
+   * the width, and which of the two spellings a given consumer reads is not
+   * something it should have to guess. `hidden_size` stays because other
+   * formulas read it out of `extra`.
+   */
+  putSize('embedding_dim', hiddenDim);
   putSize('num_layers', numLayers);
   if (numDenseLayers != null) global_params.num_dense_layers = numDenseLayers;
   putSize('num_decoder_layers', numDecoderLayers);

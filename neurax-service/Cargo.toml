@@ -18,6 +18,8 @@ neurax-core = { version = "0.15.0", path = "../neurax-core" }
 neurax-parser = { version = "0.15.0", path = "../neurax-parser" }
 neurax-ir = { version = "0.15.0", path = "../neurax-ir" }
 neurax-hardware-db = { version = "0.15.0", path = "../neurax-hardware-db" }
+neurax-probe = { version = "0.15.0", path = "../neurax-probe" }
+neurax-runtime = { version = "0.15.0", path = "../neurax-runtime" }
 actix-web = "4"
 actix-ws = "0.2"
 actix-cors = "0.7"

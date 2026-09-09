@@ -1,147 +1,87 @@
+/**
+ * The NEURAX mark.
+ *
+ * Replaces a hand-drawn SVG spider in an amber gradient — a placeholder that
+ * had outlived its purpose and no longer matched anything: not the product's
+ * name, not its palette, and not the identity that now exists.
+ *
+ * ## Why the mark is an image and the word is text
+ *
+ * The pangolin is a rendered illustration — layered scales, gradients, a glow
+ * — and nothing is gained by tracing it into SVG paths that would be larger
+ * than the PNG and still not editable. The word beside it is different: as
+ * live text it inherits `currentColor`, so it is the right colour in every
+ * theme, at every size, with no second asset to keep in step. A wordmark
+ * baked into an image is a wordmark that is white on a white page.
+ *
+ * ## Why there are two files
+ *
+ * The artwork is silver and acid green on black. Measured against the themes
+ * it has to survive: on the dark ones it is exactly as designed; on white, a
+ * quarter of it is above 200 luminance and simply vanishes, and the rest reads
+ * as pale grey on pale grey.
+ *
+ * A dark tile behind it was the first fix and it was a compromise — a black
+ * square on a white page is a lockup, not a logo. `neurax-mark-light` is the
+ * same illustration with its *lightness* inverted and nothing else: hue and
+ * saturation are untouched, so the silver becomes charcoal and the acid green
+ * stays acid green. A plain colour inversion was the obvious alternative and
+ * is wrong — it inverts hue too, and turns the green magenta.
+ *
+ * The right file is chosen by the theme, except where a surface paints its own
+ * ground regardless of it. The landing page is always dark whatever the studio
+ * is set to, so it asks for the variant it needs rather than inheriting one
+ * that would be invisible on it.
+ *
+ * The source `logo.png` could not be used directly: it is a near-black square
+ * at roughly two-thirds opacity across the whole canvas — 0.5% of its pixels
+ * are fully transparent and none are fully opaque — so dropping it anywhere
+ * would paint a dark translucent box. Both files here are the mark cut out of
+ * it with a real alpha channel and the halo removed.
+ */
+import { cn } from '@/lib/utils.ts';
+
 export interface NeuraxLogoProps {
   size?: number;
   className?: string;
   showText?: boolean;
   variant?: 'mark' | 'full';
+  /**
+   * Which ground the logo is being placed on.
+   *
+   * `auto` follows the studio's theme, which is right almost everywhere. A
+   * surface that paints its own background regardless of the theme has to say
+   * so, or it gets the variant for the theme rather than the one for the
+   * surface — dark ink on a dark page.
+   */
+  tone?: 'auto' | 'onDark' | 'onLight';
 }
 
-const spiderPath = `
-  M 36 18
-  C 28 18, 22 24, 22 32
-  C 22 40, 28 46, 36 46
-  C 40 46, 44 44, 46 41
-  L 54 41
-  C 56 44, 60 46, 64 46
-  C 72 46, 78 40, 78 32
-  C 78 24, 72 18, 64 18
-  Z
-`;
+/** Light artwork, for dark surfaces. */
+const MARK_ON_DARK = '/neurax-mark.png';
+/** Dark artwork, for light surfaces. */
+const MARK_ON_LIGHT = '/neurax-mark-light.png';
 
-const abdomenPath = `
-  M 38 42
-  C 30 42, 24 52, 26 64
-  C 28 76, 36 84, 46 86
-  L 54 86
-  C 64 84, 72 76, 74 64
-  C 76 52, 70 42, 62 42
-  Z
-`;
+function Mark({ size, tone = 'auto' }: { size: number; tone?: 'auto' | 'onDark' | 'onLight' }) {
+  const common = {
+    alt: '',
+    width: size,
+    height: size,
+    draggable: false,
+    style: { width: size, height: size },
+  } as const;
 
-function Leg({ transform }: { transform: string }) {
+  if (tone === 'onDark') return <img src={MARK_ON_DARK} {...common} className="block select-none" />;
+  if (tone === 'onLight') return <img src={MARK_ON_LIGHT} {...common} className="block select-none" />;
+
+  // Both are in the markup and one is hidden, rather than reading the theme
+  // from a context: the correct one is painted on the first frame, with no
+  // flash of the wrong artwork while a provider resolves.
   return (
-    <path
-      d="M 0 0 L 8 -4 L 16 2 L 22 -2"
-      fill="none"
-      stroke="#d65d0e"
-      strokeWidth="2.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      transform={transform}
-    />
-  );
-}
-
-function renderSpiderMark(size: number, className: string) {
-  const s = size;
-  const gs = Math.max(s, 24);
-
-  return (
-    <svg
-      width={s || gs}
-      height={s || gs}
-      viewBox="-25 -25 150 150"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={className}
-      style={{ filter: 'drop-shadow(0 0 8px rgba(215,153,33,0.2))' }}
-    >
-      <defs>
-        <radialGradient id="spider-body-grad" cx="50%" cy="40%" r="60%">
-          <stop offset="0%" stopColor="#d79921" />
-          <stop offset="70%" stopColor="#b57614" />
-          <stop offset="100%" stopColor="#8f6d11" />
-        </radialGradient>
-        <radialGradient id="spider-abdomen-grad" cx="50%" cy="30%" r="65%">
-          <stop offset="0%" stopColor="#d79921" stopOpacity="0.9" />
-          <stop offset="60%" stopColor="#b57614" stopOpacity="0.95" />
-          <stop offset="100%" stopColor="#7c5f0e" />
-        </radialGradient>
-        <filter id="spider-eye-glow">
-          <feGaussianBlur stdDeviation="1.5" result="blur" />
-          <feMerge>
-            <feMergeNode in="blur" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
-        <filter id="spider-glow">
-          <feGaussianBlur stdDeviation="1.5" result="blur" />
-          <feMerge>
-            <feMergeNode in="blur" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
-      </defs>
-
-      <g transform="translate(50, 50) scale(1.5) translate(-50, -50)">
-      {/* Web thread hanging from spinnerets */}
-      <path
-        d="M 50 86 C 50 90, 48 94, 46 98"
-        stroke="#83a598"
-        strokeWidth="0.6"
-        strokeLinecap="round"
-        opacity="0.4"
-        fill="none"
-      />
-      <circle cx="46" cy="98" r="0.8" fill="#83a598" opacity="0.6" />
-
-      {/* Legs - back pair */}
-      <Leg transform="translate(32, 32) rotate(-140)" />
-      <Leg transform="translate(68, 32) rotate(-40)" />
-
-      {/* Legs - middle pair */}
-      <Leg transform="translate(30, 38) rotate(175)" />
-      <Leg transform="translate(70, 38) rotate(5)" />
-
-      {/* Legs - front pair */}
-      <Leg transform="translate(32, 44) rotate(135)" />
-      <Leg transform="translate(68, 44) rotate(45)" />
-
-      {/* Cephalothorax */}
-      <path d={spiderPath} fill="url(#spider-body-grad)" stroke="#b57614" strokeWidth="0.8" opacity="0.95" />
-
-      {/* Abdomen */}
-      <path d={abdomenPath} fill="url(#spider-abdomen-grad)" stroke="#8f6d11" strokeWidth="0.6" opacity="0.95" />
-
-      {/* Dorsal stripe */}
-      <path
-        d="M 50 18 C 50 24, 50 34, 50 46"
-        stroke="#d79921"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-        opacity="0.3"
-        fill="none"
-      />
-
-      {/* Eyes */}
-      <circle cx="42" cy="28" r="3" fill="#fb4934" filter="url(#spider-eye-glow)" />
-      <circle cx="58" cy="28" r="3" fill="#fb4934" filter="url(#spider-eye-glow)" />
-      <circle cx="42" cy="28" r="1.2" fill="#ff6a5c" />
-      <circle cx="58" cy="28" r="1.2" fill="#ff6a5c" />
-
-      {/* Chelicerae (fangs) */}
-      <path d="M 46 32 C 44 36, 42 38, 40 40" stroke="#b57614" strokeWidth="1.2" strokeLinecap="round" fill="none" />
-      <path d="M 54 32 C 56 36, 58 38, 60 40" stroke="#b57614" strokeWidth="1.2" strokeLinecap="round" fill="none" />
-
-      {/* Spinnerets */}
-      <ellipse cx="50" cy="84" rx="4" ry="2" fill="#8f6d11" opacity="0.8" />
-      <circle cx="48" cy="84" r="1" fill="#b57614" />
-      <circle cx="52" cy="84" r="1" fill="#b57614" />
-
-      {/* Neural glow node */}
-      <circle cx="50" cy="50" r="8" fill="none" stroke="#d79921" strokeWidth="0.3" opacity="0.15" />
-      <circle cx="50" cy="50" r="14" fill="none" stroke="#d79921" strokeWidth="0.2" opacity="0.08" />
-      </g>
-    </svg>
+    <span className="inline-flex shrink-0" style={{ width: size, height: size }}>
+      <img src={MARK_ON_LIGHT} {...common} className="block dark:hidden select-none" />
+      <img src={MARK_ON_DARK} {...common} className="hidden dark:block select-none" />
+    </span>
   );
 }
 
@@ -150,23 +90,23 @@ export const NeuraxLogo = ({
   className = '',
   showText = true,
   variant = 'full',
+  tone = 'auto',
 }: NeuraxLogoProps) => {
-  const mark = renderSpiderMark(size, className);
+  const mark = <Mark size={size} tone={tone} />;
 
-  if (variant === 'mark' || !showText) return mark;
+  if (variant === 'mark' || !showText) {
+    return <span className={cn('inline-flex', className)}>{mark}</span>;
+  }
 
   return (
-    <span className={`inline-flex items-center gap-2.5 ${className}`}>
+    <span className={cn('inline-flex items-center gap-2.5', className)}>
       {mark}
+      {/* `currentColor`, not a gradient. The word is the one part that has to
+          be legible on every surface the logo lands on, and the surface's own
+          text colour is always the right answer. */}
       <span
-        className="font-bold tracking-[-0.03em]"
-        style={{
-          fontSize: `${size * 0.48}px`,
-          background: 'linear-gradient(135deg, #d79921 0%, #d65d0e 60%, #fe8019 100%)',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          backgroundClip: 'text',
-        }}
+        className="font-semibold tracking-[0.04em] leading-none"
+        style={{ fontSize: `${Math.round(size * 0.5)}px` }}
       >
         NEURAX
       </span>

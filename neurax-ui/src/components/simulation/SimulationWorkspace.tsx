@@ -1,7 +1,7 @@
 import { useState, lazy, Suspense } from 'react';
 import {
   BarChart3, Layers, HardDrive,
-  GitCompare, Target, TrendingUp, Bug,
+  Target, Bug,
 } from 'lucide-react';
 import { CanvasNode, Connection, AnalysisResult, PerLayerBreakdownRow, Warning } from '@/types/architecture.ts';
 import { ChartSkeleton } from './shared';
@@ -9,25 +9,24 @@ import { ChartSkeleton } from './shared';
 const GlobalResultsCharts = lazy(() => import('./categories/GlobalResultsCharts.tsx').then(m => ({ default: m.GlobalResultsCharts })));
 const PerLayerCharts = lazy(() => import('./categories/PerLayerCharts.tsx').then(m => ({ default: m.PerLayerCharts })));
 const MemoryCharts = lazy(() => import('./categories/MemoryCharts.tsx').then(m => ({ default: m.MemoryCharts })));
-const ComparisonCharts = lazy(() => import('./categories/ComparisonCharts.tsx').then(m => ({ default: m.ComparisonCharts })));
 const OptimizationCharts = lazy(() => import('./categories/OptimizationCharts.tsx').then(m => ({ default: m.OptimizationCharts })));
-const TrainingCharts = lazy(() => import('./categories/TrainingCharts.tsx').then(m => ({ default: m.TrainingCharts })));
 const DebuggingCharts = lazy(() => import('./categories/DebuggingCharts.tsx').then(m => ({ default: m.DebuggingCharts })));
 
 export type SimulationCategoryId =
-  | 'overview' | 'perlayer' | 'memory' | 'training'
-  | 'optimization' | 'comparison' | 'diagnostics';
+  | 'overview' | 'perlayer' | 'memory'
+  | 'optimization' | 'diagnostics';
 
 /**
  * Analysis views, ordered as they are read rather than as they were written.
  *
  * The sequence follows the question a designer actually works through: what is
- * this model, where does its cost sit, will it fit, what will it cost to train,
- * how could it be faster, how does it compare, and what is wrong with it.
+ * this model, where does its cost sit, will it fit, how could it be faster, how
+ * does it compare, and what is wrong with it. What a training run will cost, and
+ * what it actually costs once running, both live in the Training workspace —
+ * this one never leaves the realm of prediction.
  *
  * `chartCount` is asserted against the number of cards each module renders, so
- * the badges cannot drift out of date the way they had (Comparison advertised
- * nine charts and rendered four).
+ * the badges cannot drift out of date the way they had.
  */
 export const SIMULATION_CATEGORIES = [
   {
@@ -35,49 +34,35 @@ export const SIMULATION_CATEGORIES = [
     label: 'Overview',
     hint: 'Headline size, cost and hardware fit',
     icon: BarChart3,
-    chartCount: 5,
+    chartCount: 4,
   },
   {
     id: 'perlayer',
     label: 'Per Layer',
-    hint: 'Where the parameters, FLOPs and latency sit',
+    hint: 'The profile of the model along its own depth',
     icon: Layers,
-    chartCount: 2,
+    chartCount: 4,
   },
   {
     id: 'memory',
     label: 'Memory',
-    hint: 'VRAM over time, peak breakdown and OOM risk',
+    hint: 'Whether it fits, and what to change if it does not',
     icon: HardDrive,
-    chartCount: 8,
-  },
-  {
-    id: 'training',
-    label: 'Training',
-    hint: 'Time, cost and carbon for the training run',
-    icon: TrendingUp,
-    chartCount: 2,
+    chartCount: 4,
   },
   {
     id: 'optimization',
     label: 'Optimization',
-    hint: 'Roofline, bottlenecks and what to change first',
+    hint: 'What limits this design, and by how much',
     icon: Target,
-    chartCount: 3,
-  },
-  {
-    id: 'comparison',
-    label: 'Comparison',
-    hint: 'This design against other hardware and precisions',
-    icon: GitCompare,
-    chartCount: 5,
+    chartCount: 4,
   },
   {
     id: 'diagnostics',
     label: 'Diagnostics',
-    hint: 'Warnings, unsupported ops and confidence',
+    hint: 'What the compiler could not resolve, and where',
     icon: Bug,
-    chartCount: 6,
+    chartCount: 2,
   },
 ] as const satisfies ReadonlyArray<{
   id: SimulationCategoryId;
@@ -93,7 +78,6 @@ interface SimulationWorkspaceProps {
   analysis?: AnalysisResult;
   perLayer?: PerLayerBreakdownRow[];
   warnings?: Warning[];
-  topology?: Record<string, unknown>;
 }
 
 export function SimulationWorkspace({
@@ -101,7 +85,6 @@ export function SimulationWorkspace({
   analysis,
   perLayer,
   warnings,
-  topology,
 }: SimulationWorkspaceProps) {
   const [activeCategory, setActiveCategory] = useState<SimulationCategoryId>('overview');
 
@@ -148,15 +131,11 @@ export function SimulationWorkspace({
       {/* Only the active category is mounted, so its charts load on demand. */}
       <div className="flex-1 overflow-auto p-4 scrollbar-thin" role="tabpanel">
         <Suspense fallback={<ChartSkeleton variant="stats-grid" />}>
-          {activeCategory === 'overview' && <GlobalResultsCharts analysis={analysis} />}
+          {activeCategory === 'overview' && <GlobalResultsCharts analysis={analysis} perLayer={perLayer} />}
           {activeCategory === 'perlayer' && <PerLayerCharts analysis={analysis} perLayer={perLayer} />}
-          {activeCategory === 'memory' && <MemoryCharts analysis={analysis} />}
-          {activeCategory === 'training' && <TrainingCharts analysis={analysis} />}
+          {activeCategory === 'memory' && <MemoryCharts analysis={analysis} perLayer={perLayer} />}
           {activeCategory === 'optimization' && (
             <OptimizationCharts analysis={analysis} perLayer={perLayer} />
-          )}
-          {activeCategory === 'comparison' && (
-            <ComparisonCharts analysis={analysis} topology={topology} />
           )}
           {activeCategory === 'diagnostics' && (
             <DebuggingCharts

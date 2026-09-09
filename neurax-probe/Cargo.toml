@@ -1,0 +1,14 @@
+[package]
+name = "neurax-probe"
+version = "0.15.0"
+edition = "2021"
+description = "Reads the machine NEURAX is running on, and measures what it can actually do."
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+num_cpus = { workspace = true }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

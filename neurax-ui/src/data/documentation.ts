@@ -125,7 +125,7 @@ export const DOCUMENTATION: DocChapter[] = [
               ['**Canvas** (centre)', 'The architecture. Move blocks, connect them, zoom and pan.'],
               ['**Inspector** (bottom)', "The selected block's parameters, and what it contributes."],
               ['**Analysis panel** (right)', 'Results, in three tabs: Architecture, Performance, Hardware.'],
-              ['**Workspace tabs**', 'Five views of the same design.'],
+              ['**Workspace tabs**', 'Five views of the same design, and of the run it produces.'],
             ],
           },
           {
@@ -683,7 +683,7 @@ export const DOCUMENTATION: DocChapter[] = [
           {
             kind: 'text',
             text:
-              'Training-time behaviour: memory over the course of a step, throughput, gradient and optimizer breakdowns, per-layer latency and VRAM, and KV-cache growth against sequence length.',
+              'Predicted training-time behaviour: memory over the course of a step, throughput, gradient and optimizer breakdowns, per-layer latency and VRAM, and KV-cache growth against sequence length. Every figure here is derived, never measured — what a run actually does is in Training.',
           },
           { kind: 'heading', text: 'Production' },
           {
@@ -691,11 +691,18 @@ export const DOCUMENTATION: DocChapter[] = [
             text:
               'What deploying this model looks like — serving shape and the practical consequences of the design.',
           },
-          { kind: 'heading', text: 'Inference Intelligence' },
+          { kind: 'heading', text: 'Training' },
           {
             kind: 'text',
             text:
-              'Serving-time behaviour across 22 sampling and context settings, with ten widgets: stability, entropy, hallucination risk, attention focus and others. These are {-analytical indicators, not measurements of a served model-}.',
+              'The one workspace where something is running. Start a run on your own machine and watch it: loss, throughput, memory and GPU state as the process reports them, {+beside what NEURAX predicted+} — so you can see where the analysis held and where it did not.',
+          },
+          {
+            kind: 'note',
+            tone: 'info',
+            title: 'A run is a directory, not a window',
+            text:
+              'Closing NEURAX {+does not stop a run+}, and reopening it picks the session back up. If the studio is closed abruptly, the run is listed as {-interrupted-} and resumes from its last checkpoint — nothing is lost.',
           },
           { kind: 'heading', text: 'Time Machine' },
           {

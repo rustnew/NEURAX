@@ -20,7 +20,7 @@
  *    is holding before parsing the rest.
  *  - **Complete.** Everything needed to reconstruct the design exactly: blocks,
  *    connections, groups, the architecture family, the full hardware and
- *    training configuration, and the Inference Intelligence and Time Machine
+ *    training configuration, and the Time Machine
  *    what-if sliders. Reopening a file must not silently lose a setting that
  *    was on screen when it was saved — that used to mean re-entering those two
  *    panels' configuration by hand after every reopen, because neither one's
@@ -34,7 +34,6 @@
 import { AnalysisResult, CanvasNode, Connection, NodeGroup } from '@/types/architecture.ts';
 import { ArchitectureFamily } from '@/types/plugins.ts';
 import { HardwareConfig } from '@/contexts/HardwareContext.tsx';
-import type { InferenceParams } from '@/services/neuraxApi.ts';
 import type { TimeMachineConfig } from '@/components/timemachine/TimeMachineWorkspace.tsx';
 
 /** The `format` marker every `.neurax` file carries. */
@@ -115,9 +114,6 @@ export interface NeuraxDocument {
   /** The weight-initialisation recipe from Production, when one was computed. */
   initialization?: InitializationRecord | null;
 
-  /** The Inference Intelligence sliders, when the user set any. */
-  inference?: InferenceParams | null;
-
   /** The Time Machine what-if sliders, when the user set any. */
   timeMachine?: TimeMachineConfig | null;
 }
@@ -132,7 +128,6 @@ export interface DesignSnapshot {
   hardware: Partial<HardwareConfig>;
   analysis?: AnalysisResult | null;
   initialization?: InitializationRecord | null;
-  inference?: InferenceParams | null;
   timeMachine?: TimeMachineConfig | null;
 }
 
@@ -186,7 +181,6 @@ export function serializeDesign(
     hardware: snapshot.hardware,
     analysis: snapshot.analysis ?? null,
     initialization: snapshot.initialization ?? null,
-    inference: snapshot.inference ?? null,
     timeMachine: snapshot.timeMachine ?? null,
   };
 
@@ -204,7 +198,6 @@ export function serializeDesign(
     hardware: withSortedKeys(document.hardware),
     analysis: withSortedKeys(document.analysis),
     initialization: withSortedKeys(document.initialization),
-    inference: withSortedKeys(document.inference),
     timeMachine: withSortedKeys(document.timeMachine),
   };
 
@@ -288,56 +281,12 @@ function parseInitializationRecord(value: unknown, warnings: string[]): Initiali
   };
 }
 
-/** Every field `InferenceParams` requires — `moe_router_mode` is the one it doesn't. */
-const REQUIRED_INFERENCE_PARAM_KEYS: Array<[key: keyof InferenceParams, kind: 'number' | 'string' | 'boolean']> = [
-  ['temperature', 'number'],
-  ['top_k', 'number'],
-  ['top_p', 'number'],
-  ['beam_width', 'number'],
-  ['repetition_penalty', 'number'],
-  ['presence_penalty', 'number'],
-  ['frequency_penalty', 'number'],
-  ['prompt_length', 'number'],
-  ['max_output_tokens', 'number'],
-  ['sliding_window', 'boolean'],
-  ['kv_cache_reuse', 'boolean'],
-  ['architecture_family', 'string'],
-  ['attention_type', 'string'],
-  ['quantization_level', 'string'],
-  ['long_context_simulation', 'boolean'],
-  ['adversarial_prompt', 'boolean'],
-  ['high_temperature_mode', 'boolean'],
-  ['low_temperature_mode', 'boolean'],
-];
-
-/**
- * Validates a parsed `inference` block field-by-field rather than casting it
- * through once it looks roughly right — the same reasoning as
- * `parseInitializationRecord`: a hand-edited or partially-written file with
- * one field missing or the wrong type should fall back to defaults with a
- * warning, not crash the Inference Intelligence panel wherever it next reads
- * a field that turned out to be `undefined`.
- */
-function parseInferenceParams(value: unknown, warnings: string[]): InferenceParams | null {
-  if (!isRecord(value)) return null;
-
-  for (const [key, kind] of REQUIRED_INFERENCE_PARAM_KEYS) {
-    if (typeof value[key] !== kind) {
-      warnings.push(`The saved inference parameters were missing or had an invalid "${key}"; using defaults instead.`);
-      return null;
-    }
-  }
-  if (value.moe_router_mode !== undefined && typeof value.moe_router_mode !== 'string') {
-    warnings.push('The saved inference parameters had an invalid "moe_router_mode"; using defaults instead.');
-    return null;
-  }
-
-  return value as unknown as InferenceParams;
-}
-
 const TIME_MACHINE_HARDWARE_TRACKS = new Set(['a100', 'h200', 'b100']);
 
-/** Validates a parsed `timeMachine` block — see `parseInferenceParams`. */
+/** Validates a parsed `timeMachine` block — the same field-by-field
+ *  discipline as `parseInitializationRecord`: a hand-edited or partially
+ *  written file falls back to defaults with a warning rather than handing the
+ *  panel an `undefined` it will read later. */
 function parseTimeMachineConfig(value: unknown, warnings: string[]): TimeMachineConfig | null {
   if (!isRecord(value)) return null;
 
@@ -453,7 +402,6 @@ export function parseNeuraxFile(text: string): ParsedDocument {
     hardware: isRecord(parsed.hardware) ? (parsed.hardware as Partial<HardwareConfig>) : {},
     analysis: isRecord(parsed.analysis) ? (parsed.analysis as unknown as AnalysisResult) : null,
     initialization: parseInitializationRecord(parsed.initialization, warnings),
-    inference: parseInferenceParams(parsed.inference, warnings),
     timeMachine: parseTimeMachineConfig(parsed.timeMachine, warnings),
   };
 

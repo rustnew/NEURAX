@@ -1,7 +1,12 @@
-import { Layers, Play, Rocket, Brain, Clock, Check, Download } from 'lucide-react';
+import { Layers, Play, Rocket, Activity, Clock, Check, Download } from 'lucide-react';
 import { cn } from '@/lib/utils.ts';
 
-export type WorkspaceTab = 'architecture' | 'simulation' | 'production' | 'inference' | 'timemachine';
+export type WorkspaceTab =
+  | 'architecture'
+  | 'simulation'
+  | 'production'
+  | 'training'
+  | 'timemachine';
 
 interface WorkspaceTabsProps {
   activeTab: WorkspaceTab;
@@ -10,7 +15,7 @@ interface WorkspaceTabsProps {
   architectureContent: React.ReactNode;
   simulationContent?: React.ReactNode;
   productionContent?: React.ReactNode;
-  inferenceContent?: React.ReactNode;
+  trainingContent?: React.ReactNode;
   timeMachineContent?: React.ReactNode;
   /** Real signal: the canvas has at least one block on it. Undefined hides
    *  the step-progress treatment entirely (falls back to the plain tab
@@ -31,18 +36,20 @@ const WORKSPACE_TABS = [
   { id: 'architecture' as const, label: 'Architecture', icon: Layers },
   { id: 'simulation' as const, label: 'Simulation', icon: Play },
   { id: 'production' as const, label: 'Production', icon: Rocket },
-  { id: 'inference' as const, label: 'Inference Intelligence', icon: Brain },
+  { id: 'training' as const, label: 'Training', icon: Activity },
   { id: 'timemachine' as const, label: 'Time Machine', icon: Clock },
 ];
 
 /**
  * The order below is the sequence a design actually goes through — build
- * it, analyze it, then look at it from three more specialized angles —
- * not the order the tabs happen to be written in. Only Architecture and
+ * it, analyze it, initialize it, train it, then project it forward — not the
+ * order the tabs happen to be written in.
+ * Training sits after Production because that is where it falls in time:
+ * a run needs initialized weights, and it is the first step that leaves
+ * the analytical world and spends real hours on a real machine. Only Architecture and
  * Simulation get a real "done" state: whether a design exists and whether
  * it's been analyzed are both things this component can check for itself.
- * Production, Inference Intelligence and Time Machine have no equivalent
- * completion signal — they're lenses to revisit, not tasks with an end —
+ * Production, Training and Time Machine have no equivalent completion signal — they're lenses to revisit, not tasks with an end —
  * so they only ever show as current or upcoming, never done. Inventing a
  * checkmark for them would be exactly the kind of confident-looking number
  * nothing backs that this app spent tonight removing everywhere else.
@@ -65,7 +72,7 @@ export function WorkspaceTabs({
   architectureContent,
   simulationContent,
   productionContent,
-  inferenceContent,
+  trainingContent,
   timeMachineContent,
   hasDesign,
   hasAnalysis,
@@ -159,9 +166,9 @@ export function WorkspaceTabs({
             {productionContent}
           </div>
         )}
-        {inferenceContent && (
-          <div className={cn("flex-1 flex flex-col overflow-hidden", activeTab === 'inference' ? '' : 'hidden')}>
-            {inferenceContent}
+        {trainingContent && (
+          <div className={cn("flex-1 flex flex-col overflow-hidden", activeTab === 'training' ? '' : 'hidden')}>
+            {trainingContent}
           </div>
         )}
         {timeMachineContent && (

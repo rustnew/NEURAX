@@ -191,11 +191,28 @@ function IssuesBlock({ warnings, jumpToIssuesSignal }: { warnings: Warning[]; ju
                   firstCompilerWarningRef.current = el;
                 }
               }}
+              /**
+               * The body text is `text-foreground`, not the severity's
+               * `-foreground` token.
+               *
+               * `--destructive-foreground` and `--warning-foreground` are the
+               * colours meant to sit *on top of* a solid red or amber — white
+               * on a filled button. The background here is `bg-destructive/5`,
+               * a 5 % tint that is, for contrast purposes, the panel itself.
+               * On the dark theme those tokens happen to be near-white and the
+               * text read anyway; on the light theme they are pure white
+               * (`--destructive-foreground: 0 0% 100%`), so every error and
+               * warning rendered white-on-white and the panel looked empty.
+               *
+               * Severity is carried by the icon and the border, which are the
+               * right places for it — the message is body text and takes the
+               * body colour, in every theme.
+               */
               className={cn(
-                "p-2 rounded-md border text-[10px]",
-                warning.type === 'error' && "bg-destructive/5 border-destructive/30 text-destructive-foreground",
-                warning.type === 'warning' && "bg-warning/5 border-warning/30 text-warning-foreground",
-                warning.type === 'info' && "bg-primary/5 border-primary/20 text-foreground"
+                "p-2 rounded-md border text-[10px] text-foreground",
+                warning.type === 'error' && "bg-destructive/5 border-destructive/30",
+                warning.type === 'warning' && "bg-warning/5 border-warning/30",
+                warning.type === 'info' && "bg-primary/5 border-primary/20"
               )}
             >
               <div className="flex items-start gap-1.5">

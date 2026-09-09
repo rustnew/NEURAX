@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUp, ChevronRight, MessageSquareText, Plus, Sparkles, Square, Wallet, X } from 'lucide-react';
+import { ArrowUp, ChevronRight, Cpu, Database, MessageSquareText, Plus, Sparkles, Square, Wallet, X } from 'lucide-react';
 import { Button } from '@/components/ui/button.tsx';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover.tsx';
 import { Progress } from '@/components/ui/progress.tsx';
 import { Textarea } from '@/components/ui/textarea.tsx';
 import { cn } from '@/lib/utils.ts';
 import { useApiKey } from '@/contexts/ApiKeyContext.tsx';
+import { isCpuOnly, primaryGpu } from '@/types/runtime.ts';
+import type { DatasetProfile, HardwareProfile } from '@/types/runtime.ts';
 import type { AgentRunPlanItem } from '@/components/panels/AgentRunModal.tsx';
 
 type ChatRole = 'user' | 'assistant';
@@ -44,6 +46,17 @@ type AgentToolEvent = {
 
 interface AIChatDrawerProps {
   open: boolean;
+  /**
+   * The machine and the data the design has to fit.
+   *
+   * Shown rather than merely sent, because the agent's answers stop making
+   * sense without them: "use a batch of 8" reads as an arbitrary choice until
+   * you can see that the card has 22.6 GB free and the images are 224×224.
+   * These are the constraints a request is answered under, so they belong
+   * where the request is typed.
+   */
+  hardware?: HardwareProfile | null;
+  dataset?: DatasetProfile | null;
   onOpenChange: (open: boolean) => void;
   creditsLeft?: number;
   creditsLimit?: number;
@@ -108,6 +121,8 @@ export default function AIChatDrawer({
   getSnapshot,
   onToolEvent,
   projectId,
+  hardware = null,
+  dataset = null,
   className,
 }: AIChatDrawerProps) {
   const { config: apiKeyConfig } = useApiKey();
@@ -660,6 +675,45 @@ export default function AIChatDrawer({
           </div>
         </div>
       </div>
+
+      {hardware || dataset ? (
+        <div className="px-4 py-2 border-b border-border/40 bg-muted/20 flex items-center gap-x-4 gap-y-1 flex-wrap text-[10px]">
+          <span className="font-mono uppercase tracking-[0.12em] text-muted-foreground/60">Designing for</span>
+          {/* What the agent is designing under. A CPU-only machine is not an
+              absence of information — it is the constraint, and the strongest
+              one, so it is stated with the same weight as a card. */}
+          {hardware && !isCpuOnly(hardware) && primaryGpu(hardware) ? (
+            <span className="flex items-center gap-1.5 text-foreground">
+              <Cpu className="w-3 h-3 text-primary" />
+              <span className="font-medium">{primaryGpu(hardware)!.name}</span>
+              {primaryGpu(hardware)!.vramFreeBytes != null ? (
+                <span className="font-mono text-muted-foreground">
+                  {(primaryGpu(hardware)!.vramFreeBytes! / 1024 ** 3).toFixed(1)} GB free
+                </span>
+              ) : null}
+            </span>
+          ) : hardware ? (
+            <span className="flex items-center gap-1.5 text-foreground">
+              <Cpu className="w-3 h-3 text-primary" />
+              <span className="font-medium">{hardware.cpu.model.replace(/\(R\)|\(TM\)|CPU|@.*$/g, '').trim()}</span>
+              <span className="font-mono text-muted-foreground">
+                CPU only · {hardware.cpu.cores}c · {(hardware.ramAvailableBytes / 1024 ** 3).toFixed(0)} GB free
+              </span>
+            </span>
+          ) : null}
+          {dataset ? (
+            <span className="flex items-center gap-1.5 text-foreground">
+              <Database className="w-3 h-3 text-primary" />
+              <span className="font-medium">{dataset.displayPath.split('/').pop()}</span>
+              <span className="font-mono text-muted-foreground">
+                {dataset.samples.toLocaleString('en-US')} samples
+                {dataset.suggested.numClasses ? ` · ${dataset.suggested.numClasses} classes` : ''}
+                {dataset.sampleShape ? ` · ${dataset.sampleShape.join('×')}` : ''}
+              </span>
+            </span>
+          ) : null}
+        </div>
+      ) : null}
 
       <div ref={listRef} className="flex-1 overflow-y-auto scrollbar-thin px-4 py-6 space-y-6">
         {runStatus !== 'idle' ? (

@@ -444,44 +444,22 @@ describe('the .neurax document', () => {
     });
   });
 
-  describe('carries Inference Intelligence and Time Machine configuration', () => {
-    // Neither panel ever stopped the user from configuring it twice by
-    // asking for two separate imports — both stayed mounted for the whole
-    // session and simply forgot their sliders the moment the design was
-    // reopened, because nothing about them was in this file at all.
-    const inference: DesignSnapshot['inference'] = {
-      temperature: 0.7,
-      top_k: 40,
-      top_p: 0.9,
-      beam_width: 1,
-      repetition_penalty: 1.1,
-      presence_penalty: 0,
-      frequency_penalty: 0,
-      prompt_length: 512,
-      max_output_tokens: 256,
-      sliding_window: false,
-      kv_cache_reuse: true,
-      architecture_family: 'transformer',
-      attention_type: 'gqa',
-      quantization_level: 'fp16',
-      long_context_simulation: false,
-      adversarial_prompt: false,
-      high_temperature_mode: false,
-      low_temperature_mode: false,
-    };
+  describe('carries Time Machine configuration', () => {
+    // The panel stayed mounted for the whole session and simply forgot its
+    // sliders the moment the design was reopened, because nothing about it
+    // was in this file at all.
     const timeMachine: DesignSnapshot['timeMachine'] = {
       growthRate: 150,
       budgetMax: 750000,
       horizon: 3,
       hardware: 'h200',
     };
-    const withPanels: DesignSnapshot = { ...snapshot, inference, timeMachine };
+    const withPanels: DesignSnapshot = { ...snapshot, timeMachine };
 
-    it('round-trips both panels’ configuration, not just the architecture', () => {
+    it('round-trips the panel’s configuration, not just the architecture', () => {
       const parsed = parseNeuraxFile(serializeDesign(withPanels));
       expect(parsed.ok).toBe(true);
       if (!parsed.ok) return;
-      expect(parsed.document.inference).toEqual(inference);
       expect(parsed.document.timeMachine).toEqual(timeMachine);
     });
 
@@ -489,22 +467,27 @@ describe('the .neurax document', () => {
       const parsed = parseNeuraxFile(serializeDesign(snapshot));
       expect(parsed.ok).toBe(true);
       if (!parsed.ok) return;
-      expect(parsed.document.inference).toBeNull();
       expect(parsed.document.timeMachine).toBeNull();
     });
 
-    it('rejects an inference section missing a required field rather than crashing the panel', () => {
-      const handEdited = JSON.stringify({
+    it('still opens a file written before the Inference panel was removed', () => {
+      // Files in the wild carry an `inference` block. The panel that wrote it
+      // is gone, but the design around it is not, and refusing the file — or
+      // warning about a section the user can no longer see — would punish
+      // them for a change they did not make.
+      const olderFile = JSON.stringify({
         format: NEURAX_FORMAT,
         version: 1,
+        name: 'Written by an older NEURAX',
         design: { nodes, connections: [], groups: [] },
-        inference: { ...inference, temperature: undefined },
+        inference: { temperature: 0.7, top_k: 50, prompt_length: 2048 },
       });
-      const parsed = parseNeuraxFile(handEdited);
+      const parsed = parseNeuraxFile(olderFile);
       expect(parsed.ok).toBe(true);
       if (!parsed.ok) return;
-      expect(parsed.document.inference).toBeNull();
-      expect(parsed.warnings.some((w) => w.includes('inference parameters'))).toBe(true);
+      expect(parsed.document.name).toBe('Written by an older NEURAX');
+      expect(parsed.document.design.nodes.length).toBe(nodes.length);
+      expect(parsed.warnings.some((w) => w.includes('inference'))).toBe(false);
     });
 
     it('rejects a Time Machine section with an unknown hardware track', () => {

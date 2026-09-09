@@ -154,7 +154,7 @@ export default function SharedReport() {
       <header className="border-b border-border">
         <div className="max-w-4xl mx-auto px-6 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
-            <NeuraxLogo variant="mark" size={22} />
+            <NeuraxLogo variant="mark" size={30} />
             <span className="font-semibold">NEURAX</span>
           </Link>
           <a

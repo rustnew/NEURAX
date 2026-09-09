@@ -1,13 +1,13 @@
-import { TrendingUp, Info, DollarSign, Clock, Zap, Leaf } from 'lucide-react';
+import { TrendingUp, DollarSign, Clock, Zap, Leaf } from 'lucide-react';
 import { AnalysisResult } from '@/types/architecture.ts';
 import {
   ChartCard,
   StatCard,
   ChartErrorBoundary,
   EmptyChartState,
-} from '../shared';
+} from '@/components/simulation/shared';
 
-interface TrainingChartsProps {
+interface ProjectionViewProps {
   analysis?: AnalysisResult;
 }
 
@@ -34,7 +34,7 @@ interface TrainingChartsProps {
  * the value list this file now builds from the same fields Training
  * Details already used.
  */
-export function TrainingCharts({ analysis }: TrainingChartsProps) {
+export function ProjectionView({ analysis }: ProjectionViewProps) {
   if (!analysis || analysis.trainingTimeHours === 0) {
     return (
       <EmptyChartState
@@ -73,17 +73,6 @@ export function TrainingCharts({ analysis }: TrainingChartsProps) {
   return (
     <ChartErrorBoundary>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-primary" />
-            Training — Cost & Runtime Analysis
-          </h2>
-          <div className="flex items-center gap-2 text-[11px] text-muted-foreground bg-secondary/50 px-2 py-1 rounded-md">
-            <Info className="w-3 h-3" />
-            Compiler-emitted training projections
-          </div>
-        </div>
-
         {/* Summary Cards */}
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
           <StatCard
