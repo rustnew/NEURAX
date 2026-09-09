@@ -1076,6 +1076,32 @@ export function generateModelCode(
   const ordered = topoOrder(nodes, connections);
   const layers = ordered.map((n) => genNode(n, ctx));
 
+  /**
+   * A design whose order cannot be trusted must not be generated.
+   *
+   * `layer_stack` is a compact node standing for N repeated blocks. Some
+   * designs also carry the block's *body* — an attention and a feed-forward
+   * node — as separate blocks on the canvas. The compiler copes: it sums per
+   * layer and never walks the graph in order, so the totals come out right.
+   *
+   * A generated `forward()` cannot cope, because it is a sequence. Emitting
+   * both the stack and its body applies the body twice, once outside the
+   * stack, and the topological sort puts those body nodes first because
+   * nothing feeds them — which is how BERT-base came out as attention, then
+   * feed-forward, then its token embedding.
+   *
+   * That model trains. It is simply not the model that was analysed, and a
+   * training run on the wrong architecture is worse than no run at all: every
+   * figure the Accuracy view then compares is a comparison between two
+   * different models. So it is refused, by name, with what to do about it.
+   */
+  const stackNodes = ordered.filter((n) => n.type === 'layer_stack');
+  const bodyNodes = ordered.filter(
+    (n) => n.type === 'mha_attention' || n.type === 'attention' || n.type === 'gqa_attention'
+      || n.type === 'mqa_attention' || n.type === 'ffn_standard' || n.type === 'ffn_gated',
+  );
+  const ambiguousStack = stackNodes.length > 0 && bodyNodes.length > 0;
+
   const totalParams = layers.reduce((sum, l) => sum + l.paramCount, 0);
 
   /**
@@ -1177,8 +1203,10 @@ if __name__ == "__main__":
     code,
     totalParams,
     layers,
-    unsupportedTypes,
-    fullySupported: unsupportedTypes.length === 0,
+    unsupportedTypes: ambiguousStack
+      ? [...unsupportedTypes, 'layer_stack + its expanded body']
+      : unsupportedTypes,
+    fullySupported: unsupportedTypes.length === 0 && !ambiguousStack,
     inputShape,
     inputKind,
     vocabSize,
