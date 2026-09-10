@@ -460,6 +460,20 @@ CANVAS_TOOL_DESCRIPTIONS: dict[str, str] = {
         "half a second and is remembered. Do this when the accelerator has no "
         "published specification, or before quoting a latency you care about."
     ),
+    "write_model_code": (
+        "Write the model yourself, as PyTorch (args: code, class_name; "
+        "optionally input_shape, input_kind — one of tokens/image/features — "
+        "and vocab_size). Use this when NEURAX's own translator refuses the "
+        "design, or when the architecture needs something it cannot express. "
+        "The code is not taken on trust: PyTorch builds it, the parameter "
+        "count it really has is compared with the analysis, and one batch of "
+        "the declared input is pushed through it. If any of those fails the "
+        "code is refused and the reason appears in `assistant_model` in your "
+        "next snapshot — read it and send a corrected version. Only accepted "
+        "code is trained. Write one self-contained file: standard-library and "
+        "`torch` imports only, one `nn.Module` subclass named `class_name`, "
+        "constructible with no arguments."
+    ),
     "start_training": (
         "Start a real training run on this machine (no args). Requires an "
         "analysed design the generator can express faithfully. The run "
@@ -697,6 +711,43 @@ def _describe_run(run: Optional[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+def _describe_assistant_model(model: Optional[dict[str, Any]]) -> str:
+    """What happened to model code the assistant wrote.
+
+    Writing code the assistant never gets a verdict on is worse than not
+    writing it: it would report success and have no idea the file did not even
+    import. This is the reply, and it is the same sentence the user was shown
+    — there is no softer version for the agent.
+    """
+    if not model:
+        return "  None written. NEURAX's own translator is what a run would use."
+
+    name = model.get("class_name", "the model")
+    lines = []
+
+    if model.get("accepted"):
+        lines.append(f"  {name} — accepted. A run will train this, not the translator's output.")
+    else:
+        lines.append(f"  {name} — REFUSED at stage '{model.get('stage', 'unknown')}'. Nothing will train it.")
+
+    lines.append(f"  {model.get('reason', '')}".rstrip())
+
+    built, analyzed = model.get("built_parameters"), model.get("analyzed_parameters")
+    if built is not None and analyzed:
+        lines.append(f"  PyTorch built {built:,} parameters; the analysis says {analyzed:,}.")
+
+    if model.get("stale"):
+        lines.append(
+            "  The design has changed since this was checked, so the verdict is "
+            "about a model nobody is looking at any more. Send it again."
+        )
+
+    if not model.get("accepted"):
+        lines.append("  Fix what the reason names and call write_model_code again.")
+
+    return "\n".join(lines)
+
+
 def _build_tools_section(allowed_tools: Optional[frozenset[str]], has_plan: bool = False) -> str:
     """The '## Available Tools' block, filtered to what this call may
     actually use. Token efficiency, not just prompt hygiene: a mode with a
@@ -814,6 +865,7 @@ async def run_controller_step(
     machine_desc = _describe_machine(snapshot.get("machine"))
     dataset_desc = _describe_dataset(snapshot.get("dataset"))
     run_desc = _describe_run(snapshot.get("run"))
+    assistant_model_desc = _describe_assistant_model(snapshot.get("assistant_model"))
     active_tab = snapshot.get("active_tab") or "architecture"
 
     # Build detailed catalogue with all parameters
@@ -1097,6 +1149,9 @@ Connections: {connection_count}
 ## Training run
 {run_desc}
 
+## Model code you wrote
+{assistant_model_desc}
+
 ## Analysis Warnings
 {warnings_desc}
 
@@ -1150,6 +1205,7 @@ What is the next step to progress toward a complete architecture?"""
                 machine_desc=machine_desc,
                 dataset_desc=dataset_desc,
                 run_desc=run_desc,
+                assistant_model_desc=assistant_model_desc,
                 missing_fields=", ".join(str(f) for f in missing_fields[:8]) if missing_fields else "none",
                 warnings_desc=warnings_desc,
                 history_text=history_text or "(no history)",

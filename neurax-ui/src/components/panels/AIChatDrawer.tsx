@@ -492,11 +492,28 @@ export default function AIChatDrawer({
             : [];
           const hasError = warnings.some((w: any) => String(w?.type ?? '').toLowerCase() === 'error');
 
-          if (missing.length > 0 || hasError) {
+          /**
+           * Model code the assistant wrote and the studio refused.
+           *
+           * The verdict cannot reach the agent mid-run: the snapshot is sent
+           * once, at the start, and the code is built after that. Without
+           * this the assistant writes a file that does not import, is told
+           * nothing, and reports success. Offering another round — with the
+           * refusal now in the snapshot — is how it learns. Offering, not
+           * taking: another round costs tokens, and that is the user's call.
+           */
+          const refusedModel = (snap as any)?.assistant_model;
+          const modelRefused =
+            refusedModel && refusedModel.accepted === false && !refusedModel.stale;
+
+          if (missing.length > 0 || hasError || modelRefused) {
             // Present consent banner instead of silently starting another pass
             const issueList: string[] = [
               ...missing.map((f: any) => `Missing required field: ${String(f)}`),
               ...(hasError ? ['Analysis errors detected — model may not compile'] : []),
+              ...(modelRefused
+                ? [`Model code refused: ${String(refusedModel.reason ?? 'it did not pass verification')}`]
+                : []),
             ];
             setAutoRound(nextRound);
             setPendingAutoFix({ round: nextRound, issues: issueList });

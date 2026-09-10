@@ -108,6 +108,11 @@ MODE_TOOL_GRANTS: dict[str, frozenset[str]] = {
         # faster route to a known architecture than twenty `add_node` calls,
         # and the dataset is what decides the input and output shapes.
         "load_preset", "use_dataset", "measure_machine",
+        # Building the model by hand, for designs the deterministic translator
+        # refuses. Granted here rather than everywhere because this is the
+        # mode that creates architectures; what makes it safe is the check on
+        # the studio side, not the mode it was called from.
+        "write_model_code",
         # And a design is finished when it has been run. These were briefly
         # granted to a `training` mode that the studio has no way to select —
         # a grant nothing could ever use, which looks done and is not.
@@ -133,7 +138,7 @@ MODE_TOOL_GRANTS: dict[str, frozenset[str]] = {
         "analyze_architecture", "check_budget", "find_optimal_hyperparameters",
         "get_presets", "get_preset", "get_hardware_list", "estimate_training_cost",
         "remember_preference", "search_past_designs",
-        "load_preset", "use_dataset", "measure_machine",
+        "load_preset", "use_dataset", "measure_machine", "write_model_code",
         # "web_search" is NOT listed here — it's added dynamically in
         # run_agent_graph, only when the caller actually supplied a Tavily
         # key. Listing it unconditionally would grant a tool this run can't

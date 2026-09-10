@@ -507,6 +507,53 @@ export interface RunSnapshot {
   checkpoints: Checkpoint[];
 }
 
+/** What to check, and against what. */
+export interface VerifyModelRequest {
+  modelCode: string;
+  modelClass: string;
+  /** One sample, without the batch dimension — `[3, 224, 224]`, `[512]`. */
+  inputShape?: number[];
+  inputKind?: 'features' | 'image' | 'tokens';
+  vocabSize?: number;
+}
+
+/** What a candidate model turned out to be. */
+export interface ModelVerdict {
+  ok: boolean;
+  /** How far it got: `import`, `class`, `construct`, `verified`, `checker`. */
+  stage: string;
+  parameters?: number;
+  className?: string;
+  forwardOk?: boolean;
+  forwardError?: string;
+  outputShape?: number[];
+  torchVersion?: string;
+  error?: string;
+}
+
+/**
+ * POST /model/verify — build this code and report what it actually is.
+ *
+ * The gate a candidate passes before anything is trained, and what makes it
+ * safe for the assistant to write model code at all. The deterministic
+ * generator was never trustworthy because a machine wrote it; it was
+ * trustworthy because its parameter count is confronted with the analysis and
+ * refuses on disagreement. This applies the same test to code from anywhere.
+ *
+ * Returns `null` when there is no service to ask — which is not a verdict of
+ * "wrong", and callers must not treat it as one.
+ */
+export async function verifyModel(body: VerifyModelRequest): Promise<ModelVerdict | null> {
+  try {
+    return await request<ModelVerdict>('/model/verify', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  } catch {
+    return null;
+  }
+}
+
 /** POST /training/runs — create a run directory and start training in it. */
 export async function startTrainingRun(body: StartRunRequest): Promise<RunState> {
   return request<RunState>('/training/runs', { method: 'POST', body: JSON.stringify(body) });
