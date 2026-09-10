@@ -380,6 +380,30 @@ async fn training_start(body: web::Json<neurax_runtime::StartRequest>) -> impl R
     }
 }
 
+/// POST /model/verify — does this code build the model it claims to?
+///
+/// The gate every candidate passes before it is trained, and the reason the
+/// assistant is allowed to write model code at all. The deterministic
+/// generator's worth was never that a machine wrote it — it was that its
+/// parameter count is confronted with the analysis and refuses on
+/// disagreement. Code from anywhere else earns the same trust the same way or
+/// it does not earn it.
+///
+/// Runs off the async threads: it starts a Python process and waits for it.
+async fn model_verify(body: web::Json<neurax_runtime::VerifyRequest>) -> impl Responder {
+    let request = body.into_inner();
+    match web::block(move || neurax_runtime::verify_model(&request)).await {
+        Ok(Ok(verdict)) => HttpResponse::Ok().json(verdict),
+        // The checker could not be run at all — no Python, no temp directory.
+        // Distinct from a verdict of "this model is wrong", and the studio
+        // must not read it as one.
+        Ok(Err(e)) => HttpResponse::InternalServerError()
+            .json(json!({ "error": e.to_string(), "stage": "checker" })),
+        Err(e) => HttpResponse::InternalServerError()
+            .json(json!({ "error": e.to_string(), "stage": "checker" })),
+    }
+}
+
 /// GET /training/runs — every run on this machine, newest first.
 async fn training_list() -> impl Responder {
     HttpResponse::Ok().json(neurax_runtime::list_runs())
@@ -5139,6 +5163,7 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
         .route("/hardware", web::get().to(hardware_list))
         .route("/hardware/detect", web::get().to(hardware_detect))
         .route("/hardware/measure", web::post().to(hardware_measure))
+        .route("/model/verify", web::post().to(model_verify))
         .route("/training/runs", web::get().to(training_list))
         .route("/training/runs", web::post().to(training_start))
         .route("/training/runs/{id}", web::get().to(training_get))

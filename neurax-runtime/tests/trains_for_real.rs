@@ -229,3 +229,111 @@ fn a_model_that_cannot_be_built_fails_with_the_reason() {
         "the failure must carry the reason, not just the fact: got {reason:?}"
     );
 }
+
+// ─── Verification ───────────────────────────────────────────────────────────
+//
+// The gate a candidate model passes before anything is trained. It matters
+// most for code NEURAX did not write itself: the assistant can express designs
+// the deterministic translator cannot, and the only thing that makes that
+// trustworthy is being held to the same check.
+
+#[test]
+#[ignore = "needs python3 with PyTorch"]
+fn a_correct_model_reports_the_parameter_count_it_really_has() {
+    let verdict = verify_model(&VerifyRequest {
+        model_code: TINY_MODEL.into(),
+        model_class: "TinyNet".into(),
+        input_shape: vec![8],
+        input_kind: "features".into(),
+        vocab_size: None,
+    })
+    .expect("the checker should run");
+
+    assert!(verdict.ok, "verification failed: {verdict:?}");
+    // 8*16+16 + 16*4+4 = 212, by hand.
+    assert_eq!(verdict.parameters, Some(212));
+    assert_eq!(verdict.class_name.as_deref(), Some("TinyNet"));
+    assert!(verdict.forward_ok, "one batch should go through: {:?}", verdict.forward_error);
+    assert_eq!(verdict.output_shape, Some(vec![2, 4]), "batch of 2, four classes out");
+}
+
+#[test]
+#[ignore = "needs python3 with PyTorch"]
+fn a_model_that_does_not_import_is_reported_at_that_stage() {
+    let verdict = verify_model(&VerifyRequest {
+        // Genuinely unparseable. (`this is not python` would *not* be: it
+        // parses as an `is not` comparison and fails later, at name lookup.)
+        model_code: "import torch.nn as nn\n\nclass Broken(nn.Module:\n".into(),
+        model_class: "Anything".into(),
+        input_shape: vec![8],
+        input_kind: "features".into(),
+        vocab_size: None,
+    })
+    .expect("the checker should run");
+
+    assert!(!verdict.ok);
+    assert_eq!(verdict.stage, "import");
+    assert!(verdict.error.unwrap_or_default().contains("SyntaxError"));
+}
+
+#[test]
+#[ignore = "needs python3 with PyTorch"]
+fn a_model_that_builds_but_cannot_take_its_input_is_caught_before_training() {
+    // The failure the parameter check cannot see: right weights, wrong shapes.
+    // A run would die on its first batch; this costs a second.
+    let verdict = verify_model(&VerifyRequest {
+        model_code: TINY_MODEL.into(),
+        model_class: "TinyNet".into(),
+        // TinyNet's first layer takes 8 features, not an image.
+        input_shape: vec![3, 32, 32],
+        input_kind: "image".into(),
+        vocab_size: None,
+    })
+    .expect("the checker should run");
+
+    assert!(verdict.ok, "it builds — the model itself is fine");
+    assert_eq!(verdict.parameters, Some(212));
+    assert!(!verdict.forward_ok, "but the declared input does not fit it");
+    assert!(verdict.forward_error.is_some());
+}
+
+#[test]
+#[ignore = "needs python3 with PyTorch"]
+fn a_model_that_prints_is_still_understood() {
+    // Model code that announces itself in `__init__` is ordinary — every
+    // second published implementation does it — and it used to sit in front of
+    // the verdict on stdout and make it unparseable. A chatty model would have
+    // been reported as "the checker did not answer", which is both wrong and
+    // impossible to act on.
+    let verdict = verify_model(&VerifyRequest {
+        model_code: "import torch.nn as nn\n\n\nclass Chatty(nn.Module):\n    def __init__(self):\n        super().__init__()\n        print('building Chatty')\n        print('{\"not\": \"a verdict\"}')\n        self.fc = nn.Linear(8, 4)\n\n    def forward(self, x):\n        return self.fc(x)\n".into(),
+        model_class: "Chatty".into(),
+        input_shape: vec![8],
+        input_kind: "features".into(),
+        vocab_size: None,
+    })
+    .expect("the checker should run");
+
+    assert!(verdict.ok, "printing is not a fault: {verdict:?}");
+    assert_eq!(verdict.parameters, Some(36));
+    assert!(verdict.forward_ok);
+}
+
+#[test]
+#[ignore = "needs python3 with PyTorch"]
+fn an_embedding_is_fed_indices_rather_than_floats() {
+    // `inputKind` is not decoration: an embedding takes integers, and a float
+    // tensor fails in a way that reads like a shape bug.
+    let verdict = verify_model(&VerifyRequest {
+        model_code: "import torch.nn as nn\n\n\nclass Emb(nn.Module):\n    def __init__(self):\n        super().__init__()\n        self.e = nn.Embedding(100, 16)\n\n    def forward(self, x):\n        return self.e(x)\n".into(),
+        model_class: "Emb".into(),
+        input_shape: vec![12],
+        input_kind: "tokens".into(),
+        vocab_size: Some(100),
+    })
+    .expect("the checker should run");
+
+    assert!(verdict.ok && verdict.forward_ok, "{verdict:?}");
+    assert_eq!(verdict.parameters, Some(1600));
+    assert_eq!(verdict.output_shape, Some(vec![2, 12, 16]));
+}

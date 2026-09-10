@@ -58,6 +58,9 @@ pub use process::is_running;
 /// thing anyone debugging a failed run will want to do.
 const TRAIN_PY: &str = include_str!("train.py");
 
+/// The checker that decides whether a candidate model is the analysed one.
+const VERIFY_PY: &str = include_str!("verify.py");
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum RunStatus {
@@ -174,6 +177,282 @@ pub struct StartRequest {
 
 fn default_input_kind() -> String {
     "features".to_string()
+}
+
+/// What a candidate model turned out to be.
+///
+/// The point of this type is the gap between `parameters` and what the
+/// compiler predicted. NEURAX's claim is that it can say what a design costs
+/// before it runs; the claim only survives generated code if the generated
+/// code is held to it. A model that trains perfectly well with a different
+/// parameter count is not a training bug — it is a different model, and every
+/// figure the studio showed was about something else.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelVerdict {
+    /// False when the file could not even be imported or instantiated.
+    pub ok: bool,
+    /// How far it got: `import`, `class`, `construct`, `verified`.
+    pub stage: String,
+    /// What PyTorch actually built. Absent when it never got that far.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parameters: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub class_name: Option<String>,
+    /// Whether one batch of the declared input went through it. A model can
+    /// have exactly the right weights and still fail on the first batch.
+    #[serde(default)]
+    pub forward_ok: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub forward_error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output_shape: Option<Vec<i64>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub torch_version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+/// What to check, and against what.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VerifyRequest {
+    pub model_code: String,
+    pub model_class: String,
+    #[serde(default)]
+    pub input_shape: Vec<u64>,
+    #[serde(default = "default_input_kind")]
+    pub input_kind: String,
+    #[serde(default)]
+    pub vocab_size: Option<u64>,
+}
+
+/// Build a candidate model and report what it is.
+///
+/// Written to a scratch directory rather than into a run: verification happens
+/// before a run exists, and a candidate that fails should leave nothing behind
+/// for someone to mistake for a real one later.
+pub fn verify_model(req: &VerifyRequest) -> Result<ModelVerdict> {
+    use std::io::Write;
+
+    let dir = std::env::temp_dir().join(format!(
+        "neurax-verify-{}-{:x}",
+        std::process::id(),
+        chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0) & 0xffffff
+    ));
+    std::fs::create_dir_all(&dir)?;
+
+    // Cleaned up whatever happens below, including on an early return.
+    struct Scratch(PathBuf);
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+    let _scratch = Scratch(dir.clone());
+
+    std::fs::write(dir.join("model.py"), &req.model_code)?;
+    std::fs::write(dir.join("verify.py"), VERIFY_PY)?;
+
+    // The verdict goes to a file rather than stdout: a candidate model that
+    // prints anything during construction — a banner, a warning, a progress
+    // line — would otherwise sit in front of the JSON and make it unreadable.
+    // Printing is not a fault in a model, so it must not read as one.
+    let verdict_path = dir.join("verdict.json");
+
+    let payload = serde_json::json!({
+        "directory": dir.to_string_lossy(),
+        "verdictPath": verdict_path.to_string_lossy(),
+        "modelClass": req.model_class,
+        "inputShape": req.input_shape,
+        "inputKind": req.input_kind,
+        "vocabSize": req.vocab_size,
+    });
+
+    let mut child = std::process::Command::new(python_bin())
+        .arg(dir.join("verify.py"))
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| RuntimeError::Spawn(format!("{} ({e})", python_bin())))?;
+
+    // Closed rather than left open: the checker blocks on `json.load(stdin)`
+    // until it sees EOF, so holding the pipe would hang both processes.
+    {
+        let mut stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| RuntimeError::Spawn("the checker has no stdin".into()))?;
+        stdin.write_all(payload.to_string().as_bytes())?;
+    }
+
+    let (stdout, stderr, timed_out) = wait_with_deadline(&mut child, VERIFY_TIMEOUT)?;
+
+    if timed_out {
+        return Ok(checker_failure(format!(
+            "the checker did not finish within {}s and was stopped. A model that takes \
+             this long to build is either enormous or has a loop in it; nothing was trained.{}",
+            VERIFY_TIMEOUT.as_secs(),
+            if stderr.trim().is_empty() { String::new() } else { format!(" {}", stderr.trim()) },
+        )));
+    }
+
+    // The file first, stdout as a fallback for an older checker or one that
+    // could not write. A checker that produced nothing readable either way is
+    // itself a failure, and saying so is more useful than an empty verdict.
+    let written = std::fs::read_to_string(&verdict_path).unwrap_or_default();
+    serde_json::from_str::<ModelVerdict>(written.trim())
+        .or_else(|_| serde_json::from_str::<ModelVerdict>(stdout.trim()))
+        .or_else(|_| {
+            Ok(checker_failure(format!(
+                "the checker did not answer: {}",
+                if stderr.trim().is_empty() { stdout.trim() } else { stderr.trim() }
+            )))
+        })
+}
+
+/// How long a candidate gets to build.
+///
+/// Not a performance budget — a stop. The code being run here was written by a
+/// language model, and "it never returns" is a failure mode that costs nothing
+/// to guard against and hangs a service thread forever if you don't. A real
+/// model of a few hundred million parameters builds in seconds; anything past
+/// this is either enormous enough that the user should be told, or looping.
+const VERIFY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
+
+/// A verdict that says the checker, not the model, is what went wrong.
+fn checker_failure(error: String) -> ModelVerdict {
+    ModelVerdict {
+        ok: false,
+        stage: "checker".into(),
+        parameters: None,
+        class_name: None,
+        forward_ok: false,
+        forward_error: None,
+        output_shape: None,
+        torch_version: None,
+        error: Some(error),
+    }
+}
+
+/// Nothing a checker has to say is longer than this. A process printing more
+/// than a megabyte is not answering the question, and holding all of it in
+/// memory to say so would be the wrong trade.
+const MAX_CHECKER_OUTPUT: usize = 1024 * 1024;
+
+/// How long to keep reading after the child has exited, waiting for its pipes
+/// to reach EOF. Generous, because this is the difference between a verdict and
+/// "the checker did not answer" — and bounded, because a process the child
+/// spawned can hold those pipes open long after the child itself is gone.
+const SETTLE_AFTER_EXIT: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Wait for a child, but not forever. Returns its output and whether it had to
+/// be killed.
+///
+/// Two things here are load-bearing, and both were found by a test rather than
+/// by reading:
+///
+///  - The pipes are drained on their own threads, because a child that fills
+///    its stdout buffer blocks on the write, and a parent that waits before
+///    reading would then be waiting on a process that is waiting on it.
+///  - Those threads are **not joined** when the deadline is hit. Killing a
+///    child does not necessarily close its pipes: anything it spawned inherits
+///    them and can hold them open for as long as it likes. Joining there
+///    reintroduces exactly the unbounded wait the deadline exists to prevent,
+///    one level down — a `sh -c "echo …; sleep 60"` returned in 60 seconds
+///    with a 300 ms limit. So the readers append into a shared buffer as they
+///    go, the parent reads whatever has arrived, and a straggler thread is
+///    left to finish into a buffer nobody reads again.
+fn wait_with_deadline(
+    child: &mut std::process::Child,
+    limit: std::time::Duration,
+) -> Result<(String, String, bool)> {
+    use std::io::Read;
+    use std::sync::{Arc, Mutex};
+
+    type Shared = Arc<Mutex<Vec<u8>>>;
+    /// A drained pipe: what has arrived so far, and whether it has ended.
+    struct Reader {
+        buffer: Shared,
+        finished: Arc<std::sync::atomic::AtomicBool>,
+    }
+
+    fn drain(pipe: Option<impl Read + Send + 'static>) -> Reader {
+        let reader = Reader {
+            buffer: Arc::new(Mutex::new(Vec::new())),
+            finished: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        };
+        let writer = Arc::clone(&reader.buffer);
+        let done = Arc::clone(&reader.finished);
+        std::thread::spawn(move || {
+            let mut chunk = [0u8; 8192];
+            if let Some(mut pipe) = pipe {
+                loop {
+                    match pipe.read(&mut chunk) {
+                        Ok(0) | Err(_) => break,
+                        Ok(n) => {
+                            // A poisoned lock means the reader on the other
+                            // side panicked; nobody is left to report to.
+                            let Ok(mut held) = writer.lock() else { break };
+                            if held.len() >= MAX_CHECKER_OUTPUT {
+                                break;
+                            }
+                            held.extend_from_slice(&chunk[..n]);
+                        }
+                    }
+                }
+            }
+            done.store(true, std::sync::atomic::Ordering::Release);
+        });
+        reader
+    }
+
+    let out = drain(child.stdout.take());
+    let err = drain(child.stderr.take());
+
+    let deadline = std::time::Instant::now() + limit;
+    let mut timed_out = false;
+    loop {
+        match child.try_wait()? {
+            Some(_) => {
+                // The child is gone, but its last bytes may still be in flight
+                // between the pipe and the buffers above. Wait for both pipes
+                // to reach EOF — which is what a join would do, except that
+                // this one gives up. A grandchild holding the pipe open would
+                // otherwise stall here for as long as it lives.
+                let settle = std::time::Instant::now() + SETTLE_AFTER_EXIT;
+                while std::time::Instant::now() < settle {
+                    let ended = |r: &Reader| r.finished.load(std::sync::atomic::Ordering::Acquire);
+                    if ended(&out) && ended(&err) {
+                        break;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(5));
+                }
+                break;
+            }
+            None if std::time::Instant::now() >= deadline => {
+                let _ = child.kill();
+                let _ = child.wait();
+                timed_out = true;
+                break;
+            }
+            None => std::thread::sleep(std::time::Duration::from_millis(25)),
+        }
+    }
+
+    // A poisoned buffer loses that half of the answer rather than the whole
+    // call: a missing traceback is worse than nothing, an unreadable verdict
+    // is worse than both.
+    let read = |reader: &Reader| -> String {
+        reader
+            .buffer
+            .lock()
+            .map(|b| String::from_utf8_lossy(&b).into_owned())
+            .unwrap_or_default()
+    };
+
+    Ok((read(&out), read(&err), timed_out))
 }
 
 #[derive(Debug)]
@@ -750,5 +1029,95 @@ mod tests {
             (0..100).map(|_| create_run(&request()).unwrap().id).collect();
         assert_eq!(ids.len(), 100, "every run must own its directory");
         assert_eq!(list_runs().len(), 100);
+    }
+}
+
+/// The deadline, tested on a process that ignores it.
+///
+/// Worth its own tests because the failure it guards against is invisible in
+/// the happy path: a checker that never returns holds a service thread for the
+/// life of the process, and nothing in a passing suite would show it.
+#[cfg(test)]
+mod deadline {
+    use super::wait_with_deadline;
+    use std::process::{Command, Stdio};
+    use std::time::{Duration, Instant};
+
+    fn shell(script: &str) -> std::process::Child {
+        Command::new("sh")
+            .arg("-c")
+            .arg(script)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("sh runs")
+    }
+
+    #[test]
+    fn a_process_that_finishes_is_read_in_full() {
+        let mut child = shell("echo hello; echo trouble >&2");
+        let (out, err, timed_out) =
+            wait_with_deadline(&mut child, Duration::from_secs(10)).expect("waits");
+        assert!(!timed_out);
+        assert_eq!(out.trim(), "hello");
+        assert_eq!(err.trim(), "trouble");
+    }
+
+    #[test]
+    fn a_process_that_will_not_end_is_killed_and_reported() {
+        let started = Instant::now();
+        let mut child = shell("sleep 60");
+        let (_, _, timed_out) =
+            wait_with_deadline(&mut child, Duration::from_millis(300)).expect("waits");
+        assert!(timed_out, "a sleeping process should hit the deadline");
+        assert!(
+            started.elapsed() < Duration::from_secs(10),
+            "it should return at the deadline, not when the child would have ended"
+        );
+    }
+
+    #[test]
+    fn output_written_before_the_deadline_survives_the_kill() {
+        // What the studio needs when a model hangs *after* printing: the
+        // reason is often already on stderr, and killing the child must not
+        // throw it away.
+        let mut child = shell("echo said something; sleep 60");
+        let (out, _, timed_out) =
+            wait_with_deadline(&mut child, Duration::from_millis(300)).expect("waits");
+        assert!(timed_out);
+        assert_eq!(out.trim(), "said something");
+    }
+
+    #[test]
+    fn a_grandchild_holding_the_pipe_open_does_not_stall_the_wait() {
+        // The bug this whole function was rewritten for. The child exits at
+        // once, but something it spawned inherited stdout and will hold it for
+        // half a minute — so the pipe never reaches EOF. Waiting for EOF
+        // unconditionally (which is what joining the reader threads does) turns
+        // a 300 ms deadline into a 30 second one.
+        let started = Instant::now();
+        let mut child = shell("(sleep 30 &) ; echo answered");
+        let (out, _, timed_out) =
+            wait_with_deadline(&mut child, Duration::from_secs(10)).expect("waits");
+
+        assert!(!timed_out, "the child itself finished immediately");
+        assert_eq!(out.trim(), "answered", "what it did say must still arrive");
+        assert!(
+            started.elapsed() < Duration::from_secs(10),
+            "it waited {:?} on a process that had already exited",
+            started.elapsed()
+        );
+    }
+
+    #[test]
+    fn a_process_larger_than_a_pipe_buffer_does_not_deadlock() {
+        // The reason the pipes are drained on threads. A child that fills its
+        // stdout buffer blocks on the write; a parent that waits before
+        // reading would then be waiting on a process waiting on it.
+        let mut child = shell("yes abcdefghij | head -c 500000");
+        let (out, _, timed_out) =
+            wait_with_deadline(&mut child, Duration::from_secs(20)).expect("waits");
+        assert!(!timed_out, "half a megabyte is not a hang");
+        assert_eq!(out.len(), 500_000);
     }
 }

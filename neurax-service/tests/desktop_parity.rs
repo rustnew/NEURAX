@@ -357,3 +357,65 @@ fn an_arbitrary_web_origin_is_refused() {
         "an unknown origin was granted access"
     );
 }
+
+/// The gate every model passes before it is trained — including one the
+/// assistant wrote, which is the whole reason it may write one.
+///
+/// Skipped rather than failed where PyTorch is absent: the desktop must
+/// *serve* the route, and it does so honestly on a machine that cannot build
+/// anything, reporting stage `torch` instead of pretending to a verdict.
+#[test]
+fn a_candidate_model_can_be_built_and_counted() {
+    let base = desktop_api();
+    let (status, body) = post(
+        &base,
+        "/model/verify",
+        json!({
+            "modelCode": "import torch.nn as nn\n\n\nclass TinyNet(nn.Module):\n    def __init__(self):\n        super().__init__()\n        self.fc = nn.Linear(8, 4)\n\n    def forward(self, x):\n        return self.fc(x)\n",
+            "modelClass": "TinyNet",
+            "inputShape": [8],
+            "inputKind": "features"
+        }),
+    );
+    assert_eq!(status, 200, "the desktop must serve /model/verify: {body}");
+
+    let verdict: Value = serde_json::from_str(&body).expect("a verdict is JSON");
+    let stage = verdict["stage"].as_str().unwrap_or_default();
+    if stage == "torch" || stage == "checker" {
+        eprintln!("skipped: no PyTorch on this machine ({stage})");
+        return;
+    }
+
+    assert_eq!(verdict["ok"], true, "{body}");
+    // 8*4 + 4, by hand. The point of the whole route is that this number is
+    // what PyTorch built, not what anything predicted.
+    assert_eq!(verdict["parameters"], 36, "{body}");
+    assert_eq!(verdict["forwardOk"], true, "{body}");
+}
+
+/// A refusal is a 200 with a verdict, not a 500.
+///
+/// The distinction the studio depends on: "this code is wrong" is an answer,
+/// and must not look like "the checker broke".
+#[test]
+fn a_model_that_does_not_build_is_answered_not_errored() {
+    let base = desktop_api();
+    let (status, body) = post(
+        &base,
+        "/model/verify",
+        json!({
+            "modelCode": "class Broken(nn.Module:\n",
+            "modelClass": "Broken",
+            "inputShape": [8],
+            "inputKind": "features"
+        }),
+    );
+    assert_eq!(status, 200, "a refusal is an answer: {body}");
+
+    let verdict: Value = serde_json::from_str(&body).expect("a verdict is JSON");
+    if verdict["stage"] == "checker" {
+        eprintln!("skipped: no python on this machine");
+        return;
+    }
+    assert_eq!(verdict["ok"], false, "{body}");
+}
