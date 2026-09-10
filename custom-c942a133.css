@@ -1,0 +1,334 @@
+/* NEURAX brand — a vivid magenta/amber accent on a clean white page.
+   The book is pinned to the light theme only (book.toml), so these rules
+   target `.light` / the pre-JS fallback directly rather than all five
+   built-in mdBook themes. */
+
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600&display=swap');
+
+:root {
+    /* Pulled directly from the studio's own theme tokens
+       (neurax-ui/src/index.css :root), not an independently invented
+       palette — --primary/--accent (336 70% 48% -> #d02569), --chart-1
+       (37 80% 39% -> #b37614), --chart-7 (190 89% 25% -> #076678). */
+    --neurax-pink: #d02569;
+    --neurax-pink-bright: #e8317f;
+    --neurax-amber: #b37614;
+    --neurax-teal: #076678;
+    --neurax-ink: #322a2d; /* studio's --foreground: 340 8% 18% */
+    /* mdBook's own default (750px) is sized for a long-form reading
+       column, not a marketing page — widened so the page uses more of
+       the browser window instead of a narrow strip in the middle of it. */
+    --content-max-width: 1100px;
+}
+
+h1, h2, h3 {
+    font-family: "Sora", "Source Sans Pro", sans-serif;
+    letter-spacing: -0.01em;
+}
+
+body, .content p, .content li {
+    font-family: "Inter", "Source Sans Pro", sans-serif;
+}
+
+.light,
+html:not(.js) {
+    --sidebar-active: var(--neurax-pink);
+    --links: var(--neurax-pink);
+    --inline-code-color: var(--neurax-teal);
+    --quote-border: var(--neurax-pink);
+}
+
+#menu-bar {
+    border-bottom: 3px solid var(--neurax-pink-bright);
+}
+
+/* mdBook's default menu-title is a huge (2.4rem), very thin (weight 200)
+   heading — sized to be a page title in its own right. Since the book
+   title is now the plain wordmark "NEURAX" (no restated tagline), it only
+   needs to read as a compact brand mark in the top bar, not compete with
+   the hero's own headline directly below it. */
+.menu-title {
+    font-family: "Sora", sans-serif;
+    font-size: 1.35rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    color: var(--neurax-ink);
+}
+
+.chapter li.chapter-item.expanded > a.active,
+.chapter li > a.active {
+    box-shadow: inset 3px 0 0 0 var(--sidebar-active);
+    font-weight: 600;
+}
+
+/* Plain heading gradient (used by ordinary chapter titles, e.g. Desktop App) */
+h1 {
+    background: linear-gradient(90deg, var(--neurax-pink), #ff6b3d 60%, var(--neurax-amber));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    display: inline-block;
+}
+
+/* ============================================================
+   Landing-page components (used by the Introduction chapter)
+   ============================================================ */
+
+.hero {
+    text-align: center;
+    padding: 2.5rem 1rem 2rem;
+    margin: 0 0 2.5rem;
+}
+
+.hero .eyebrow {
+    font-family: "Sora", sans-serif;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    font-size: 0.8rem;
+    color: var(--neurax-pink);
+    margin: 0 0 1rem;
+}
+
+.hero h1.hero-title {
+    font-size: clamp(2rem, 5vw, 3.2rem);
+    line-height: 1.15;
+    margin: 0 auto 1.1rem;
+    max-width: 30ch;
+    text-wrap: balance;
+    background: linear-gradient(100deg, var(--neurax-ink) 30%, var(--neurax-pink) 75%, var(--neurax-amber));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+.hero .hero-sub {
+    font-size: 1.15rem;
+    line-height: 1.6;
+    color: #4a4550;
+    max-width: 46ch;
+    margin: 0 auto 1.75rem;
+}
+
+.cta-button {
+    display: inline-block;
+    font-family: "Sora", sans-serif;
+    font-weight: 700;
+    font-size: 1rem;
+    color: #fff !important;
+    background: linear-gradient(100deg, var(--neurax-pink-bright), var(--neurax-pink));
+    padding: 0.85rem 1.9rem;
+    border-radius: 999px;
+    text-decoration: none !important;
+    box-shadow: 0 8px 24px -8px rgba(214, 0, 110, 0.55);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.cta-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 28px -6px rgba(214, 0, 110, 0.6);
+}
+
+.stat-strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    max-width: 640px;
+    margin: 0 auto 3rem;
+    padding: 1.4rem 1rem;
+    background: #fdf5f8;
+    border: 1px solid #f6d9e5;
+    border-radius: 16px;
+}
+
+.stat-strip div {
+    text-align: center;
+}
+
+.stat-strip strong {
+    display: block;
+    font-family: "Sora", sans-serif;
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--neurax-pink);
+}
+
+.stat-strip span {
+    display: block;
+    font-size: 0.78rem;
+    color: #6b6570;
+    margin-top: 0.15rem;
+}
+
+.pillars {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.1rem;
+    margin: 2rem 0 2.5rem;
+}
+
+.pillar-card {
+    position: relative;
+    padding: 1.6rem 1.4rem 1.4rem;
+    border-radius: 16px;
+    border: 1px solid #ece7ec;
+    background: #fff;
+    box-shadow: 0 4px 18px -10px rgba(22, 18, 26, 0.15);
+}
+
+.pillar-card .pillar-number {
+    font-family: "Sora", sans-serif;
+    font-weight: 800;
+    font-size: 0.85rem;
+    color: #fff;
+    background: var(--neurax-pink);
+    width: 1.9rem;
+    height: 1.9rem;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 0.8rem;
+}
+
+.pillar-card:nth-child(2) .pillar-number { background: var(--neurax-amber); }
+.pillar-card:nth-child(3) .pillar-number { background: var(--neurax-teal); }
+
+.pillar-card h3 {
+    margin: 0 0 0.5rem;
+    font-size: 1.15rem;
+}
+
+.pillar-card p {
+    font-size: 0.92rem;
+    line-height: 1.55;
+    color: #4a4550;
+    margin: 0;
+}
+
+.audience-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.9rem;
+    margin: 1.5rem 0 2rem;
+}
+
+.audience-card {
+    padding: 1.1rem 1.3rem;
+    border-radius: 12px;
+    background: #faf8fb;
+    border-left: 3px solid var(--neurax-pink);
+}
+
+.audience-card strong {
+    display: block;
+    font-family: "Sora", sans-serif;
+    font-size: 0.98rem;
+    margin-bottom: 0.25rem;
+}
+
+.audience-card span {
+    font-size: 0.88rem;
+    color: #4a4550;
+    line-height: 1.5;
+}
+
+.cta-banner {
+    text-align: center;
+    padding: 2.6rem 1.5rem;
+    margin: 3rem 0 1.5rem;
+    border-radius: 20px;
+    /* The studio's own dark-mode tokens: --background (330 15% 9%) through
+       --card (330 14% 12%) to --primary (330 81% 48%). */
+    background: linear-gradient(120deg, #1a1417, #231a1f 55%, #dd177a);
+}
+
+.cta-banner h2 {
+    color: #fff;
+    background: none;
+    -webkit-text-fill-color: #fff;
+    margin: 0 0 0.5rem;
+}
+
+.cta-banner p {
+    color: #e8d8de;
+    margin: 0 0 1.4rem;
+}
+
+.showcase-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+    margin: 2rem 0 1rem;
+}
+
+.showcase-grid figure {
+    margin: 0;
+}
+
+.showcase-grid img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 12px;
+    border: 1px solid #ece7ec;
+    box-shadow: 0 10px 30px -14px rgba(22, 18, 26, 0.28);
+}
+
+.showcase-grid figcaption {
+    margin-top: 0.5rem;
+    font-size: 0.82rem;
+    color: #6b6570;
+    text-align: center;
+}
+
+.market-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin: 1.5rem 0 1rem;
+    font-size: 0.92rem;
+    border: 1px solid #ece7ec;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.market-table th, .market-table td {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid #ece7ec;
+}
+
+.market-table th {
+    font-family: "Sora", sans-serif;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #6b6570;
+    background: #faf8fb;
+}
+
+.market-table tr:last-child td {
+    border-bottom: none;
+}
+
+.market-table td.figure {
+    font-family: "Sora", sans-serif;
+    font-weight: 700;
+    color: var(--neurax-pink);
+    white-space: nowrap;
+}
+
+.market-note {
+    font-size: 0.82rem;
+    color: #6b6570;
+    margin-top: -0.5rem;
+}
+
+@media (max-width: 700px) {
+    .stat-strip { grid-template-columns: repeat(2, 1fr); }
+    .pillars { grid-template-columns: 1fr; }
+    .audience-grid { grid-template-columns: 1fr; }
+    .showcase-grid { grid-template-columns: 1fr; }
+    .market-table { font-size: 0.82rem; }
+}
