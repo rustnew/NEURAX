@@ -740,6 +740,31 @@ export const DOCUMENTATION: DocChapter[] = [
             text:
               'The Copilot is a fast way to get a first draft onto the canvas. {-It is not a source of truth about your model.-} Read the blocks and run the analysis before trusting the shape.',
           },
+          { kind: 'heading', text: 'When it writes the model itself' },
+          {
+            kind: 'text',
+            text:
+              'NEURAX translates a canvas into PyTorch layer by layer, or refuses. Some designs it cannot express — and for those you can ask the assistant to {+write the model file itself+}. It is the same request in words: "the launch dialog says this cannot be trained, write the model".',
+          },
+          {
+            kind: 'text',
+            text:
+              'What makes that safe is not the assistant. It is what happens next, before the code is allowed anywhere near a run: PyTorch {+builds+} the file, the parameter count it really has is {+compared with the analysis on your screen+}, and one batch of the input the design implies is pushed through it. Code that fails any of the three is refused, the reason is shown, and the assistant is given that reason to fix it.',
+          },
+          {
+            kind: 'note',
+            tone: 'info',
+            title: 'Why the parameter count is the check that matters',
+            text:
+              'A model that trains perfectly well with a different parameter count is {-not a training bug — it is a different model-}, and every figure NEURAX showed you was about something else. That is why agreement with the analysis, not "it runs", is what accepted means. The launch dialog says which of the two wrote the code you are about to train, and the exported project says so in its README.',
+          },
+          {
+            kind: 'note',
+            tone: 'warning',
+            title: 'It needs PyTorch, and it runs here',
+            text:
+              'The check builds the model for real, so it needs Python with PyTorch — the same requirement as training. Without it nothing can be verified, and NEURAX says {-that it could not check-}, which is not the same as saying the code is wrong. Building it also means {-running the assistant\'s code on this machine, with your permissions-}, the same as training does. Nothing is sent anywhere, but the file the assistant wrote is executed locally the moment it is checked. The exported project always contains the exact file that was verified, so you can read it.',
+          },
         ],
       },
       {
@@ -846,9 +871,9 @@ export const DOCUMENTATION: DocChapter[] = [
           {
             kind: 'note',
             tone: 'warning',
-            title: 'Not every design can be trained yet',
+            title: 'When NEURAX will not translate a design',
             text:
-              'Training needs the design as PyTorch, and NEURAX will {-refuse rather than generate something that is not your design-}. The case you are most likely to meet is a repeated block whose body is also drawn separately on the canvas: the analysis handles it, a generated `forward()` cannot, and training the wrong architecture would make every comparison meaningless. The launch dialog names the blocks responsible before anything is committed.',
+              'Training needs the design as PyTorch, and NEURAX will {-refuse rather than generate something that is not your design-}. The case you are most likely to meet is a repeated block whose body is also drawn separately on the canvas: the analysis handles it, a generated `forward()` cannot, and training the wrong architecture would make every comparison meaningless. The launch dialog names the blocks responsible before anything is committed. When that happens, ask the assistant to write the model — see {+The AI Copilot+} — and it will be trained only if it passes the same check.',
           },
           {
             kind: 'note',

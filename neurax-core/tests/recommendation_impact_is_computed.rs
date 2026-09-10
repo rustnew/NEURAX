@@ -283,10 +283,29 @@ fn already_on_the_fastest_gpu_gets_no_bandwidth_recommendation() {
     // one already configured is a nonsensical suggestion. Whatever the
     // database's current fastest entry is, a model already on it must not
     // receive this recommendation.
-    let impact = bandwidth_recommendation_impact("GH200");
+    //
+    // Asked of the database rather than named here. This test used to hardcode
+    // "GH200" while claiming to be about "whatever the current fastest entry
+    // is" — so adding the B200 (7.7 TB/s against the GH200's 4.8) broke it,
+    // and the break said nothing about the recommendation being wrong. The
+    // property is real; the name was never part of it.
+    let db = neurax_hardware_db::HardwareDatabase::new();
+    let fastest = db
+        .list_gpus()
+        .into_iter()
+        .max_by(|a, b| {
+            a.memory_bandwidth_gbs
+                .partial_cmp(&b.memory_bandwidth_gbs)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .expect("the database ships with GPUs in it");
+
+    let impact = bandwidth_recommendation_impact(&fastest.name);
     assert!(
         impact.is_none(),
-        "expected no bandwidth recommendation when already on the fastest \
-         GPU in the database, got: {impact:?}"
+        "expected no bandwidth recommendation when already on {} ({} GB/s), the \
+         fastest GPU in the database, got: {impact:?}",
+        fastest.name,
+        fastest.memory_bandwidth_gbs,
     );
 }
