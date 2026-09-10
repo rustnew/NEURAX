@@ -1,6 +1,6 @@
 [package]
 name = "neurax-core"
-version = "0.15.0"
+version = "0.16.0"
 edition = "2021"
 description = "Core pipeline and orchestration for NEURAX"
 # Proprietary — closed-source, commercial. publish = false blocks an
@@ -44,10 +44,10 @@ once_cell = { workspace = true }
 tokio = { workspace = true }
 
 # Crates internes
-neurax-parser = { version = "0.15.0", path = "../neurax-parser" }
-neurax-ir = { version = "0.15.0", path = "../neurax-ir" }
-neurax-formulas = { version = "0.15.0", path = "../neurax-formulas" }
-neurax-hardware-db = { version = "0.15.0", path = "../neurax-hardware-db" }
+neurax-parser = { version = "0.16.0", path = "../neurax-parser" }
+neurax-ir = { version = "0.16.0", path = "../neurax-ir" }
+neurax-formulas = { version = "0.16.0", path = "../neurax-formulas" }
+neurax-hardware-db = { version = "0.16.0", path = "../neurax-hardware-db" }
 
 [dev-dependencies]
 approx = { workspace = true }

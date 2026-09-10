@@ -1,6 +1,6 @@
 [package]
 name = "neurax-ir"
-version = "0.15.0"
+version = "0.16.0"
 edition = "2021"
 description = "10 IR dialects for NEURAX"
 # Proprietary — closed-source, commercial. publish = false blocks an
@@ -49,10 +49,10 @@ itertools = { workspace = true }
 once_cell = { workspace = true }
 
 # Crates internes
-neurax-parser = { version = "0.15.0", path = "../neurax-parser" }
-neurax-formulas = { version = "0.15.0", path = "../neurax-formulas" }
-neurax-opspec = { version = "0.15.0", path = "../neurax-opspec" }
-neurax-hardware-db = { version = "0.15.0", path = "../neurax-hardware-db" }
+neurax-parser = { version = "0.16.0", path = "../neurax-parser" }
+neurax-formulas = { version = "0.16.0", path = "../neurax-formulas" }
+neurax-opspec = { version = "0.16.0", path = "../neurax-opspec" }
+neurax-hardware-db = { version = "0.16.0", path = "../neurax-hardware-db" }
 
 [dev-dependencies]
 approx = { workspace = true }

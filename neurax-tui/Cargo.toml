@@ -1,6 +1,6 @@
 [package]
 name = "neurax-tui"
-version = "0.15.0"
+version = "0.16.0"
 edition = "2021"
 description = "Terminal User Interface for Neurax IR model compilation visualization"
 # Proprietary — closed-source, commercial. publish = false blocks an
@@ -19,7 +19,7 @@ categories = ["command-line-utilities", "visualization"]
 # crate reaches the compiler entirely through neurax_core::analyze_json, it
 # never needs the IR/parser crates directly. Confirmed unused via
 # `grep -rl` before removing, not just `cargo machete`'s say-so.
-neurax-core = { version = "0.15.0", path = "../neurax-core" }
+neurax-core = { version = "0.16.0", path = "../neurax-core" }
 
 ratatui = { workspace = true }
 crossterm = { workspace = true }

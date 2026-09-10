@@ -1,6 +1,6 @@
 [package]
 name = "neurax-runtime"
-version = "0.15.0"
+version = "0.16.0"
 edition = "2021"
 description = "Runs a design, and survives the studio that started it."
 

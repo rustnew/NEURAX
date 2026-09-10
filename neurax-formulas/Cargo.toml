@@ -1,6 +1,6 @@
 [package]
 name = "neurax-formulas"
-version = "0.15.0"
+version = "0.16.0"
 edition = "2021"
 description = "Analytical formulas for ML operations - Hot path, maximum optimization"
 # Proprietary — closed-source, commercial. publish = false blocks an

@@ -1,6 +1,6 @@
 [package]
 name = "neurax-opspec"
-version = "0.15.0"
+version = "0.16.0"
 edition = "2021"
 description = "OpSpec-IR: one unified definition (params + FLOPs) per NEURAX operation"
 # Proprietary — NEURAX is closed-source and commercial, not MIT/open source.
@@ -10,8 +10,8 @@ publish = false
 readme = "README.md"
 
 [dependencies]
-neurax-parser = { version = "0.15.0", path = "../neurax-parser" }
-neurax-formulas = { version = "0.15.0", path = "../neurax-formulas" }
+neurax-parser = { version = "0.16.0", path = "../neurax-parser" }
+neurax-formulas = { version = "0.16.0", path = "../neurax-formulas" }
 
 [dev-dependencies]
 serde_json = { workspace = true }

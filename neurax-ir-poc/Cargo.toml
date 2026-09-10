@@ -13,7 +13,7 @@ the real compiler on real models. See README.md.
 """
 
 [dependencies]
-neurax-parser = { version = "0.15.0", path = "../neurax-parser" }
-neurax-ir = { version = "0.15.0", path = "../neurax-ir" }
-neurax-core = { version = "0.15.0", path = "../neurax-core" }
+neurax-parser = { version = "0.16.0", path = "../neurax-parser" }
+neurax-ir = { version = "0.16.0", path = "../neurax-ir" }
+neurax-core = { version = "0.16.0", path = "../neurax-core" }
 once_cell = "1"

@@ -1,6 +1,6 @@
 [package]
 name = "neurax-hardware-db"
-version = "0.15.0"
+version = "0.16.0"
 edition = "2021"
 description = "Hardware database for NEURAX (GPU specs, etc.)"
 # Proprietary — closed-source, commercial. publish = false blocks an
