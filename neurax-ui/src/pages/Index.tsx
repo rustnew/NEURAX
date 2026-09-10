@@ -69,6 +69,9 @@ import { AnalysisResult, CanvasNode, Connection, LayerConfig, NodeGroup, PerLaye
 import { ImportResult } from '@/utils/architectureImporter.ts';
 import { compileToNeuraxIR } from '@/utils/neuraxCompiler.ts';
 import { generateModelCode } from '@/utils/modelCodeGen.ts';
+import { reviewCandidate, type CandidateReview } from '@/services/modelCandidate.ts';
+import { buildProjectFiles } from '@/utils/projectExport.ts';
+import type { GeneratedModel } from '@/components/training/TrainingWorkspace.tsx';
 import { MODEL_TEMPLATES } from '@/data/modelTemplates.ts';
 import { kindForFilename } from '@/components/layout/DatasetPicker.tsx';
 import {
@@ -1038,7 +1041,37 @@ const Index = () => {
   const [openRun, setOpenRun] = useState<RunState | null>(null);
 
 
+  /**
+   * Model code that did not come from the translator, and what happened when
+   * it was built for real.
+   *
+   * NEURAX's own generator translates a canvas faithfully or refuses — which
+   * is right, and leaves designs it cannot express untrainable. Two others can
+   * write those: the assistant, and you, in Training's Code view. What makes
+   * either safe is not who typed it — it is that the code goes through
+   * `reviewCandidate`, where PyTorch builds it and the parameter count it
+   * really has is confronted with the analysis on screen. Rejected code is
+   * kept, not discarded: whoever wrote it needs to see what was wrong.
+   *
+   * `analyzedParams` records what it was checked against, so the studio can
+   * tell later that the design has moved on and the code is stale.
+   */
+  const [authoredModel, setAuthoredModel] = useState<{
+    /** Which of the two non-translator authors wrote it. */
+    source: 'assistant' | 'you';
+    code: string;
+    modelClassName: string;
+    inputShape: number[];
+    inputKind: 'tokens' | 'image' | 'features';
+    vocabSize?: number;
+    numClasses: number;
+    review: CandidateReview;
+    analyzedParams: number | null;
+    at: number;
+  } | null>(null);
+
   const [datasetProfile, setDatasetProfile] = useState<DatasetProfile | null>(IS_MOCK ? mockImageDataset : null);
+
   const [activeRightPanelTab, setActiveRightPanelTab] = useState<RightPanelTabId>('architecture');
   const [jumpToIssuesSignal, setJumpToIssuesSignal] = useState(0);
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -2168,8 +2201,60 @@ params: params as Record<string, ParameterValue>,
             verified: datasetProfile.verified,
           }
         : null,
+      /**
+       * The assistant's own model code, and what happened when it was built.
+       *
+       * Without this the assistant writes code, the studio builds it, and the
+       * assistant never learns whether it worked — so it cannot fix it. The
+       * `reason` is the same sentence the user was shown; there is no second,
+       * softer version for the agent.
+       */
+      assistant_model: authoredModel
+        ? {
+            class_name: authoredModel.modelClassName,
+            accepted: authoredModel.review.accepted,
+            stage: authoredModel.review.stage,
+            reason: authoredModel.review.reason,
+            built_parameters: authoredModel.review.builtParams,
+            analyzed_parameters: authoredModel.review.analyzedParams,
+            input_shape: authoredModel.inputShape,
+            input_kind: authoredModel.inputKind,
+            output_shape: authoredModel.review.outputShape,
+            /** True when the design has changed since this code was checked,
+             *  which makes the verdict above about a model nobody is looking
+             *  at any more. */
+            stale: authoredModel.analyzedParams !== analyzedParamsNow,
+          }
+        : null,
     };
-  }, [selectedArchitecture, nodes, connections, groups, hwConfig, warnings, toHwFamily]);
+  }, [
+    selectedArchitecture, nodes, connections, groups, hwConfig, warnings, toHwFamily,
+    // Every name on the line below was missing, and the omission was not
+    // cosmetic: the machine, the dataset, the open run, the analysis and the
+    // assistant's own verdict were all frozen at whatever they held the last
+    // time the canvas changed. An assistant that measured the machine, or
+    // wrote code and had it refused, went on reading the state from before it
+    // acted.
+    hardwareProfile, isExampleHardware, openRun, datasetProfile, authoredModel, analysis,
+  ]);
+
+  /**
+   * The parameter count a model has to agree with, or `null` when there is
+   * none to agree with yet.
+   *
+   * The zeroed placeholder shown before the first analysis is not a
+   * prediction: treating its 0 as one would either reject every model or,
+   * worse, agree with one that has no parameters. Every consumer reads this
+   * rather than re-deriving it, so "still the design it was checked against"
+   * means one thing across the studio instead of three.
+   */
+  const analyzedParamsNow = analysis.generatedAt ? analysis.totalParams : null;
+
+  /** Authored code that passed, and is still about the design on screen. */
+  const modelInForce =
+    authoredModel?.review.accepted && authoredModel.analyzedParams === analyzedParamsNow
+      ? authoredModel
+      : null;
 
   const layerConfigByType = useMemo(() => {
     const preferredOrder: ArchitectureFamily[] = [
@@ -2265,6 +2350,127 @@ params: params as Record<string, ParameterValue>,
     () => documentName?.replace(/\.neurax(\.json)?$/i, '') ?? 'Untitled design',
     [documentName],
   );
+
+  /**
+   * Build a candidate and say what it is — the gate an edit passes before a
+   * run will use it, and the same one the assistant's code passes.
+   *
+   * On acceptance the edit becomes the model in force, which is the whole
+   * point: a Code view that verifies and then trains something else would be
+   * theatre. On refusal it is kept and reported, so it can be fixed.
+   */
+  const handleVerifyModelCode = useCallback(
+    async (code: string): Promise<CandidateReview> => {
+      const implied = nodes.length > 0
+        ? generateModelCode(nodes, connections, hwConfig, documentBaseName)
+        : null;
+      const modelClassName = implied?.modelClassName ?? 'NeuraxModel';
+      const inputShape = implied?.inputShape ?? [];
+      const inputKind = implied?.inputKind ?? 'features';
+      const vocabSize = implied?.vocabSize;
+      const numClasses = hwConfig.numClasses ?? 10;
+
+      const review = await reviewCandidate(
+        { source: 'generator', code, modelClassName, inputShape, inputKind, vocabSize, numClasses },
+        analyzedParamsNow,
+      );
+
+      setAuthoredModel({
+        source: 'you',
+        code,
+        modelClassName,
+        inputShape,
+        inputKind,
+        vocabSize,
+        numClasses,
+        review,
+        analyzedParams: analyzedParamsNow,
+        at: Date.now(),
+      });
+      return review;
+    },
+    [analyzedParamsNow, connections, documentBaseName, hwConfig, nodes],
+  );
+
+  /**
+   * The design as PyTorch, for a run to train.
+   *
+   * A `useCallback` rather than an inline arrow, because the Training
+   * workspace memoises on this function's identity: as an inline arrow it was
+   * a new function every render, so the whole model source was re-emitted
+   * every time anything at all in this component changed — which is exactly
+   * what the doc note about generation not being free was warning about.
+   */
+  const generateModelForRun = useCallback((): GeneratedModel | null => {
+    if (nodes.length === 0) return null;
+    /**
+     * Authored code wins — the assistant's, or your own from the Code view —
+     * but only once PyTorch has built it, its real parameter count has
+     * matched the analysis, and a batch of its declared input has gone
+     * through it, and only while the design it was checked against is still
+     * the design on screen. Otherwise the deterministic translator, which is
+     * the right answer whenever it can express the canvas at all.
+     */
+    if (modelInForce) {
+      return {
+        source: modelInForce.source,
+        code: modelInForce.code,
+        modelClassName: modelInForce.modelClassName,
+        totalParams: modelInForce.review.builtParams ?? analysis?.totalParams ?? 0,
+        fullySupported: true,
+        unsupportedTypes: [],
+        inputShape: modelInForce.inputShape,
+        inputKind: modelInForce.inputKind,
+        vocabSize: modelInForce.vocabSize,
+        numClasses: modelInForce.numClasses,
+      };
+    }
+    const generated = generateModelCode(nodes, connections, hwConfig, documentBaseName);
+    return {
+      source: 'generator' as const,
+      code: generated.code,
+      modelClassName: generated.modelClassName,
+      totalParams: generated.totalParams,
+      fullySupported: generated.fullySupported,
+      unsupportedTypes: generated.unsupportedTypes,
+      // The shape and the dtype come from the model, not from the config.
+      // Guessing them here — image size set anywhere means images — fed
+      // `[3, 224, 224]` floats to BERT's token embedding and killed the run
+      // in its first attention block.
+      inputShape: generated.inputShape,
+      inputKind: generated.inputKind,
+      vocabSize: generated.vocabSize,
+      numClasses: hwConfig.numClasses ?? 10,
+    };
+  }, [analysis, connections, documentBaseName, hwConfig, modelInForce, nodes]);
+
+  /**
+   * The exportable project, for the Code view to read.
+   *
+   * The same function the Export panel calls, so what you read beside the run
+   * and what you download are one folder rather than two that drift. Memoised
+   * on the design because assembling it walks the graph and emits every file
+   * — and because `TrainingWorkspace` keys its own memo on this function's
+   * identity.
+   */
+  const buildProjectForCode = useCallback(
+    () =>
+      nodes.length === 0
+        ? []
+        : buildProjectFiles(
+            nodes, connections, hwConfig, selectedArchitecture, documentBaseName,
+            analysis.generatedAt ? analysis : null, '',
+            modelInForce
+              ? {
+                  code: modelInForce.code,
+                  modelClassName: modelInForce.modelClassName,
+                  builtParams: modelInForce.review.builtParams ?? analysis.totalParams,
+                }
+              : null,
+          ).files,
+    [analysis, connections, documentBaseName, hwConfig, modelInForce, nodes, selectedArchitecture],
+  );
+
 
   /**
    * Sets `openedInitialization` together with the design it was computed
@@ -2601,6 +2807,90 @@ params: params as Record<string, ParameterValue>,
       return;
     }
 
+    /**
+     * The assistant writes the model itself.
+     *
+     * NEURAX's generator translates a canvas or refuses; the designs it
+     * refuses — a `layer_stack` drawn alongside its own body, anything
+     * outside its verified block set — were simply untrainable. The
+     * assistant can write those. What makes that trustworthy is the next
+     * three lines and not the assistant: the code is built by PyTorch, the
+     * parameter count it really has is confronted with the analysis on
+     * screen, and one batch of the declared input is pushed through it. Code
+     * that fails any of those is kept and reported, never trained.
+     *
+     * Shape and dtype default to what the design implies rather than to
+     * something plausible — feeding `[3, 224, 224]` floats to a token
+     * embedding is exactly the failure this path exists to stop.
+     */
+    if (name === 'write_model_code') {
+      const code = typeof args.code === 'string' ? args.code : '';
+      const className = typeof args.class_name === 'string' ? args.class_name.trim() : '';
+      if (!code.trim() || !className) {
+        toast({
+          title: 'No model code to check',
+          description: 'write_model_code needs both `code` and `class_name`.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // Read off the design, so the assistant does not have to restate what
+      // the canvas already says. It may still override each one.
+      const implied = nodes.length > 0
+        ? generateModelCode(nodes, connections, hwConfig, documentBaseName)
+        : null;
+      const shape = Array.isArray(args.input_shape)
+        ? (args.input_shape as unknown[]).map(Number).filter((n) => Number.isFinite(n) && n > 0)
+        : [];
+      const inputShape = shape.length > 0 ? shape : implied?.inputShape ?? [];
+      const kindArg = typeof args.input_kind === 'string' ? args.input_kind : '';
+      const inputKind = (['tokens', 'image', 'features'].includes(kindArg)
+        ? kindArg
+        : implied?.inputKind ?? 'features') as 'tokens' | 'image' | 'features';
+      // `!= null` rather than a truthiness check, and before the conversion:
+      // `Number(null)` is 0, which is finite, and would silently become a
+      // vocabulary of zero.
+      const vocabSize =
+        args.vocab_size != null && Number.isFinite(Number(args.vocab_size)) && Number(args.vocab_size) > 0
+          ? Number(args.vocab_size)
+          : implied?.vocabSize;
+      const numClasses = hwConfig.numClasses ?? 10;
+      // Only a real, completed analysis counts. The zeroed placeholder shown
+      // before the first run is not a prediction to confront code with, and
+      // treating its 0 as one would either reject everything or, worse, agree
+      // with a model that has no parameters. Every reader of
+      // `authoredModel.analyzedParams` below compares against this same
+      // expression, so "still the design it was checked against" means one
+      // thing rather than three.
+      const analyzedParams = analyzedParamsNow;
+
+      void (async () => {
+        const review = await reviewCandidate(
+          { source: 'assistant', code, modelClassName: className, inputShape, inputKind, vocabSize, numClasses },
+          analyzedParams,
+        );
+        setAuthoredModel({
+          source: 'assistant',
+          code,
+          modelClassName: className,
+          inputShape,
+          inputKind,
+          vocabSize,
+          numClasses,
+          review,
+          analyzedParams,
+          at: Date.now(),
+        });
+        toast({
+          title: review.accepted ? 'Model code verified' : 'Model code refused',
+          description: review.reason,
+          variant: review.accepted ? undefined : 'destructive',
+        });
+      })();
+      return;
+    }
+
     if (name === 'start_training') {
       setActiveWorkspaceTab('training');
       setAgentTrainingCommand({ command: 'start', at: Date.now() });
@@ -2780,7 +3070,18 @@ params: params as Record<string, ParameterValue>,
       handleSelectNode(nodeId || null);
       return;
     }
-  }, [layerConfigByType, toast, handleAddNode, handleUpdateNode, handleAddConnection, handleDeleteConnection, handleDeleteNode, handleSelectNode, triggerAgentAutoAnalysis, handleArchitectureChange, updateHwConfig, nodes, connections, setActiveWorkspaceTab, handleRunAnalysis]);
+  }, [
+    layerConfigByType, toast, handleAddNode, handleUpdateNode, handleAddConnection,
+    handleDeleteConnection, handleDeleteNode, handleSelectNode, triggerAgentAutoAnalysis,
+    handleArchitectureChange, updateHwConfig, nodes, connections, setActiveWorkspaceTab,
+    handleRunAnalysis,
+    // `hwConfig` was already read here — `set_hyperparams` merges into
+    // `hwConfig.customParams` — and was already missing, so the assistant's
+    // hyperparameters were merged into whatever the config held the last time
+    // the canvas changed. `analysis` is what model code is checked against,
+    // and a stale one would confront new code with an old parameter count.
+    hwConfig, documentBaseName, analysis,
+  ]);
 
   const handleImportArchitecture = useCallback((result: ImportResult) => {
     // 1. Update family if present
@@ -3183,26 +3484,10 @@ params: params as Record<string, ParameterValue>,
                  * workspace nobody is looking at — generating a large model's
                  * source is not free.
                  */
-                onGenerateModel={() => {
-                  if (nodes.length === 0) return null;
-                  const generated = generateModelCode(nodes, connections, hwConfig, documentBaseName);
-                  return {
-                    code: generated.code,
-                    modelClassName: generated.modelClassName,
-                    totalParams: generated.totalParams,
-                    fullySupported: generated.fullySupported,
-                    unsupportedTypes: generated.unsupportedTypes,
-                    // The shape and the dtype come from the model, not from
-                    // the config. Guessing them here — image size set
-                    // anywhere means images — fed `[3, 224, 224]` floats to
-                    // BERT's token embedding and killed the run in its first
-                    // attention block.
-                    inputShape: generated.inputShape,
-                    inputKind: generated.inputKind,
-                    vocabSize: generated.vocabSize,
-                    numClasses: hwConfig.numClasses ?? 10,
-                  };
-                }}
+                onGenerateModel={generateModelForRun}
+                onBuildProject={buildProjectForCode}
+                onVerifyModelCode={handleVerifyModelCode}
+                modelReview={authoredModel?.review ?? null}
                 analysis={analysis}
                 hardware={hardwareProfile}
                 dataset={datasetProfile}
@@ -3271,6 +3556,21 @@ params: params as Record<string, ParameterValue>,
           // before the first run — is worth cross-checking generated code
           // against. `generatedAt` is only ever set by a real analysis result.
           analysisResult={analysis.generatedAt ? analysis : null}
+          /**
+           * The assistant's model, once it has been built by PyTorch and
+           * matched against the analysis on screen — and only while that
+           * analysis is still the one it was checked against. Otherwise the
+           * translator's output, which is what the canvas says.
+           */
+          verifiedModel={
+            modelInForce
+              ? {
+                  code: modelInForce.code,
+                  modelClassName: modelInForce.modelClassName,
+                  builtParams: modelInForce.review.builtParams ?? analysis.totalParams,
+                }
+              : null
+          }
         />
 
         <ImportPanel

@@ -15,7 +15,7 @@
  * report what was knowable in milliseconds — the whole argument for an
  * analytical compiler, applied to its own launch button.
  */
-import { CircleAlert, CircleCheck, Clock, FolderOpen, HardDrive, Play, Repeat, Save, Zap } from 'lucide-react';
+import { CircleAlert, CircleCheck, Clock, FileCode, FolderOpen, HardDrive, Play, Repeat, Save, Zap } from 'lucide-react';
 
 import { Button } from '@/components/ui/button.tsx';
 import {
@@ -37,6 +37,15 @@ interface TrainingLaunchDialogProps {
    *  discovered on click: a confirmation screen whose one button silently
    *  does nothing is worse than one that says why up front. */
   blocker?: string | null;
+  /**
+   * Who wrote the `model.py` about to be trained.
+   *
+   * Shown because "the assistant wrote this" is a different sentence from
+   * "NEURAX translated your canvas", even though both reach this screen by
+   * passing the same check. Someone committing hours of their machine to a
+   * run is entitled to know which one they are looking at.
+   */
+  modelSource?: 'generator' | 'assistant' | 'you' | null;
   onConfirm: () => void;
 }
 
@@ -67,6 +76,7 @@ export function TrainingLaunchDialog({
   plan,
   budgetIsSystemRam = false,
   blocker = null,
+  modelSource = null,
   onConfirm,
 }: TrainingLaunchDialogProps) {
   const memoryLabel = budgetIsSystemRam ? 'Peak memory' : 'Peak VRAM';
@@ -122,6 +132,24 @@ export function TrainingLaunchDialog({
             value={`every ${plan.checkpointEverySteps.toLocaleString('en-US')}`}
             detail={`${checkpointCount} × ${formatBytes(plan.checkpointSizeBytes)} = ${formatBytes(totalCheckpointBytes)}`}
           />
+          {modelSource ? (
+            <Row
+              icon={FileCode}
+              label="Model code"
+              value={
+                modelSource === 'assistant'
+                  ? 'Written by the assistant'
+                  : modelSource === 'you'
+                    ? 'Edited by you, in Code'
+                    : 'Translated from your canvas'
+              }
+              detail={
+                modelSource === 'generator'
+                  ? 'parameter count cross-checked against the analysis'
+                  : 'built by PyTorch and matched against the analysis before this screen'
+              }
+            />
+          ) : null}
           {plan.outputDirectory ? (
             <Row icon={FolderOpen} label="Writes to" value={plan.outputDirectory} />
           ) : (

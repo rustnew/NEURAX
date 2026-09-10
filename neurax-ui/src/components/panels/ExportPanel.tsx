@@ -39,7 +39,7 @@ import { ArchitectureFamily } from '@/types/plugins.ts';
 import { compileToNeuraxIR } from '@/utils/neuraxCompiler.ts';
 import { useHardware } from '@/contexts/HardwareContext.tsx';
 import { GitHubExportPanel } from './GitHubExportPanel.tsx';
-import { buildProjectFiles, downloadProjectZip, ProjectExportResult } from '@/utils/projectExport.ts';
+import { buildProjectFiles, downloadProjectZip, ProjectExportResult, VerifiedModelOverride } from '@/utils/projectExport.ts';
 
 const iconMap: Record<string, React.ElementType> = {
   FileJson,
@@ -92,6 +92,13 @@ interface ExportPanelProps {
    * wearing the same name. Absent (e.g. nothing analysed yet) just skips
    * the check rather than blocking on it. */
   analysisResult?: AnalysisResult | null;
+  /**
+   * Model code the assistant wrote and the studio verified, when there is
+   * one. The exported folder must contain the file the studio would actually
+   * train — handing over the translator's output instead would give someone
+   * a project that builds a different model from the one they were shown.
+   */
+  verifiedModel?: VerifiedModelOverride | null;
 }
 
 // Memoized: Index.tsx holds 40+ pieces of unrelated UI state, and without
@@ -107,6 +114,7 @@ export const ExportPanel = memo(function ExportPanel({
   groups = [],
   selectedArchitecture = 'transformer',
   analysisResult = null,
+  verifiedModel = null,
 }: ExportPanelProps) {
   const [selectedFormat, setSelectedFormat] = useState<string>('json');
   const [copied, setCopied] = useState(false);
@@ -132,9 +140,12 @@ export const ExportPanel = memo(function ExportPanel({
   const project: ProjectExportResult | null = useMemo(
     () =>
       isOpen && nodes.length > 0
-        ? buildProjectFiles(nodes, connections, hwConfig, selectedArchitecture, architectureName, analysisResult)
+        ? buildProjectFiles(
+            nodes, connections, hwConfig, selectedArchitecture, architectureName, analysisResult,
+            '', verifiedModel ?? null,
+          )
         : null,
-    [isOpen, nodes, connections, hwConfig, selectedArchitecture, architectureName, analysisResult],
+    [isOpen, nodes, connections, hwConfig, selectedArchitecture, architectureName, analysisResult, verifiedModel],
   );
 
   // The file being previewed. Derived rather than synced via an effect: if

@@ -15,9 +15,16 @@
  * of the analysis — and would have put the only stop button in the product
  * three clicks deep inside a tab about predictions.
  *
- * Its six views follow the life of a run rather than the shape of the data:
- * what it will cost, what it is doing, whether the prediction held, which
- * layer was wrong, what went wrong, and what runs exist on this machine.
+ * Its views follow the life of a run rather than the shape of the data: what
+ * it will cost, what will actually execute, what it is doing, whether the
+ * prediction held, which layer was wrong, what went wrong, and what runs exist
+ * on this machine.
+ *
+ * `Code` sits second for that reason and not because there was room there. The
+ * generated project used to be readable only inside the Export panel, on the
+ * way *out* of the product — which put the thing being trained behind a dialog
+ * about leaving. Between the plan and the run is where it belongs: the plan
+ * describes it, the run executes it.
  *
  * ── On the mock clock ──────────────────────────────────────────────────────
  * No backend exists yet. Rather than render a frozen screenshot of a run, this
@@ -29,7 +36,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Activity, Database, FlaskConical, Layers, Play, Scale, ScrollText, Stethoscope,
+  Activity, Database, FileCode2, FlaskConical, Layers, Play, Scale, ScrollText, Stethoscope,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button.tsx';
@@ -40,6 +47,7 @@ import {
   mockPredictions, mockRunState, mockSteps,
 } from '@/services/mockRuntime.ts';
 import { isCpuOnly, primaryGpu } from '@/types/runtime.ts';
+import type { CandidateReview } from '@/services/modelCandidate.ts';
 import type {
   DatasetProfile,
   HardwareProfile,
@@ -61,11 +69,17 @@ import { RunsList } from './RunsList.tsx';
 import { useTrainingRun } from './useTrainingRun.ts';
 import { controlTrainingRun, listTrainingRuns, startTrainingRun } from '@/services/neuraxApi.ts';
 import { TrainingLaunchDialog } from './TrainingLaunchDialog.tsx';
+import { EmptyChartState } from '@/components/simulation/shared';
+import { CodeWorkspace, type ProjectFile } from './CodeWorkspace.tsx';
 
-export type TrainingCategoryId = 'plan' | 'live' | 'accuracy' | 'layers' | 'diagnostics' | 'sessions';
+export type TrainingCategoryId = 'plan' | 'code' | 'live' | 'accuracy' | 'layers' | 'diagnostics' | 'sessions';
 
 export const TRAINING_CATEGORIES = [
   { id: 'plan', label: 'Plan', hint: 'The dataset, the projected cost, and the launch', icon: FlaskConical },
+  // Between the plan and the run, which is where it belongs: the code is what
+  // the plan describes and what the run executes, and reading it was only
+  // possible on the way out through Export.
+  { id: 'code', label: 'Code', hint: 'The generated project — read it, edit the model, verify it', icon: FileCode2 },
   { id: 'live', label: 'Live', hint: 'Loss, throughput, memory and the GPU, as reported', icon: Activity },
   { id: 'accuracy', label: 'Accuracy', hint: "NEURAX's predictions against what happened", icon: Scale },
   { id: 'layers', label: 'Per Layer', hint: 'Which operator the cost model got wrong', icon: Layers },
@@ -80,6 +94,11 @@ export const TRAINING_CATEGORIES = [
 
 /** What the studio can generate from the canvas, for a run to train. */
 export interface GeneratedModel {
+  /** Who wrote it. The user is told, because "the assistant wrote this and it
+   *  passed the check" is a different sentence from "NEURAX translated your
+   *  canvas", even when both are trustworthy for the same reason. Three
+   *  authors now, one check: the translator, the assistant, and you. */
+  source?: 'generator' | 'assistant' | 'you';
   code: string;
   modelClassName: string;
   totalParams: number;
@@ -100,6 +119,23 @@ interface TrainingWorkspaceProps {
    *  workspace offers the example and says why, rather than a Start button
    *  that fails on click. */
   onGenerateModel?: () => GeneratedModel | null;
+  /**
+   * The whole project folder, for the Code view: the model, the harness, the
+   * requirements, the README. Built by the host because it is the host that
+   * holds the canvas, the hyperparameters and the analysis it is assembled
+   * from — the same function the Export panel uses, so the folder read here
+   * and the folder downloaded there are one thing.
+   */
+  onBuildProject?: () => ProjectFile[];
+  /**
+   * Build this model code and say what it is. The gate an edit passes before
+   * a run will use it — the same one the assistant's code passes. Absent when
+   * the studio has no service to ask.
+   */
+  onVerifyModelCode?: (code: string) => Promise<CandidateReview>;
+  /** The verdict on the model in force, when it did not come from the
+   *  translator. */
+  modelReview?: CandidateReview | null;
   analysis?: AnalysisResult;
   hardware: HardwareProfile | null;
   dataset: DatasetProfile | null;
@@ -128,6 +164,9 @@ const STEPS_PER_TICK = 23;
 export function TrainingWorkspace({
   modelName,
   onGenerateModel,
+  onBuildProject,
+  onVerifyModelCode,
+  modelReview = null,
   analysis,
   hardware,
   dataset,
@@ -152,6 +191,28 @@ export function TrainingWorkspace({
    * not free, and a workspace nobody is looking at should not be doing it.
    */
   const [launchBlocker, setLaunchBlocker] = useState<string | null>(null);
+  /** Who wrote the code the launch dialog is about to commit hours to. */
+  const [launchSource, setLaunchSource] = useState<'generator' | 'assistant' | 'you' | null>(null);
+
+  /**
+   * The project folder, rebuilt when the design changes and not otherwise.
+   *
+   * Assembling it walks the graph and emits every file, so it is not something
+   * to redo on a hover — but it must never lag the canvas either, or the Code
+   * view shows a model that no longer exists. Keyed on the host's own builder,
+   * which the host memoises against the canvas for exactly that reason.
+   */
+  const projectFiles = useMemo<ProjectFile[]>(
+    () => onBuildProject?.() ?? [],
+    [onBuildProject],
+  );
+
+  /** Who wrote the model a run would train, and what it is called. */
+  const modelSourceInfo = useMemo(() => {
+    const generated = onGenerateModel?.();
+    if (!generated) return null;
+    return { source: generated.source ?? 'generator', modelClassName: generated.modelClassName };
+  }, [onGenerateModel]);
   const [isStarting, setIsStarting] = useState(false);
 
   /**
@@ -422,9 +483,8 @@ export function TrainingWorkspace({
    * expensive way to learn it.
    */
   /** What stops this design being trained, in the user's words, or `null`. */
-  const checkLaunchable = useCallback((): string | null => {
+  const blockerFor = useCallback((generated: GeneratedModel | null): string | null => {
     if (!onGenerateModel) return 'This studio cannot generate the design as PyTorch.';
-    const generated = onGenerateModel();
     if (!generated) return 'There is nothing on the canvas yet.';
     if (!generated.fullySupported) {
       return `NEURAX does not yet generate PyTorch for ${generated.unsupportedTypes.join(', ')}, so this design cannot be trained as drawn.`;
@@ -432,10 +492,21 @@ export function TrainingWorkspace({
     return null;
   }, [onGenerateModel]);
 
+  const checkLaunchable = useCallback(
+    (): string | null => blockerFor(onGenerateModel?.() ?? null),
+    [blockerFor, onGenerateModel],
+  );
+
   const openLaunch = useCallback(() => {
-    setLaunchBlocker(checkLaunchable());
+    // Generated once and read twice. `onGenerateModel` walks the graph and
+    // emits the whole source — its own doc comment says so — and calling it
+    // for the blocker and again for the source was paying that twice to open
+    // a dialog.
+    const generated = onGenerateModel?.() ?? null;
+    setLaunchBlocker(blockerFor(generated));
+    setLaunchSource(generated?.source ?? null);
     setLaunchOpen(true);
-  }, [checkLaunchable]);
+  }, [blockerFor, onGenerateModel]);
 
   const start = useCallback(async () => {
     const generated = onGenerateModel?.();
@@ -680,6 +751,11 @@ export function TrainingWorkspace({
             const Icon = category.icon;
             const isActive = activeCategory === category.id;
             const isLiveView = category.id === 'live' && run?.status === 'running';
+            // The same job the live dot does: something in here is not what
+            // you would assume, and you should be able to see that without
+            // opening it. Here it means the model a run would train is not the
+            // translator's output — the assistant wrote it, or you edited it.
+            const isAuthored = category.id === 'code' && modelReview !== null;
             return (
               <button
                 key={category.id}
@@ -699,6 +775,15 @@ export function TrainingWorkspace({
                 <span className="hidden sm:inline">{category.label}</span>
                 {isLiveView && !isActive ? (
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                ) : null}
+                {isAuthored && !isActive ? (
+                  <span
+                    title="The model a run would train did not come from the translator"
+                    className={cn(
+                      'w-1.5 h-1.5 rounded-full shrink-0',
+                      modelReview?.accepted ? 'bg-primary' : 'bg-amber-500',
+                    )}
+                  />
                 ) : null}
               </button>
             );
@@ -734,6 +819,25 @@ export function TrainingWorkspace({
           </div>
         )}
 
+        {activeCategory === 'code' && (
+          projectFiles.length > 0 && modelSourceInfo ? (
+            <CodeWorkspace
+              files={projectFiles}
+              modelPath="src/model.py"
+              modelClassName={modelSourceInfo.modelClassName}
+              onVerify={onVerifyModelCode}
+              activeSource={modelSourceInfo.source}
+              activeReview={modelReview}
+            />
+          ) : (
+            <EmptyChartState
+              icon={FileCode2}
+              title="Nothing to generate yet"
+              description="Draw a design on the canvas and the project appears here — the model, the training script, the requirements and the README."
+            />
+          )
+        )}
+
         {activeCategory === 'live' && <LiveMetrics steps={steps} stepsPerEpoch={mockRunState.stepsPerEpoch} />}
 
         {activeCategory === 'accuracy' && (
@@ -766,6 +870,7 @@ export function TrainingWorkspace({
         plan={plan}
         budgetIsSystemRam={budgetIsSystemRam}
         blocker={launchBlocker}
+        modelSource={launchSource}
         onConfirm={() => void start()}
       />
     </div>

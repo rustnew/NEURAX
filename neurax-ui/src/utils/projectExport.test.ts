@@ -150,3 +150,53 @@ describe('NEURAX signature across the generated project', () => {
     }
   });
 });
+
+/**
+ * The assistant can write architectures the translator refuses to express.
+ * What must never happen is a folder that says NEURAX and contains a
+ * different model from the one the studio is running.
+ */
+describe('buildProjectFiles with verified assistant code', () => {
+  const OVERRIDE = {
+    code: 'import torch.nn as nn\n\n\nclass HandWritten(nn.Module):\n    pass\n',
+    modelClassName: 'HandWritten',
+    builtParams: ANALYSIS.totalParams,
+  };
+
+  it('ships the assistant\'s file as src/model.py, not the translator\'s', () => {
+    const result = buildProjectFiles(NODES, CONNS, BASE_HW, 'transformer', 'My Model', ANALYSIS, '', OVERRIDE);
+    const model = result.files.find((f) => f.path === 'src/model.py');
+    expect(model?.content).toContain('class HandWritten');
+    expect(result.codegen.modelClassName).toBe('HandWritten');
+  });
+
+  it('the training script imports the class that is actually in the file', () => {
+    // The failure this catches: model.py defines HandWritten, train.py
+    // imports NeuraxModel, and the project does not run at all.
+    const result = buildProjectFiles(NODES, CONNS, BASE_HW, 'transformer', 'My Model', ANALYSIS, '', OVERRIDE);
+    const train = result.files.find((f) => f.path === 'train.py');
+    expect(train?.content).toContain('HandWritten');
+  });
+
+  it('says in the README who wrote the code and what it survived', () => {
+    const result = buildProjectFiles(NODES, CONNS, BASE_HW, 'transformer', 'My Model', ANALYSIS, '', OVERRIDE);
+    const readme = result.files.find((f) => f.path === 'README.md')?.content ?? '';
+    expect(readme).toContain("written by NEURAX's assistant");
+    expect(readme).toContain('PyTorch actually built');
+  });
+
+  it('reports the count PyTorch built, not the one the translator predicted', () => {
+    const result = buildProjectFiles(
+      NODES, CONNS, BASE_HW, 'transformer', 'My Model', ANALYSIS, '',
+      { ...OVERRIDE, builtParams: ANALYSIS.totalParams },
+    );
+    expect(result.codegen.totalParams).toBe(ANALYSIS.totalParams);
+    expect(result.verification.matches).toBe(true);
+  });
+
+  it('without an override, nothing about the normal export changes', () => {
+    const plain = buildProjectFiles(NODES, CONNS, BASE_HW, 'transformer', 'My Model', ANALYSIS);
+    const explicitNull = buildProjectFiles(NODES, CONNS, BASE_HW, 'transformer', 'My Model', ANALYSIS, '', null);
+    expect(explicitNull.files).toEqual(plain.files);
+  });
+});
